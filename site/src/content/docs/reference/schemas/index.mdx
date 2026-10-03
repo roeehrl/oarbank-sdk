@@ -1,0 +1,19 @@
+---
+title: JSON Schemas
+description: Every JSON Schema the Oarbank SDK publishes, generated from its typed Python models, with links to the raw files.
+type: reference
+sidebar:
+  order: 1
+  label: All schemas
+---
+
+import SchemaList from '../../../../components/SchemaList.astro';
+
+The SDK generates these schemas from the Pydantic models in `oarbank_sdk` (`oarbank-sdk export-schemas`), and its CI
+fails when they are stale. Each raw file is served under `/oarbank/schemas/`. Readers are lenient: the
+`*.strict.schema.json` variants flag unknown fields as probable typos, for authoring checks.
+
+[Result envelope 1](/oarbank/reference/schemas/result-envelope-1) is also rendered field by field. Every schema is
+listed below with a link to its raw file.
+
+<SchemaList />

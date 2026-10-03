@@ -1,0 +1,16 @@
+---
+title: Result envelope 1
+description: The result envelope a runner writes for every job, field by field, rendered from result-envelope-1.schema.json.
+type: reference
+sidebar:
+  order: 2
+---
+
+import JsonSchema from '../../../../components/JsonSchema.astro';
+
+A runner writes this document atomically to the `--out` path when a job succeeds. The `payload` is the module's own
+result; the rest is the envelope the core reads.
+
+## Fields
+
+<JsonSchema name="result-envelope-1" />

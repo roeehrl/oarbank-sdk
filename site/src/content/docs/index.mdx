@@ -1,0 +1,55 @@
+---
+title: Oarbank documentation
+description: Oarbank runs batch jobs on a fleet of macOS, Linux and Windows computers you own; these docs cover how it works, what it needs and how to build modules with the open-source SDK.
+type: overview
+tableOfContents: false
+---
+
+import { CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+Oarbank spreads batch jobs across the computers you already own: Macs, Linux machines and Windows PCs, mixed in one
+fleet. A coordinator plans the work and an agent on every node runs it, while host protection keeps each computer
+usable for the people who use it. What the jobs compute is defined by **modules**, built with the open-source module
+SDK (Apache-2.0), which talk to Oarbank's source-available core only through the versioned public contracts
+documented here.
+
+Oarbank is not released yet: downloads arrive with the first public release. You can read how it works and build
+toward it today.
+
+## Choose your path
+
+<CardGrid>
+  <LinkCard
+    title="Run a fleet"
+    description="What setting up a coordinator and nodes will look like, and what each computer needs."
+    href="/oarbank/get-started"
+  />
+  <LinkCard
+    title="Build a module"
+    description="Write, test and bundle a module with the SDK, start to finish."
+    href="/oarbank/build/tutorial"
+  />
+</CardGrid>
+
+## Platforms
+
+Nodes run on these platforms. The coordinator runs on macOS or Linux.
+
+| | Versions | Architectures |
+|---|---|---|
+| macOS | 15 or later | Apple silicon |
+| Linux | systemd, Linux 6.2 or later | x86_64, arm64 |
+| Windows | 10 version 1809 or later, 11 | x64, ARM64 |
+
+A module declares the platforms its runner supports as tokens: `darwin-arm64`, `linux-amd64`, `linux-arm64`,
+`windows-amd64` and `windows-arm64`. What each computer needs is in
+[Requirements](/oarbank/operate/requirements); the token rules, portable paths and per-platform declarations are in
+[Platforms](/oarbank/spec/platforms).
+
+## Learn more
+
+- [How Oarbank works](/oarbank/concepts/how-oarbank-works): coordinator, nodes, modules, certification, sandboxing,
+  host protection and signing.
+- [Specification](/oarbank/spec): the normative public contracts between modules and the core.
+- [Manifest fields](/oarbank/reference/manifest) and [JSON Schemas](/oarbank/reference/schemas): generated from the
+  SDK's typed models.
