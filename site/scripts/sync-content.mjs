@@ -6,7 +6,7 @@
 //   - adds `description`, `type`, `source` and a UTC `lastUpdated` date from git;
 //   - rewrites repo-relative links: a published page becomes its site route, a raw
 //     artefact its published URL, and anything else a GitHub link (or plain text
-//     while the repository is private).
+//     when REPO.public is false).
 //
 // Generated files are gitignored; the repo file is the only source.
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -84,7 +84,7 @@ function syncPages() {
   }
   console.log(`sync: ${PAGES.length} pages`);
   if (unresolved.length) {
-    console.log(`sync: ${unresolved.length} links to unpublished repo files left as plain text (repository is private):`);
+    console.log(`sync: ${unresolved.length} links to unpublished repo files left as plain text (REPO.public is false):`);
     for (const u of unresolved) console.log(`  ${u}`);
   }
 }

@@ -22,11 +22,11 @@ export const REPO = {
   url: 'https://github.com/roeehrl/oarbank-sdk',
   branch: 'main',
   /**
-   * The SDK repository is private until launch. While false, the site shows no
-   * edit links and no GitHub links: repo files that are not published as pages
-   * are named in plain text instead of linked.
+   * The SDK repository is public: pages get edit links and a source link, and
+   * repo files that are not published as pages link to GitHub. Set to false to
+   * show no GitHub links at all (repo files are then named in plain text).
    */
-  public: false,
+  public: true,
 };
 
 /**
