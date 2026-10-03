@@ -201,3 +201,45 @@ def test_broker_client_round_trip(tmp_path, monkeypatch):
     monkeypatch.delenv(broker.ENV)
     with pytest.raises(broker.BrokerError, match="no_broker"):
         broker.status()
+
+
+def _layout(prefix, exe, paths, base=None):
+    return {"base_prefix": str(base or prefix), "prefix": str(prefix), "executable": str(exe), "paths": [str(p) for p in paths]}
+
+
+def test_interpreter_roots_never_grant_a_shared_prefix(tmp_path, monkeypatch):
+    """A Homebrew-shaped Python (bin/python3 under the shared /opt/homebrew, resolving into its own framework prefix), a
+    venv on top of it, and a system-shaped one (prefix /usr): only the interpreters' own prefixes, library directories
+    and executables are granted."""
+    brew, usr = tmp_path / "opt" / "homebrew", tmp_path / "usr"
+    monkeypatch.setattr(S, "SHARED_PREFIXES", (str(brew), str(usr)))
+    fw = brew / "Cellar" / "python@3.12" / "3.12.9" / "Frameworks" / "Python.framework" / "Versions" / "3.12"
+    lib = fw / "lib" / "python3.12"
+    for d in (fw / "bin", lib / "site-packages", usr / "bin", usr / "lib" / "python3.12" / "lib-dynload",
+              usr / "lib" / "python3" / "dist-packages", tmp_path / "venv" / "lib" / "python3.12" / "site-packages"):
+        d.mkdir(parents=True)
+    real = lambda p: os.path.realpath(p)
+    roots = S.interpreter_roots(layout=_layout(fw, fw / "bin" / "python3.12", [lib, lib, lib / "site-packages", lib / "site-packages"]))
+    assert roots == [real(fw)]
+    venv = tmp_path / "venv"
+    roots = S.interpreter_roots(layout=_layout(venv, fw / "bin" / "python3.12", [lib, lib, venv / "lib" / "python3.12" / "site-packages"] * 1 +
+                                               [venv / "lib" / "python3.12" / "site-packages"], base=fw))
+    assert roots == [real(fw), real(venv)]
+    system = _layout(usr, usr / "bin" / "python3.12", [usr / "lib" / "python3.12", usr / "lib" / "python3.12",
+                                                        usr / "lib" / "python3" / "dist-packages", usr / "lib" / "python3" / "dist-packages"])
+    roots = S.interpreter_roots(layout=system)
+    assert roots == [real(usr / "lib" / "python3.12"), real(usr / "lib" / "python3" / "dist-packages"), real(usr / "bin" / "python3.12")]
+    assert not {real(usr), real(usr / "bin"), real(brew)} & set(roots)
+
+
+def test_another_interpreter_reports_its_own_layout(tmp_path):
+    """A venv other than this process's shares its base's executable (realpath), but its prefix is its own: it is asked."""
+    import subprocess
+    import venv as V
+    V.create(tmp_path / "v", with_pip=False, symlinks=os.name != "nt")
+    py = tmp_path / "v" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+    lay = S.interpreter_layout(str(py))
+    assert os.path.realpath(lay["prefix"]) == os.path.realpath(tmp_path / "v") and lay["base_prefix"] == sys.base_prefix
+    roots = S.interpreter_roots(str(py))
+    assert os.path.realpath(tmp_path / "v") in roots and os.path.realpath(tmp_path) not in roots
+    assert subprocess.run([str(py), "-c", "pass"]).returncode == 0

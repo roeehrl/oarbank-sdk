@@ -195,21 +195,44 @@ def render(policy: Policy) -> tuple[str, list[tuple[str, str]]]:
     return text, params
 
 
-def interpreter_roots(python: str | None = None) -> list[str]:
-    """What a Python process needs to read to start and import: the interpreter's home, the venv, and every import
-    root (editable installs included). For `python` other than this one, its venv and resolved home only."""
+# Prefixes many programs share: never granted whole, even when an interpreter's prefix is one of them (a system Python's
+# is /usr); its own library directories and executable are granted instead.
+SHARED_PREFIXES = ("/", "/usr", "/usr/local", "/opt/homebrew", "/opt/local", "/home/linuxbrew/.linuxbrew")
+_LAYOUT = ("import json, sys, sysconfig, os; p = sysconfig.get_paths(); print(json.dumps({'base_prefix': sys.base_prefix, "
+           "'prefix': sys.prefix, 'executable': os.path.realpath(sys.executable), 'paths': [p[k] for k in "
+           "('stdlib', 'platstdlib', 'purelib', 'platlib')]}))")
+
+
+def interpreter_layout(python: str | None = None) -> dict:
+    """Where an interpreter lives, as it reports itself: {base_prefix, prefix, executable (resolved), paths (stdlib,
+    platstdlib, purelib, platlib)}, plus `extra`: this process's other import roots (editable installs included)."""
+    import json
+    import subprocess
     import sysconfig
-    if python is None or os.path.realpath(python) == os.path.realpath(sys.executable):
-        roots = [sys.base_prefix, sys.prefix, sysconfig.get_paths()["stdlib"]] + [p for p in sys.path if p and os.path.isdir(p)]
-    else:
-        venv = Path(python).parent.parent
-        real = Path(os.path.realpath(python))
-        roots = [str(venv), str(real.parent.parent)]
+    if python is None or os.path.abspath(python) == os.path.abspath(sys.executable):     # a venv shares its base's realpath
+        paths = sysconfig.get_paths()
+        return {"base_prefix": sys.base_prefix, "prefix": sys.prefix, "executable": os.path.realpath(sys.executable),
+                "paths": [paths[k] for k in ("stdlib", "platstdlib", "purelib", "platlib")],
+                "extra": [p for p in sys.path if p and os.path.isdir(p)]}
+    out = subprocess.run([python, "-I", "-c", _LAYOUT], capture_output=True, text=True, timeout=60, check=True)
+    return {**json.loads(out.stdout), "extra": []}
+
+
+def interpreter_roots(python: str | None = None, layout: dict | None = None) -> list[str]:
+    """What a Python process needs to read to start and import: its own prefix (a venv's, and the base interpreter's)
+    unless that is a shared one such as /usr or /opt/homebrew, its library directories, its resolved executable, and
+    (for this process) every import root. Never a shared parent of the interpreter."""
+    lay = layout or interpreter_layout(python)
+    shared = {os.path.realpath(x) for x in SHARED_PREFIXES}
+    roots = [x for x in (lay["base_prefix"], lay["prefix"]) if os.path.realpath(x) not in shared]
+    roots += [*lay["paths"], lay["executable"], *lay.get("extra", [])]
     out = []
     for r in roots:
         rr = os.path.realpath(r)
-        if not any(rr == o or rr.startswith(o + "/") for o in out):
-            out = [o for o in out if not o.startswith(rr + "/")] + [rr]
+        if rr in shared:
+            continue
+        if not any(rr == o or rr.startswith(o.rstrip(os.sep) + os.sep) for o in out):
+            out = [o for o in out if not o.startswith(rr.rstrip(os.sep) + os.sep)] + [rr]
     return out
 
 
