@@ -1,0 +1,53 @@
+{
+  "$defs": {
+    "ModuleIdentity": {
+      "additionalProperties": true,
+      "properties": {
+        "id": {
+          "maxLength": 128,
+          "pattern": "^[a-z0-9]+(\\.[a-z0-9][a-z0-9-]*)+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "version": {
+          "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(-[0-9A-Za-z.-]+)?(\\+[0-9A-Za-z.-]+)?$",
+          "title": "Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "version"
+      ],
+      "title": "ModuleIdentity",
+      "type": "object"
+    }
+  },
+  "$id": "https://codonic.dev/oarbank/schemas/module-initialize-result-1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "capabilities": {
+      "description": "[stable] Optional verbs implemented (absent = unsupported).",
+      "items": {
+        "type": "string"
+      },
+      "title": "Capabilities",
+      "type": "array"
+    },
+    "module": {
+      "$ref": "#/$defs/ModuleIdentity"
+    },
+    "protocol_version": {
+      "description": "[stable] The one major the module chose from protocol_versions.",
+      "title": "Protocol Version",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "protocol_version",
+    "module"
+  ],
+  "title": "InitializeResult",
+  "type": "object"
+}

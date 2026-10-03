@@ -1,0 +1,16 @@
+{
+  "$id": "https://codonic.dev/oarbank/schemas/module-host-blobs-stat-params-1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "digest": {
+      "title": "Digest",
+      "type": "string"
+    }
+  },
+  "required": [
+    "digest"
+  ],
+  "title": "BlobStatParams",
+  "type": "object"
+}

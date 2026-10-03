@@ -1,0 +1,47 @@
+{
+  "$id": "https://codonic.dev/oarbank/schemas/module-integrity-check-params-1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "description": "The host asks a module to verify its own state (store documents, files, datasets) through host callbacks.\nRead-only: the verb returns no effects. [beta]",
+  "properties": {
+    "deep": {
+      "default": false,
+      "description": "[beta] The operator asked for an expensive check (for example re-reading every file).",
+      "title": "Deep",
+      "type": "boolean"
+    },
+    "move_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Move Id"
+    },
+    "now": {
+      "title": "Now",
+      "type": "number"
+    },
+    "scope": {
+      "description": "[beta] `routine`: the host's daily run; `on_demand`: an operator asked; `move_source` / `move_target`: the frozen old coordinator and the target's verified copy during a coordinator move.",
+      "enum": [
+        "routine",
+        "on_demand",
+        "move_source",
+        "move_target"
+      ],
+      "title": "Scope",
+      "type": "string"
+    }
+  },
+  "required": [
+    "scope",
+    "now"
+  ],
+  "title": "IntegrityCheckParams",
+  "type": "object"
+}

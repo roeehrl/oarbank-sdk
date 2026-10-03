@@ -1,0 +1,54 @@
+[
+ {
+  "name": "coordinator",
+  "kind": "coordinator",
+  "ro": 4,
+  "rw": 2,
+  "links": 3,
+  "net": "none",
+  "broker": false,
+  "gpu": false
+ },
+ {
+  "name": "runner-minimal",
+  "kind": "runner",
+  "ro": 3,
+  "rw": 2,
+  "links": 1,
+  "net": "none",
+  "broker": false,
+  "gpu": false
+ },
+ {
+  "name": "runner-everything",
+  "kind": "runner",
+  "ro": 4,
+  "rw": 2,
+  "links": 2,
+  "net": "egress-any",
+  "broker": true,
+  "gpu": true,
+  "exec_rw": true
+ },
+ {
+  "name": "runner-allowlist",
+  "kind": "runner",
+  "ro": 3,
+  "rw": 2,
+  "links": 1,
+  "net": "egress-allowlist",
+  "proxy_port": 47001,
+  "broker": false,
+  "gpu": false
+ },
+ {
+  "name": "service-egress",
+  "kind": "service",
+  "ro": 3,
+  "rw": 1,
+  "links": 0,
+  "net": "egress-any",
+  "broker": false,
+  "gpu": false
+ }
+]

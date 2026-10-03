@@ -1,0 +1,23 @@
+{
+  "$id": "https://codonic.dev/oarbank/schemas/module-params-distance-params-1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "a": {
+      "additionalProperties": true,
+      "title": "A",
+      "type": "object"
+    },
+    "b": {
+      "additionalProperties": true,
+      "title": "B",
+      "type": "object"
+    }
+  },
+  "required": [
+    "a",
+    "b"
+  ],
+  "title": "ParamsDistanceParams",
+  "type": "object"
+}

@@ -1,0 +1,18 @@
+/* UI contract 1 components (Apache-2.0, oarbank-sdk). Uses the host's CSS variables (--card, --line, --mut, ...). */
+.mod-region { display:block }
+.mod-title { font-size:16px; margin:4px 0 10px }
+.mod-section { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:12px; margin-bottom:12px }
+.mod-section h3 { font-size:14px; margin:0 0 8px }
+.mod-cols { display:grid; gap:12px } .mod-cols-2 { grid-template-columns:1fr 1fr } .mod-cols-3 { grid-template-columns:1fr 1fr 1fr }
+@media (max-width:640px) { .mod-cols-2, .mod-cols-3 { grid-template-columns:1fr } }
+.mod-stat { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:10px }
+.mod-stat-v { font-size:22px; font-variant-numeric:tabular-nums }
+.mod-callout { border-left:4px solid var(--acc); background:var(--chip); padding:6px 10px; border-radius:6px; margin:6px 0 }
+.mod-callout.tone-warn { border-color:var(--warn) } .mod-callout.tone-error { border-color:var(--bad) } .mod-callout.tone-ok { border-color:var(--ok) }
+.tone-ok { color:var(--ok) } .tone-warn { color:var(--warn) } .tone-error { color:var(--bad) }
+.mod-placeholder { border:1px dashed var(--line); border-radius:6px; padding:6px }
+.mod-watermark { margin-bottom:4px }
+.mod-frame { width:100%; border:1px solid var(--line); border-radius:8px; background:var(--card) }
+.mod-chart { min-height:40px } .mod-md p { margin:4px 0 }
+.mod-form label { display:block; margin:4px 0 }
+.mod-op + .mod-op { margin-left:4px }

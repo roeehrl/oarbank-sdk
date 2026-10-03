@@ -1,0 +1,39 @@
+{
+  "$id": "https://codonic.dev/oarbank/schemas/module-result-evaluate-params-1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "result": {
+      "additionalProperties": true,
+      "description": "[stable] The result envelope as written by the runner (after artifact upload).",
+      "title": "Result",
+      "type": "object"
+    },
+    "spec": {
+      "additionalProperties": true,
+      "description": "[stable] The spec envelope the attempt ran.",
+      "title": "Spec",
+      "type": "object"
+    },
+    "stage": {
+      "anyOf": [
+        {
+          "maxLength": 64,
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Stage"
+    }
+  },
+  "required": [
+    "spec",
+    "result"
+  ],
+  "title": "ResultEvaluateParams",
+  "type": "object"
+}

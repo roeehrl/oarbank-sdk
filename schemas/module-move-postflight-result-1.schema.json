@@ -1,0 +1,109 @@
+{
+  "$defs": {
+    "CheckItem": {
+      "additionalProperties": true,
+      "description": "One named check a module ran over its own state. [beta]",
+      "properties": {
+        "detail": {
+          "default": "",
+          "maxLength": 1000,
+          "title": "Detail",
+          "type": "string"
+        },
+        "name": {
+          "description": "[beta] Short, stable check name, e.g. `rounds_index_matches_files`.",
+          "maxLength": 120,
+          "title": "Name",
+          "type": "string"
+        },
+        "ok": {
+          "title": "Ok",
+          "type": "boolean"
+        },
+        "severity": {
+          "default": "error",
+          "description": "[beta] Only failed `error` checks fail the whole result.",
+          "enum": [
+            "error",
+            "warn",
+            "info"
+          ],
+          "title": "Severity",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "ok"
+      ],
+      "title": "CheckItem",
+      "type": "object"
+    },
+    "Effect": {
+      "additionalProperties": true,
+      "description": "A core change the module asks the host to make; the host applies it on the single writer.",
+      "properties": {
+        "args": {
+          "additionalProperties": true,
+          "title": "Args",
+          "type": "object"
+        },
+        "kind": {
+          "enum": [
+            "jobs.enqueue",
+            "jobs.cancel",
+            "campaigns.create",
+            "campaigns.update",
+            "campaigns.cancel",
+            "datasets.create",
+            "datasets.update",
+            "datasets.delete",
+            "module_settings.update",
+            "store.write",
+            "store.delete",
+            "files.write",
+            "files.put",
+            "files.delete",
+            "external"
+          ],
+          "title": "Kind",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "title": "Effect",
+      "type": "object"
+    }
+  },
+  "$id": "https://codonic.dev/oarbank/schemas/module-move-postflight-result-1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "checks": {
+      "description": "[beta] A failed `error` check raises an alert on the new coordinator.",
+      "items": {
+        "$ref": "#/$defs/CheckItem"
+      },
+      "title": "Checks",
+      "type": "array"
+    },
+    "effects": {
+      "description": "[beta] Only kinds in coordinator.move.effects (resume work, rebuild what was skipped).",
+      "items": {
+        "$ref": "#/$defs/Effect"
+      },
+      "title": "Effects",
+      "type": "array"
+    },
+    "message": {
+      "default": "",
+      "maxLength": 500,
+      "title": "Message",
+      "type": "string"
+    }
+  },
+  "title": "MovePostflightResult",
+  "type": "object"
+}

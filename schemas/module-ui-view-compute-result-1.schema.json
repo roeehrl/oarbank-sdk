@@ -1,0 +1,74 @@
+{
+  "$id": "https://codonic.dev/oarbank/schemas/module-ui-view-compute-result-1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "data_version": {
+      "title": "Data Version",
+      "type": "integer"
+    },
+    "kv": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Kv"
+    },
+    "rows": {
+      "anyOf": [
+        {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Rows"
+    },
+    "series": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "items": {},
+            "type": "array"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Series"
+    },
+    "stat": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Stat"
+    }
+  },
+  "required": [
+    "data_version"
+  ],
+  "title": "ViewComputeResult",
+  "type": "object"
+}

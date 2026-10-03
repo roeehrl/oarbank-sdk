@@ -1,0 +1,85 @@
+{
+  "$defs": {
+    "MoveSkipped": {
+      "additionalProperties": true,
+      "properties": {
+        "bytes": {
+          "title": "Bytes",
+          "type": "integer"
+        },
+        "class": {
+          "enum": [
+            "rebuild",
+            "drop"
+          ],
+          "title": "Class",
+          "type": "string"
+        },
+        "count": {
+          "title": "Count",
+          "type": "integer"
+        },
+        "kind": {
+          "enum": [
+            "files",
+            "store"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "selector": {
+          "description": "[beta] The rule's files prefix or store collection.",
+          "title": "Selector",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "selector",
+        "class",
+        "count",
+        "bytes"
+      ],
+      "title": "MoveSkipped",
+      "type": "object"
+    }
+  },
+  "$id": "https://codonic.dev/oarbank/schemas/module-move-postflight-params-1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "description": "Called once on the new coordinator after it took over. [beta]",
+  "properties": {
+    "epoch": {
+      "title": "Epoch",
+      "type": "integer"
+    },
+    "from_url": {
+      "title": "From Url",
+      "type": "string"
+    },
+    "move_id": {
+      "title": "Move Id",
+      "type": "string"
+    },
+    "now": {
+      "title": "Now",
+      "type": "number"
+    },
+    "skipped": {
+      "description": "[beta] What did not move, by the module's own rules.",
+      "items": {
+        "$ref": "#/$defs/MoveSkipped"
+      },
+      "title": "Skipped",
+      "type": "array"
+    }
+  },
+  "required": [
+    "move_id",
+    "from_url",
+    "epoch",
+    "now"
+  ],
+  "title": "MovePostflightParams",
+  "type": "object"
+}

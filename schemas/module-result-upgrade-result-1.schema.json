@@ -1,0 +1,17 @@
+{
+  "$id": "https://codonic.dev/oarbank/schemas/module-result-upgrade-result-1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "payload": {
+      "additionalProperties": true,
+      "title": "Payload",
+      "type": "object"
+    }
+  },
+  "required": [
+    "payload"
+  ],
+  "title": "ResultUpgradeResult",
+  "type": "object"
+}

@@ -1,0 +1,79 @@
+{
+  "$id": "https://codonic.dev/oarbank/schemas/module-result-evaluate-result-1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "digest": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "[stable] Content digest for replica/golden comparison.",
+      "title": "Digest"
+    },
+    "digest_version": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Digest Version"
+    },
+    "fields": {
+      "additionalProperties": true,
+      "description": "[stable] Declared result fields (indexed ones become generated columns).",
+      "title": "Fields",
+      "type": "object"
+    },
+    "reason": {
+      "default": "ok",
+      "description": "[stable] Reason code (module-namespaced for module-specific reasons).",
+      "title": "Reason",
+      "type": "string"
+    },
+    "summary": {
+      "additionalProperties": true,
+      "description": "[stable] Small dict of declared fields for tables.",
+      "title": "Summary",
+      "type": "object"
+    },
+    "value": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "[stable] Objective value (the manifest's results.value field).",
+      "title": "Value"
+    },
+    "verdict": {
+      "description": "[stable] accept; reject (bad result, counts against the node); retry (transient, re-run); fail_permanent (the job can never succeed).",
+      "enum": [
+        "accept",
+        "reject",
+        "retry",
+        "fail_permanent"
+      ],
+      "title": "Verdict",
+      "type": "string"
+    }
+  },
+  "required": [
+    "verdict"
+  ],
+  "title": "ResultEvaluateResult",
+  "type": "object"
+}

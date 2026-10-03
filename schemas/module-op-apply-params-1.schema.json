@@ -1,0 +1,128 @@
+{
+  "$defs": {
+    "Effect": {
+      "additionalProperties": true,
+      "description": "A core change the module asks the host to make; the host applies it on the single writer.",
+      "properties": {
+        "args": {
+          "additionalProperties": true,
+          "title": "Args",
+          "type": "object"
+        },
+        "kind": {
+          "enum": [
+            "jobs.enqueue",
+            "jobs.cancel",
+            "campaigns.create",
+            "campaigns.update",
+            "campaigns.cancel",
+            "datasets.create",
+            "datasets.update",
+            "datasets.delete",
+            "module_settings.update",
+            "store.write",
+            "store.delete",
+            "files.write",
+            "files.put",
+            "files.delete",
+            "external"
+          ],
+          "title": "Kind",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "title": "Effect",
+      "type": "object"
+    },
+    "OpPlanResult": {
+      "additionalProperties": true,
+      "properties": {
+        "diff": {
+          "description": "[beta] {path, before, after} rows.",
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Diff",
+          "type": "array"
+        },
+        "effects": {
+          "items": {
+            "$ref": "#/$defs/Effect"
+          },
+          "title": "Effects",
+          "type": "array"
+        },
+        "summary": {
+          "description": "[beta] Plain text; shown under the host's own operation title.",
+          "maxLength": 500,
+          "title": "Summary",
+          "type": "string"
+        },
+        "targets": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Targets",
+          "type": "array"
+        }
+      },
+      "required": [
+        "summary"
+      ],
+      "title": "OpPlanResult",
+      "type": "object"
+    }
+  },
+  "$id": "https://codonic.dev/oarbank/schemas/module-op-apply-params-1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "actor": {
+      "title": "Actor",
+      "type": "string"
+    },
+    "params": {
+      "additionalProperties": true,
+      "title": "Params",
+      "type": "object"
+    },
+    "plan": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/OpPlanResult"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "[beta] The reviewed plan for T2/T3 operations."
+    },
+    "target": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Target"
+    },
+    "verb": {
+      "title": "Verb",
+      "type": "string"
+    }
+  },
+  "required": [
+    "verb",
+    "actor"
+  ],
+  "title": "OpApplyParams",
+  "type": "object"
+}

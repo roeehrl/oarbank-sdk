@@ -1,0 +1,27 @@
+{
+  "$id": "https://codonic.dev/oarbank/schemas/module-move-cancelled-params-1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "description": "The move was cancelled or aborted before the commit decision; this coordinator keeps serving. [beta]",
+  "properties": {
+    "move_id": {
+      "title": "Move Id",
+      "type": "string"
+    },
+    "now": {
+      "title": "Now",
+      "type": "number"
+    },
+    "reason": {
+      "default": "",
+      "title": "Reason",
+      "type": "string"
+    }
+  },
+  "required": [
+    "move_id",
+    "now"
+  ],
+  "title": "MoveCancelledParams",
+  "type": "object"
+}

@@ -1,0 +1,665 @@
+{
+ "pick": [
+  {
+   "keys": [
+    "linux",
+    "linux-amd64",
+    "windows"
+   ],
+   "platform": "linux-amd64",
+   "key": "linux-amd64"
+  },
+  {
+   "keys": [
+    "linux",
+    "linux-amd64",
+    "windows"
+   ],
+   "platform": "linux-arm64",
+   "key": "linux"
+  },
+  {
+   "keys": [
+    "linux",
+    "linux-amd64",
+    "windows"
+   ],
+   "platform": "windows-arm64",
+   "key": "windows"
+  },
+  {
+   "keys": [
+    "linux",
+    "linux-amd64",
+    "windows"
+   ],
+   "platform": "darwin-arm64",
+   "key": null
+  },
+  {
+   "keys": [
+    "darwin-arm64"
+   ],
+   "platform": "darwin-amd64",
+   "key": null
+  },
+  {
+   "keys": [
+    "darwin"
+   ],
+   "platform": "darwin-arm64",
+   "key": "darwin"
+  },
+  {
+   "keys": [],
+   "platform": "linux-amd64",
+   "key": null
+  }
+ ],
+ "merged": [
+  "env",
+  "timeouts_s",
+  "requires",
+  "requires.resources"
+ ],
+ "overlay": [
+  {
+   "section": "runner",
+   "base": {
+    "exec": [
+     "python",
+     "-I",
+     "{bundle}/node/main.py"
+    ],
+    "runtime": {
+     "kind": "python"
+    },
+    "stop_grace_s": 20.0,
+    "env": {
+     "MKL_CBWR": "COMPATIBLE",
+     "OMP_NUM_THREADS": "1"
+    }
+   },
+   "variants": {
+    "windows": {
+     "exec": [
+      "{bundle}/native/windows/scorer.exe"
+     ],
+     "runtime": {
+      "kind": "native"
+     },
+     "env": {
+      "KMP_AFFINITY": "disabled"
+     }
+    },
+    "windows-amd64": {
+     "stop_grace_s": 5.0,
+     "env": {
+      "OMP_NUM_THREADS": "2"
+     }
+    }
+   },
+   "platform": "windows-amd64",
+   "resolved": {
+    "exec": [
+     "{bundle}/native/windows/scorer.exe"
+    ],
+    "runtime": {
+     "kind": "native"
+    },
+    "stop_grace_s": 5.0,
+    "env": {
+     "MKL_CBWR": "COMPATIBLE",
+     "OMP_NUM_THREADS": "2",
+     "KMP_AFFINITY": "disabled"
+    }
+   }
+  },
+  {
+   "section": "runner",
+   "base": {
+    "exec": [
+     "python",
+     "-I",
+     "{bundle}/node/main.py"
+    ],
+    "runtime": {
+     "kind": "python"
+    },
+    "stop_grace_s": 20.0,
+    "env": {
+     "MKL_CBWR": "COMPATIBLE",
+     "OMP_NUM_THREADS": "1"
+    }
+   },
+   "variants": {
+    "windows": {
+     "exec": [
+      "{bundle}/native/windows/scorer.exe"
+     ],
+     "runtime": {
+      "kind": "native"
+     },
+     "env": {
+      "KMP_AFFINITY": "disabled"
+     }
+    },
+    "windows-amd64": {
+     "stop_grace_s": 5.0,
+     "env": {
+      "OMP_NUM_THREADS": "2"
+     }
+    }
+   },
+   "platform": "windows-arm64",
+   "resolved": {
+    "exec": [
+     "{bundle}/native/windows/scorer.exe"
+    ],
+    "runtime": {
+     "kind": "native"
+    },
+    "stop_grace_s": 20.0,
+    "env": {
+     "MKL_CBWR": "COMPATIBLE",
+     "OMP_NUM_THREADS": "1",
+     "KMP_AFFINITY": "disabled"
+    }
+   }
+  },
+  {
+   "section": "runner",
+   "base": {
+    "exec": [
+     "python",
+     "-I",
+     "{bundle}/node/main.py"
+    ],
+    "runtime": {
+     "kind": "python"
+    },
+    "stop_grace_s": 20.0,
+    "env": {
+     "MKL_CBWR": "COMPATIBLE",
+     "OMP_NUM_THREADS": "1"
+    }
+   },
+   "variants": {
+    "windows": {
+     "exec": [
+      "{bundle}/native/windows/scorer.exe"
+     ],
+     "runtime": {
+      "kind": "native"
+     },
+     "env": {
+      "KMP_AFFINITY": "disabled"
+     }
+    },
+    "windows-amd64": {
+     "stop_grace_s": 5.0,
+     "env": {
+      "OMP_NUM_THREADS": "2"
+     }
+    }
+   },
+   "platform": "linux-amd64",
+   "resolved": {
+    "exec": [
+     "python",
+     "-I",
+     "{bundle}/node/main.py"
+    ],
+    "runtime": {
+     "kind": "python"
+    },
+    "stop_grace_s": 20.0,
+    "env": {
+     "MKL_CBWR": "COMPATIBLE",
+     "OMP_NUM_THREADS": "1"
+    }
+   }
+  },
+  {
+   "section": "runner",
+   "base": {
+    "exec": [
+     "python",
+     "-I",
+     "{bundle}/node/main.py"
+    ],
+    "runtime": {
+     "kind": "python"
+    },
+    "gpu": {
+     "use": "exclusive",
+     "apis_any": [
+      "metal"
+     ]
+    },
+    "capabilities": [
+     "cancellable",
+     "freeze_ok"
+    ]
+   },
+   "variants": {
+    "linux": {
+     "gpu": {
+      "use": "shared"
+     },
+     "capabilities": [
+      "cancellable"
+     ]
+    }
+   },
+   "platform": "linux-arm64",
+   "resolved": {
+    "exec": [
+     "python",
+     "-I",
+     "{bundle}/node/main.py"
+    ],
+    "runtime": {
+     "kind": "python"
+    },
+    "gpu": {
+     "use": "shared"
+    },
+    "capabilities": [
+     "cancellable"
+    ]
+   }
+  },
+  {
+   "section": "runner",
+   "base": {
+    "exec": [
+     "python",
+     "-I",
+     "{bundle}/node/main.py"
+    ],
+    "runtime": {
+     "kind": "python"
+    },
+    "gpu": {
+     "use": "exclusive",
+     "apis_any": [
+      "metal"
+     ]
+    },
+    "capabilities": [
+     "cancellable",
+     "freeze_ok"
+    ]
+   },
+   "variants": {
+    "linux": {
+     "gpu": {
+      "use": "shared"
+     },
+     "capabilities": [
+      "cancellable"
+     ]
+    }
+   },
+   "platform": "darwin-arm64",
+   "resolved": {
+    "exec": [
+     "python",
+     "-I",
+     "{bundle}/node/main.py"
+    ],
+    "runtime": {
+     "kind": "python"
+    },
+    "gpu": {
+     "use": "exclusive",
+     "apis_any": [
+      "metal"
+     ]
+    },
+    "capabilities": [
+     "cancellable",
+     "freeze_ok"
+    ]
+   }
+  },
+  {
+   "section": "coordinator",
+   "base": {
+    "exec": [
+     "python",
+     "-I",
+     "{bundle}/coordinator.py"
+    ],
+    "runtime": {
+     "kind": "python"
+    },
+    "timeouts_s": {
+     "default": 10.0
+    },
+    "concurrency": 1
+   },
+   "variants": {
+    "linux": {
+     "timeouts_s": {
+      "job.plan": 60.0
+     },
+     "concurrency": 2,
+     "env": {
+      "OMP_NUM_THREADS": "1"
+     }
+    },
+    "linux-arm64": {
+     "exec": [
+      "{bundle}/bin/linux-arm64/coordinator"
+     ],
+     "runtime": {
+      "kind": "native"
+     },
+     "timeouts_s": {
+      "default": 20.0
+     }
+    }
+   },
+   "platform": "linux-arm64",
+   "resolved": {
+    "exec": [
+     "{bundle}/bin/linux-arm64/coordinator"
+    ],
+    "runtime": {
+     "kind": "native"
+    },
+    "timeouts_s": {
+     "default": 20.0,
+     "job.plan": 60.0
+    },
+    "concurrency": 2,
+    "env": {
+     "OMP_NUM_THREADS": "1"
+    }
+   }
+  },
+  {
+   "section": "coordinator",
+   "base": {
+    "exec": [
+     "python",
+     "-I",
+     "{bundle}/coordinator.py"
+    ],
+    "runtime": {
+     "kind": "python"
+    },
+    "timeouts_s": {
+     "default": 10.0
+    },
+    "concurrency": 1
+   },
+   "variants": {
+    "linux": {
+     "timeouts_s": {
+      "job.plan": 60.0
+     },
+     "concurrency": 2,
+     "env": {
+      "OMP_NUM_THREADS": "1"
+     }
+    },
+    "linux-arm64": {
+     "exec": [
+      "{bundle}/bin/linux-arm64/coordinator"
+     ],
+     "runtime": {
+      "kind": "native"
+     },
+     "timeouts_s": {
+      "default": 20.0
+     }
+    }
+   },
+   "platform": "linux-amd64",
+   "resolved": {
+    "exec": [
+     "python",
+     "-I",
+     "{bundle}/coordinator.py"
+    ],
+    "runtime": {
+     "kind": "python"
+    },
+    "timeouts_s": {
+     "default": 10.0,
+     "job.plan": 60.0
+    },
+    "concurrency": 2,
+    "env": {
+     "OMP_NUM_THREADS": "1"
+    }
+   }
+  },
+  {
+   "section": "coordinator",
+   "base": {
+    "exec": [
+     "python",
+     "-I",
+     "{bundle}/coordinator.py"
+    ],
+    "runtime": {
+     "kind": "python"
+    },
+    "timeouts_s": {
+     "default": 10.0
+    },
+    "concurrency": 1
+   },
+   "variants": {
+    "linux": {
+     "timeouts_s": {
+      "job.plan": 60.0
+     },
+     "concurrency": 2,
+     "env": {
+      "OMP_NUM_THREADS": "1"
+     }
+    },
+    "linux-arm64": {
+     "exec": [
+      "{bundle}/bin/linux-arm64/coordinator"
+     ],
+     "runtime": {
+      "kind": "native"
+     },
+     "timeouts_s": {
+      "default": 20.0
+     }
+    }
+   },
+   "platform": "darwin-arm64",
+   "resolved": {
+    "exec": [
+     "python",
+     "-I",
+     "{bundle}/coordinator.py"
+    ],
+    "runtime": {
+     "kind": "python"
+    },
+    "timeouts_s": {
+     "default": 10.0
+    },
+    "concurrency": 1
+   }
+  },
+  {
+   "section": "stage",
+   "base": {
+    "name": "render",
+    "timeout_s": 3600.0,
+    "retry": {
+     "max_attempts": 3
+    },
+    "requires": {
+     "pools": {
+      "scorer": 1
+     },
+     "resources": {
+      "cpu": 4.0,
+      "mem_gb": 8.0
+     }
+    }
+   },
+   "variants": {
+    "windows": {
+     "timeout_s": 5400.0,
+     "requires": {
+      "resources": {
+       "mem_gb": 10.0
+      }
+     },
+     "retry": {
+      "max_attempts": 4
+     }
+    },
+    "windows-arm64": {
+     "requires": {
+      "resources": {
+       "cpu": 2.0
+      }
+     }
+    }
+   },
+   "platform": "windows-amd64",
+   "resolved": {
+    "name": "render",
+    "timeout_s": 5400.0,
+    "retry": {
+     "max_attempts": 4
+    },
+    "requires": {
+     "pools": {
+      "scorer": 1
+     },
+     "resources": {
+      "cpu": 4.0,
+      "mem_gb": 10.0
+     }
+    }
+   }
+  },
+  {
+   "section": "stage",
+   "base": {
+    "name": "render",
+    "timeout_s": 3600.0,
+    "retry": {
+     "max_attempts": 3
+    },
+    "requires": {
+     "pools": {
+      "scorer": 1
+     },
+     "resources": {
+      "cpu": 4.0,
+      "mem_gb": 8.0
+     }
+    }
+   },
+   "variants": {
+    "windows": {
+     "timeout_s": 5400.0,
+     "requires": {
+      "resources": {
+       "mem_gb": 10.0
+      }
+     },
+     "retry": {
+      "max_attempts": 4
+     }
+    },
+    "windows-arm64": {
+     "requires": {
+      "resources": {
+       "cpu": 2.0
+      }
+     }
+    }
+   },
+   "platform": "windows-arm64",
+   "resolved": {
+    "name": "render",
+    "timeout_s": 5400.0,
+    "retry": {
+     "max_attempts": 4
+    },
+    "requires": {
+     "pools": {
+      "scorer": 1
+     },
+     "resources": {
+      "cpu": 2.0,
+      "mem_gb": 10.0
+     }
+    }
+   }
+  },
+  {
+   "section": "stage",
+   "base": {
+    "name": "render",
+    "timeout_s": 3600.0,
+    "retry": {
+     "max_attempts": 3
+    },
+    "requires": {
+     "pools": {
+      "scorer": 1
+     },
+     "resources": {
+      "cpu": 4.0,
+      "mem_gb": 8.0
+     }
+    }
+   },
+   "variants": {
+    "windows": {
+     "timeout_s": 5400.0,
+     "requires": {
+      "resources": {
+       "mem_gb": 10.0
+      }
+     },
+     "retry": {
+      "max_attempts": 4
+     }
+    },
+    "windows-arm64": {
+     "requires": {
+      "resources": {
+       "cpu": 2.0
+      }
+     }
+    }
+   },
+   "platform": "darwin-arm64",
+   "resolved": {
+    "name": "render",
+    "timeout_s": 3600.0,
+    "retry": {
+     "max_attempts": 3
+    },
+    "requires": {
+     "pools": {
+      "scorer": 1
+     },
+     "resources": {
+      "cpu": 4.0,
+      "mem_gb": 8.0
+     }
+    }
+   }
+  }
+ ],
+ "note": "A per-platform table applies its token's entry, else its OS's entry, else the base. A section's variants apply OS first, then token; each field a variant sets replaces the base value whole, except the tables in `merged`, which merge key by key."
+}

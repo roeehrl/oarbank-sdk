@@ -1,0 +1,92 @@
+{
+  "$defs": {
+    "BuiltSpec": {
+      "additionalProperties": true,
+      "properties": {
+        "key_inputs": {
+          "additionalProperties": true,
+          "title": "Key Inputs",
+          "type": "object"
+        },
+        "spec_version": {
+          "title": "Spec Version",
+          "type": "integer"
+        },
+        "stages": {
+          "items": {
+            "$ref": "#/$defs/StageSpec"
+          },
+          "title": "Stages",
+          "type": "array"
+        }
+      },
+      "required": [
+        "key_inputs",
+        "spec_version",
+        "stages"
+      ],
+      "title": "BuiltSpec",
+      "type": "object"
+    },
+    "StageSpec": {
+      "additionalProperties": true,
+      "properties": {
+        "datasets": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Datasets",
+          "type": "array"
+        },
+        "mounts": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Mounts",
+          "type": "object"
+        },
+        "payload": {
+          "additionalProperties": true,
+          "title": "Payload",
+          "type": "object"
+        },
+        "stage": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "pattern": "^[a-z][a-z0-9_]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Stage"
+        }
+      },
+      "required": [
+        "payload"
+      ],
+      "title": "StageSpec",
+      "type": "object"
+    }
+  },
+  "$id": "https://codonic.dev/oarbank/schemas/module-spec-build-result-1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "specs": {
+      "items": {
+        "$ref": "#/$defs/BuiltSpec"
+      },
+      "title": "Specs",
+      "type": "array"
+    }
+  },
+  "required": [
+    "specs"
+  ],
+  "title": "SpecBuildResult",
+  "type": "object"
+}

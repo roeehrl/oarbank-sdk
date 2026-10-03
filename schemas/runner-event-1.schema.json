@@ -1,0 +1,105 @@
+{
+  "$id": "https://codonic.dev/oarbank/schemas/runner-event-1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "description": "One NDJSON line in --events (capability progress_events).",
+  "properties": {
+    "data": {
+      "additionalProperties": true,
+      "title": "Data",
+      "type": "object"
+    },
+    "fraction": {
+      "anyOf": [
+        {
+          "maximum": 1,
+          "minimum": 0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "[stable] progress: 0..1.",
+      "title": "Fraction"
+    },
+    "kind": {
+      "enum": [
+        "log",
+        "progress",
+        "metric",
+        "checkpoint",
+        "phase"
+      ],
+      "title": "Kind",
+      "type": "string"
+    },
+    "level": {
+      "anyOf": [
+        {
+          "enum": [
+            "debug",
+            "info",
+            "warn",
+            "error"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Level"
+    },
+    "msg": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Msg"
+    },
+    "name": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "[stable] metric/phase name.",
+      "title": "Name"
+    },
+    "t": {
+      "description": "[stable] Unix seconds.",
+      "title": "T",
+      "type": "number"
+    },
+    "value": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Value"
+    }
+  },
+  "required": [
+    "t",
+    "kind"
+  ],
+  "title": "Event",
+  "type": "object"
+}

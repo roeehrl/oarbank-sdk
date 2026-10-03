@@ -1,0 +1,5 @@
+{
+ "type": "object",
+ "properties": {"ns": {"type": "array", "items": {"type": "integer", "minimum": 0, "maximum": 1000000000}, "minItems": 1}, "name": {"type": "string"}},
+ "required": ["ns"]
+}

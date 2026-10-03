@@ -1,0 +1,57 @@
+# Test fixture: the base the manifest tests mutate. The shipped manifest lives in the module's repository.
+# bench: deterministic CPU benchmark.
+# params: {"iters": int, "seed": str}; objective: single-core Mhash/s; golden: seed "oarbank-golden", 2M iters.
+manifest = 1
+
+[module]
+id = "dev.codonic.oarbank.bench"
+version = "1.0.0"
+compat = "bench1"
+publisher = "oarbank"
+license = "Apache-2.0"
+codeowners = ["roeehrl"]
+stability = "stable"
+description = "Deterministic single-core hash benchmark"
+
+[requires]
+platforms = ["darwin-arm64", "linux-arm64", "linux-amd64"]
+core = ">=2.0,<3"
+agent = ">=0.4"
+module_protocol = [1]
+runner_protocol = [1]
+
+[coordinator]
+exec = ["python", "-I", "-m", "oarbank_bench.module"]
+runtime = { kind = "uv", lock = "uv.lock", python = "3.12.14" }
+timeouts_s = { default = 5.0 }
+
+[runner]
+exec = ["python", "-I", "{bundle}/runner/main.py"]
+runtime = { kind = "uv", lock = "runner/uv.lock", python = "3.12.14" }
+capabilities = ["cancellable", "deterministic_output", "freeze_ok"]
+stop_grace_s = 5
+
+[[stages]]
+name = "run"
+timeout_s = 900
+requires.resources = { cpu = 1, mem_gb = 0.2 }
+
+[results]
+schema = "schemas/result.schema.json"
+schema_version = 1
+determinism = "exact"
+digest = { version = 1, over = ["digest"] }
+value = { field = "mhash_s", direction = "maximize" }
+fields = [
+  { name = "mhash_s", type = "number", indexed = true, unit = "Mhash/s", ui = { column = "Mhash/s", format = ".2f" } },
+  { name = "seconds", type = "number", unit = "s", ui = { column = "Time", format = ".1f", unit = "s" } },
+  { name = "iters", type = "integer", ui = { column = "Iterations", format = ",d" } },
+  { name = "digest", type = "string" },
+]
+
+[goldens]
+fixtures = "goldens/*.json"
+
+[ui]
+digest_line = "{mhash_s:.2f} Mhash/s over {iters:,d} iterations"
+icon = "cpu"

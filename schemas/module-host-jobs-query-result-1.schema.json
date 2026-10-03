@@ -1,0 +1,18 @@
+{
+  "$id": "https://codonic.dev/oarbank/schemas/module-host-jobs-query-result-1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "jobs": {
+      "description": "[beta] {job_id, job_key, state, kind, stage, dataset_id, labels, group, target_node, value, digest, fields, node_id, platform}; result fields (platform: the canonical result's node platform) only for done jobs.",
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "Jobs",
+      "type": "array"
+    }
+  },
+  "title": "JobsQueryResult",
+  "type": "object"
+}

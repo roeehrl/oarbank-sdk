@@ -1,0 +1,29 @@
+{
+  "$id": "https://codonic.dev/oarbank/schemas/module-host-store-query-params-1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "collection": {
+      "title": "Collection",
+      "type": "string"
+    },
+    "limit": {
+      "default": 500,
+      "maximum": 5000,
+      "minimum": 1,
+      "title": "Limit",
+      "type": "integer"
+    },
+    "where": {
+      "additionalProperties": true,
+      "description": "[beta] Equality on top-level document fields.",
+      "title": "Where",
+      "type": "object"
+    }
+  },
+  "required": [
+    "collection"
+  ],
+  "title": "StoreQueryParams",
+  "type": "object"
+}

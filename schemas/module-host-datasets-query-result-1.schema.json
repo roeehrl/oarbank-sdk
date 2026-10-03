@@ -1,0 +1,54 @@
+{
+  "$defs": {
+    "DatasetRef": {
+      "additionalProperties": true,
+      "properties": {
+        "attrs": {
+          "additionalProperties": true,
+          "title": "Attrs",
+          "type": "object"
+        },
+        "files": {
+          "description": "[stable] {path, digest, size} per file.",
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Files",
+          "type": "array"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "title": "Kind",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "kind"
+      ],
+      "title": "DatasetRef",
+      "type": "object"
+    }
+  },
+  "$id": "https://codonic.dev/oarbank/schemas/module-host-datasets-query-result-1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "datasets": {
+      "items": {
+        "$ref": "#/$defs/DatasetRef"
+      },
+      "title": "Datasets",
+      "type": "array"
+    }
+  },
+  "required": [
+    "datasets"
+  ],
+  "title": "DatasetsQueryResult",
+  "type": "object"
+}

@@ -1,0 +1,87 @@
+{
+  "$defs": {
+    "HostInfo": {
+      "additionalProperties": true,
+      "properties": {
+        "capabilities": {
+          "description": "[stable] Host features the module may rely on, e.g. host.datasets.query, placement.v1, nodes.platform, goldens.by_platform, coordinator.variants.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Capabilities",
+          "type": "array"
+        },
+        "name": {
+          "const": "oarbank",
+          "default": "oarbank",
+          "title": "Name",
+          "type": "string"
+        },
+        "platform": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "[beta] The coordinator host's platform token (also OARBANK_PLATFORM in the module's environment). Verbs keep job keys platform-independent: never put it in key_inputs.",
+          "title": "Platform"
+        },
+        "version": {
+          "title": "Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "version"
+      ],
+      "title": "HostInfo",
+      "type": "object"
+    }
+  },
+  "$id": "https://codonic.dev/oarbank/schemas/module-initialize-params-1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "host": {
+      "$ref": "#/$defs/HostInfo"
+    },
+    "module_digest": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "[stable] Content digest of the installed bundle, for the module's logs.",
+      "title": "Module Digest"
+    },
+    "protocol_versions": {
+      "description": "[stable] Majors the host supports, highest first.",
+      "items": {
+        "type": "integer"
+      },
+      "minItems": 1,
+      "title": "Protocol Versions",
+      "type": "array"
+    },
+    "settings": {
+      "additionalProperties": true,
+      "description": "[stable] The module's own settings (validated against its schema).",
+      "title": "Settings",
+      "type": "object"
+    }
+  },
+  "required": [
+    "protocol_versions",
+    "host"
+  ],
+  "title": "InitializeParams",
+  "type": "object"
+}

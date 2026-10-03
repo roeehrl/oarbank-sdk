@@ -1,0 +1,120 @@
+# Test fixture: the base the manifest tests mutate. An invented module, not a shipped one.
+# render: renders frames of a scene with a pinned renderer and scores them against a reference frame.
+#
+# Two ways to run one evaluation (job.plan picks per sweep; the setting `pipeline` chooses):
+#   eval             render + score in one job; the imagediff pool must exist but is used only briefly (needs_pools)
+#   render -> score  render natively on any node with the renderer, then compare images on a node with the pool
+# Nothing about the image-comparison VM or the renderer lives in the core: the `imagediff` service and the `renderer4` probe
+# below are this module's own executables speaking service protocol 1.
+manifest = 1
+
+[module]
+id = "dev.example.render"
+version = "2.0.0"
+compat = "renderer4.2-sampler2-metrics2"
+publisher = "example"
+license = "Apache-2.0"
+codeowners = ["example"]
+stability = "beta"
+description = "Renders frames of a scene and scores them against a reference frame"
+
+[requires]
+platforms = ["darwin-arm64"]
+os = { darwin = ">=15.0" }
+core = ">=2.0,<3"
+agent = ">=0.4"
+module_protocol = [1]
+runner_protocol = [1]
+service_protocol = [1]
+
+[coordinator]
+exec = ["python", "-I", "-m", "render_module.module"]
+runtime = { kind = "uv", lock = "uv.lock", python = "3.12.14" }
+capabilities = ["result.merge", "study.metrics", "params.distance"]
+concurrency = 4
+timeouts_s = { default = 10.0, "job.plan" = 60.0 }
+permissions = ["datasets:read", "settings:read:self"]
+
+[runner]
+exec = ["python", "-I", "{bundle}/runner/main.py"]
+runtime = { kind = "uv", lock = "runner/uv.lock", python = "3.12.14" }
+capabilities = ["cancellable", "progress_events", "deterministic_output"]
+stop_grace_s = 20
+
+[[stages]]
+name = "eval"
+timeout_s = 1800
+requires = { capabilities = ["renderer4"], needs_pools = ["imagediff"], resources = { cpu = 1, mem_gb = 1.5 } }
+retry = { max_attempts = 3 }
+
+[[stages]]
+name = "render"
+timeout_s = 1800
+requires = { capabilities = ["renderer4"], resources = { cpu = 1, mem_gb = 1.5 } }
+
+[[stages]]
+name = "score"
+after = "render"
+timeout_s = 600
+requires = { pools = { imagediff = 1 }, resources = { cpu = 0.5, mem_gb = 1.0 } }
+
+[[services]]
+name = "imagediff"
+exec = ["{bundle}/services/imagediff.sh"]
+lifecycle = "on_demand"
+idle_timeout_s = 900
+start_timeout_s = 180
+provides = { capabilities = ["imagediff"], pools = ["imagediff"] }
+reserves_host_memory = true
+yieldable = true
+freeze_ok = false
+
+[[probes]]
+name = "renderer4"
+exec = ["{bundle}/probes/renderer4.sh"]
+period_s = 3600
+
+[sandbox]
+contract = 1
+net = { mode = "egress-allowlist", allow = ["assets.example.org"] }      # scene textures, fetched by the runner
+tools = [{ id = "renderer4", trust = "code-exec" }]                     # scenes may carry scripts
+devices = { gpu = "compute" }
+
+[settings]
+schema = "schemas/settings.schema.json"
+
+[results]
+schema = "schemas/result.schema.json"
+schema_version = 1
+determinism = "exact"
+digest = { version = 1, over = ["image_sha256"] }
+value = { field = "score", direction = "maximize" }
+fields = [
+  { name = "score", type = "number", indexed = true, ui = { column = "Score", format = ".6f" } },
+  { name = "tiles", type = "integer", ui = { column = "Tiles", format = ",d" } },
+  { name = "psnr", type = "number", ui = { column = "PSNR", format = ".2f" } },
+  { name = "worst_tile", type = "number", ui = { column = "Worst tile", format = ".4f" } },
+  { name = "noise", type = "number", ui = { column = "Noise", format = ".3f" } },
+  { name = "render_s", type = "number", unit = "s", ui = { column = "Render", format = ".0f", unit = "s" } },
+  { name = "score_s", type = "number", unit = "s", ui = { column = "Score time", format = ".0f", unit = "s" } },
+  { name = "image_sha256", type = "string" },
+]
+
+[datasets]
+kinds = ["scene", "reference", "tool"]
+attrs = [
+  { name = "scene", type = "string", indexed = true },
+  { name = "frames", type = "string" },
+  { name = "round_id", type = "string", indexed = true },
+]
+
+[goldens]
+fixtures = "goldens/*.json"
+compare = "digest"
+
+[ui]
+digest_line = "score {score:.6f}  PSNR {psnr:.2f}  worst {worst_tile:.4f}  {tiles:,d} tiles"
+icon = "gpu"
+
+[cli]
+exec = ["python", "-I", "-m", "render_module.cli"]

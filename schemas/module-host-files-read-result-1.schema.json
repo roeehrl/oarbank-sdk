@@ -1,0 +1,32 @@
+{
+  "$id": "https://codonic.dev/oarbank/schemas/module-host-files-read-result-1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "content_b64": {
+      "title": "Content B64",
+      "type": "string"
+    },
+    "digest": {
+      "title": "Digest",
+      "type": "string"
+    },
+    "eof": {
+      "title": "Eof",
+      "type": "boolean"
+    },
+    "size": {
+      "description": "[beta] The whole file's size.",
+      "title": "Size",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "content_b64",
+    "size",
+    "digest",
+    "eof"
+  ],
+  "title": "FilesReadResult",
+  "type": "object"
+}

@@ -1,0 +1,39 @@
+{
+ "cases": [
+  {
+   "module_id": "dev.codonic.oarbank.toy",
+   "compat": "toy1",
+   "key_inputs": {
+    "n": 1000
+   },
+   "stage": null,
+   "job_key": "2950ad61ba317a9e660b5c397b601989542951dc3964f4fff39e9142a6d7f533"
+  },
+  {
+   "module_id": "dev.codonic.oarbank.toy",
+   "compat": "toy1",
+   "key_inputs": {
+    "n": 1000.0
+   },
+   "stage": null,
+   "job_key": "2950ad61ba317a9e660b5c397b601989542951dc3964f4fff39e9142a6d7f533"
+  },
+  {
+   "module_id": "dev.example.render",
+   "compat": "render3",
+   "key_inputs": {
+    "params": {
+     "a": 0.5,
+     "b": [
+      1,
+      2,
+      3
+     ]
+    },
+    "dataset": "scene:atrium@2026-10-02T13:05"
+   },
+   "stage": "score",
+   "job_key": "9ce9e019e2929c372fa7c25ddc23d38f65414e81c7d437eaae306ee539ad6838:score"
+  }
+ ]
+}

@@ -1,0 +1,23 @@
+{
+  "$id": "https://codonic.dev/oarbank/schemas/module-golden-compare-params-1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "expected": {
+      "additionalProperties": true,
+      "title": "Expected",
+      "type": "object"
+    },
+    "result": {
+      "additionalProperties": true,
+      "title": "Result",
+      "type": "object"
+    }
+  },
+  "required": [
+    "expected",
+    "result"
+  ],
+  "title": "GoldenCompareParams",
+  "type": "object"
+}

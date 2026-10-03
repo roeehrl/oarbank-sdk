@@ -1,0 +1,27 @@
+{
+ "accept": [
+  "darwin-arm64",
+  "linux-amd64",
+  "windows-arm64",
+  "freebsd-amd64",
+  "linux-riscv64"
+ ],
+ "reject": [
+  "darwin",
+  "linux-amd64\n",
+  "Darwin-arm64",
+  "linux_amd64",
+  "linux-",
+  "-arm64",
+  "linux-amd64-musl!",
+  ""
+ ],
+ "known": [
+  "darwin-arm64",
+  "darwin-amd64",
+  "linux-arm64",
+  "linux-amd64",
+  "windows-arm64",
+  "windows-amd64"
+ ]
+}

@@ -1,0 +1,87 @@
+# toy: the smallest useful module. The core's own test suite runs with only this installed.
+# params: {"n": int}; result: {"sum": int} = sum(range(n)); deterministic, no datasets, no services.
+manifest = 1
+
+[module]
+id = "dev.codonic.oarbank.toy"
+version = "0.1.0"
+compat = "toy1"
+publisher = "oarbank"
+license = "Apache-2.0"
+codeowners = ["roeehrl"]
+stability = "stable"
+description = "Sums integers; the reference module for the conformance kit"
+
+[requires]
+core = ">=2.1,<3"
+platforms = ["darwin-arm64", "darwin-amd64", "linux-arm64", "linux-amd64", "windows-arm64", "windows-amd64"]
+module_protocol = [1]
+runner_protocol = [1]
+ui_contract = ">=1.0,<2"
+
+[coordinator]
+exec = ["python", "-I", "{bundle}/toy_module.py"]
+runtime = { kind = "python" }
+capabilities = ["ui.view.compute", "op.plan", "op.apply", "integrity.check", "move.preflight", "move.postflight", "move.cancelled"]
+permissions = ["files:read:self", "store:read:self"]
+
+[coordinator.move]
+rules = [{ files = "cache/", class = "rebuild" }, { store = "toy_scratch", class = "drop" }]
+effects = ["store.write", "files.write"]
+
+[runner]
+exec = ["python", "-I", "{bundle}/toy_runner.py"]
+runtime = { kind = "python" }
+capabilities = ["cancellable", "deterministic_output", "freeze_ok"]
+
+[[stages]]
+name = "run"
+timeout_s = 60
+requires.resources = { cpu = 1, mem_gb = 0.1 }
+
+[results]
+schema = "schemas/result.schema.json"
+schema_version = 1
+determinism = "exact"
+digest = { version = 1, over = ["sum"] }
+value = { field = "sum", direction = "maximize" }
+fields = [{ name = "sum", type = "integer", ui = { column = "Sum", format = ",d" } }]
+
+[goldens]
+fixtures = "goldens/*.json"
+
+[ui]
+digest_line = "sum = {sum:,d}"
+icon = "cube"
+pages = [{ id = "overview", title = "Toy", slot = "module.overview", file = "ui/pages/overview.json" }]
+panels = [{ id = "job_sum", title = "Toy result", slot = "job.detail.panel", file = "ui/panels/job.json" }]
+iframes = [{ id = "explorer", entry = "ui/frames/explorer.html", title = "Toy explorer", bridge = ["read.view", "request.operation", "resize"] }]
+
+[ui.views.sums]
+shape = "rows"
+inputs = ["results"]
+columns = [{ key = "n", type = "integer" }, { key = "sum", type = "integer" }, { key = "ok", type = "bool" }]
+
+[[operations]]
+verb = "set_favorite"
+title = "Set the favorite n"
+tier = "T1"
+target = "none"
+params_schema = "schemas/set_favorite.json"
+effects = ["module_settings.update"]
+
+[[operations]]
+verb = "queue_sums"
+title = "Queue sums"
+tier = "T1"
+target = "none"
+params_schema = "schemas/queue_sums.json"
+effects = ["campaigns.create", "jobs.enqueue"]
+
+[[operations]]
+verb = "save_note"
+title = "Save a note"
+tier = "T1"
+target = "none"
+params_schema = "schemas/save_note.json"
+effects = ["files.write"]

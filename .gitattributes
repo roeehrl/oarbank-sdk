@@ -1,0 +1,2 @@
+# Every text file is LF on every platform: bundle digests and the conformance kit's portability check need it.
+* text=auto eol=lf

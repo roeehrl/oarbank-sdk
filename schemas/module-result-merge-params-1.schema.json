@@ -1,0 +1,26 @@
+{
+  "$id": "https://codonic.dev/oarbank/schemas/module-result-merge-params-1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "stages": {
+      "description": "[stable] Stage name -> accepted result envelope.",
+      "patternProperties": {
+        "^[a-z][a-z0-9_]*$": {
+          "additionalProperties": true,
+          "type": "object"
+        }
+      },
+      "propertyNames": {
+        "maxLength": 64
+      },
+      "title": "Stages",
+      "type": "object"
+    }
+  },
+  "required": [
+    "stages"
+  ],
+  "title": "ResultMergeParams",
+  "type": "object"
+}

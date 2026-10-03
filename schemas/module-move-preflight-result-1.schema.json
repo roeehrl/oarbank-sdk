@@ -1,0 +1,138 @@
+{
+  "$defs": {
+    "CheckItem": {
+      "additionalProperties": true,
+      "description": "One named check a module ran over its own state. [beta]",
+      "properties": {
+        "detail": {
+          "default": "",
+          "maxLength": 1000,
+          "title": "Detail",
+          "type": "string"
+        },
+        "name": {
+          "description": "[beta] Short, stable check name, e.g. `rounds_index_matches_files`.",
+          "maxLength": 120,
+          "title": "Name",
+          "type": "string"
+        },
+        "ok": {
+          "title": "Ok",
+          "type": "boolean"
+        },
+        "severity": {
+          "default": "error",
+          "description": "[beta] Only failed `error` checks fail the whole result.",
+          "enum": [
+            "error",
+            "warn",
+            "info"
+          ],
+          "title": "Severity",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "ok"
+      ],
+      "title": "CheckItem",
+      "type": "object"
+    },
+    "Effect": {
+      "additionalProperties": true,
+      "description": "A core change the module asks the host to make; the host applies it on the single writer.",
+      "properties": {
+        "args": {
+          "additionalProperties": true,
+          "title": "Args",
+          "type": "object"
+        },
+        "kind": {
+          "enum": [
+            "jobs.enqueue",
+            "jobs.cancel",
+            "campaigns.create",
+            "campaigns.update",
+            "campaigns.cancel",
+            "datasets.create",
+            "datasets.update",
+            "datasets.delete",
+            "module_settings.update",
+            "store.write",
+            "store.delete",
+            "files.write",
+            "files.put",
+            "files.delete",
+            "external"
+          ],
+          "title": "Kind",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "title": "Effect",
+      "type": "object"
+    },
+    "MoveBlocker": {
+      "additionalProperties": true,
+      "properties": {
+        "code": {
+          "description": "[beta] `<module-short>/<code>`.",
+          "maxLength": 80,
+          "title": "Code",
+          "type": "string"
+        },
+        "message": {
+          "maxLength": 500,
+          "title": "Message",
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "message"
+      ],
+      "title": "MoveBlocker",
+      "type": "object"
+    }
+  },
+  "$id": "https://codonic.dev/oarbank/schemas/module-move-preflight-result-1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "blockers": {
+      "description": "[beta] While any remains, the cutover waits.",
+      "items": {
+        "$ref": "#/$defs/MoveBlocker"
+      },
+      "title": "Blockers",
+      "type": "array"
+    },
+    "checks": {
+      "items": {
+        "$ref": "#/$defs/CheckItem"
+      },
+      "title": "Checks",
+      "type": "array"
+    },
+    "effects": {
+      "description": "[beta] Only kinds in coordinator.move.effects; applied while draining.",
+      "items": {
+        "$ref": "#/$defs/Effect"
+      },
+      "title": "Effects",
+      "type": "array"
+    },
+    "message": {
+      "default": "",
+      "maxLength": 500,
+      "title": "Message",
+      "type": "string"
+    }
+  },
+  "title": "MovePreflightResult",
+  "type": "object"
+}

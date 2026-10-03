@@ -1,0 +1,176 @@
+{
+  "$defs": {
+    "Artifact": {
+      "additionalProperties": true,
+      "properties": {
+        "files": {
+          "items": {
+            "$ref": "#/$defs/ArtifactFile"
+          },
+          "minItems": 1,
+          "title": "Files",
+          "type": "array"
+        },
+        "name": {
+          "description": "[stable] Output name; a downstream stage receives it as inputs.<name>.",
+          "maxLength": 64,
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "files"
+      ],
+      "title": "Artifact",
+      "type": "object"
+    },
+    "ArtifactFile": {
+      "additionalProperties": true,
+      "properties": {
+        "digest": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Digest"
+        },
+        "local": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "[stable] Runner-written only: workdir-relative source (a PortablePath, `/`-separated). The agent uploads it and replaces it with digest/size.",
+          "title": "Local"
+        },
+        "path": {
+          "description": "[stable] PortablePath inside the artifact (what the consumer sees under its mount). Artifacts carry no file modes.",
+          "title": "Path",
+          "type": "string"
+        },
+        "size": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Size"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "title": "ArtifactFile",
+      "type": "object"
+    },
+    "Provenance": {
+      "additionalProperties": true,
+      "properties": {
+        "argv": {
+          "additionalProperties": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "description": "[stable] Tool invocations that produced the result.",
+          "title": "Argv",
+          "type": "object"
+        },
+        "host": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Host"
+        },
+        "tool_versions": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Tool Versions",
+          "type": "object"
+        }
+      },
+      "title": "Provenance",
+      "type": "object"
+    }
+  },
+  "$id": "https://codonic.dev/oarbank/schemas/result-envelope-1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "artifacts": {
+      "items": {
+        "$ref": "#/$defs/Artifact"
+      },
+      "title": "Artifacts",
+      "type": "array"
+    },
+    "effective": {
+      "additionalProperties": true,
+      "description": "[stable] The subset of spec parameters/modes actually honoured; the core compares it with what was requested.",
+      "title": "Effective",
+      "type": "object"
+    },
+    "envelope": {
+      "const": 1,
+      "default": 1,
+      "title": "Envelope",
+      "type": "integer"
+    },
+    "module_version": {
+      "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(-[0-9A-Za-z.-]+)?(\\+[0-9A-Za-z.-]+)?$",
+      "title": "Module Version",
+      "type": "string"
+    },
+    "payload": {
+      "additionalProperties": true,
+      "description": "[stable] Module-owned result payload (<= max_inline_kb; larger data goes in artifacts).",
+      "title": "Payload",
+      "type": "object"
+    },
+    "protocol": {
+      "default": 1,
+      "title": "Protocol",
+      "type": "integer"
+    },
+    "provenance": {
+      "$ref": "#/$defs/Provenance"
+    },
+    "schema": {
+      "description": "[stable] `<module>/result@N` of the payload.",
+      "pattern": "^[a-z0-9][a-z0-9.-]*/(spec|result)@[1-9][0-9]*$",
+      "title": "Schema",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema",
+    "module_version",
+    "payload"
+  ],
+  "title": "ResultEnvelope",
+  "type": "object"
+}

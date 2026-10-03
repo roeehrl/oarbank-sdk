@@ -1,0 +1,21 @@
+{
+  "$id": "https://codonic.dev/oarbank/schemas/module-golden-compare-result-1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "ok": {
+      "title": "Ok",
+      "type": "boolean"
+    },
+    "reason": {
+      "default": "ok",
+      "title": "Reason",
+      "type": "string"
+    }
+  },
+  "required": [
+    "ok"
+  ],
+  "title": "GoldenCompareResult",
+  "type": "object"
+}

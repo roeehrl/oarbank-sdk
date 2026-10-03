@@ -1,0 +1,28 @@
+{
+  "$id": "https://codonic.dev/oarbank/schemas/module-host-blobs-stat-result-1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "exists": {
+      "title": "Exists",
+      "type": "boolean"
+    },
+    "size": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Size"
+    }
+  },
+  "required": [
+    "exists"
+  ],
+  "title": "BlobStatResult",
+  "type": "object"
+}

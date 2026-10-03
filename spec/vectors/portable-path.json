@@ -1,0 +1,57 @@
+{
+ "accept": [
+  "a",
+  "notes/x.txt",
+  "bin/linux-amd64/runner",
+  "x..y",
+  "A-b_c+d@e",
+  "deep/deep/deep/deep/deep/deep/deep/deep/deep/deep/deep/deep/deep/deep/deep/deep/deep/deep/deep/deep/f"
+ ],
+ "accept_with_dotfiles": [
+  ".gitattributes",
+  "cfg/.env.example"
+ ],
+ "reject": [
+  "",
+  "a\n",
+  "a\n/b",
+  "/abs",
+  "a/",
+  "a//b",
+  "./a",
+  "a/../b",
+  "..",
+  "a\\b",
+  "C:/x",
+  "c:x",
+  "a:b",
+  "CON",
+  "con.txt",
+  "a/NUL",
+  "lpt9.log",
+  "COM¹",
+  "trail.",
+  "trail ",
+  "sp ace",
+  "naïve",
+  "é",
+  "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+  "y/y/y/y/y/y/y/y/y/y/y/y/y/y/y/y/y/y/y/y/y/y/y/y/y/y/y/y/y/y/y/y/y/y/y/y/y/y/y/y/y/y/y/y/y/y/y/y/y/y/y/y/y/y/y/y/y/y/y/y/y/y/y/y/y/y/y/y/y/y/y/y/y/y/y/y/y/y/y/y/y/y/y/y/y/y/y/y/y/y/y/y/y/y/y/y/y/y/y/y/y/z",
+  "*star",
+  "q?",
+  "pipe|",
+  "lt<",
+  "gt>",
+  "quo\"te"
+ ],
+ "casefold_collisions": [
+  [
+   "Readme.md",
+   "README.md"
+  ],
+  [
+   "a/B",
+   "a/b"
+  ]
+ ]
+}

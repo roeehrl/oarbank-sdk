@@ -1,0 +1,23 @@
+{
+  "$id": "https://codonic.dev/oarbank/schemas/module-host-files-list-params-1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "limit": {
+      "default": 1000,
+      "maximum": 10000,
+      "minimum": 1,
+      "title": "Limit",
+      "type": "integer"
+    },
+    "prefix": {
+      "default": "",
+      "description": "[beta] Path prefix inside the module's files ('' = all).",
+      "maxLength": 512,
+      "title": "Prefix",
+      "type": "string"
+    }
+  },
+  "title": "FilesListParams",
+  "type": "object"
+}

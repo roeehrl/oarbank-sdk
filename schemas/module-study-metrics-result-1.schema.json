@@ -1,0 +1,21 @@
+{
+  "$id": "https://codonic.dev/oarbank/schemas/module-study-metrics-result-1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "columns": {
+      "additionalProperties": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "description": "[stable] trial label -> {study_column_name: value}.",
+      "title": "Columns",
+      "type": "object"
+    }
+  },
+  "required": [
+    "columns"
+  ],
+  "title": "StudyMetricsResult",
+  "type": "object"
+}

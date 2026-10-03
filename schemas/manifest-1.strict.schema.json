@@ -1,0 +1,2522 @@
+{
+  "$defs": {
+    "BundleSection": {
+      "additionalProperties": false,
+      "description": "How the bundle is built (spec/bundles.md). [stable]",
+      "properties": {
+        "executables": {
+          "description": "[stable] Globs (bundle paths) of files that get mode 755; every other file is 644. The argv[0] of every native exec is executable too. Modes never come from the build host's filesystem.",
+          "items": {
+            "maxLength": 200,
+            "type": "string"
+          },
+          "title": "Executables",
+          "type": "array"
+        },
+        "platform_files": {
+          "description": "[beta] Glob (bundle path) -> the platforms or OSes whose nodes receive the matching files; a file matched by several globs goes to each one's platforms, and unmatched files go everywhere. The coordinator and the CLI always have the whole bundle. Needs requires.core >= 2.2.",
+          "patternProperties": {
+            "^[^/\\\\:][^\\\\:]*$": {
+              "items": {
+                "maxLength": 40,
+                "pattern": "^[a-z][a-z0-9]*(-[a-z0-9_]+)?$",
+                "type": "string"
+              },
+              "minItems": 1,
+              "type": "array"
+            }
+          },
+          "propertyNames": {
+            "maxLength": 200
+          },
+          "title": "Platform Files",
+          "type": "object"
+        }
+      },
+      "title": "BundleSection",
+      "type": "object"
+    },
+    "CLI": {
+      "additionalProperties": false,
+      "properties": {
+        "exec": {
+          "description": "[beta] Module CLI; `oarbank cli <module> ...` runs it on the coordinator, sandboxed, with a token scoped to the module (OARBANKD_URL, OARBANK_TOKEN).",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Exec",
+          "type": "array"
+        }
+      },
+      "required": [
+        "exec"
+      ],
+      "title": "CLI",
+      "type": "object"
+    },
+    "Column": {
+      "additionalProperties": false,
+      "properties": {
+        "direction": {
+          "anyOf": [
+            {
+              "enum": [
+                "min",
+                "max"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Which way is better; enables best/colouring generically.",
+          "title": "Direction"
+        },
+        "format": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Format"
+        },
+        "key": {
+          "maxLength": 64,
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "title": "Key",
+          "type": "string"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "maxLength": 80,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Label"
+        },
+        "sortable": {
+          "default": true,
+          "title": "Sortable",
+          "type": "boolean"
+        },
+        "tone_by_sign": {
+          "default": false,
+          "title": "Tone By Sign",
+          "type": "boolean"
+        },
+        "type": {
+          "default": "text",
+          "enum": [
+            "text",
+            "number",
+            "integer",
+            "percent",
+            "bytes",
+            "duration",
+            "relative_time",
+            "timestamp",
+            "bool",
+            "digest",
+            "code",
+            "status",
+            "job_ref",
+            "node_ref",
+            "dataset_ref",
+            "campaign_ref",
+            "link"
+          ],
+          "title": "Type",
+          "type": "string"
+        },
+        "unit": {
+          "anyOf": [
+            {
+              "maxLength": 16,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Unit"
+        }
+      },
+      "required": [
+        "key"
+      ],
+      "title": "Column",
+      "type": "object"
+    },
+    "ContainerImage": {
+      "additionalProperties": false,
+      "description": "A container image the module's jobs may run through the agent's container broker. [beta]",
+      "properties": {
+        "image": {
+          "description": "[beta] A digest-pinned reference, e.g. `docker.io/org/tool:1.2@sha256:<64 hex>`.",
+          "maxLength": 300,
+          "pattern": "^[a-z0-9][a-z0-9._/:-]*@sha256:[0-9a-f]{64}$",
+          "title": "Image",
+          "type": "string"
+        },
+        "platform": {
+          "default": "linux/arm64",
+          "description": "[beta] OCI platform (open set), e.g. linux/arm64 or linux/amd64 (emulated where the node's arch differs).",
+          "pattern": "^[a-z0-9]+/[a-z0-9_]+$",
+          "title": "Platform",
+          "type": "string"
+        }
+      },
+      "required": [
+        "image"
+      ],
+      "title": "ContainerImage",
+      "type": "object"
+    },
+    "Coordinator": {
+      "additionalProperties": false,
+      "description": "The out-of-process coordinator side (module protocol over stdio). [stable]",
+      "properties": {
+        "campaign_effects": {
+          "description": "[beta] Effects campaign.tick may request (requires the campaign.tick capability).",
+          "items": {
+            "enum": [
+              "jobs.enqueue",
+              "jobs.cancel",
+              "campaigns.create",
+              "campaigns.update",
+              "campaigns.cancel",
+              "datasets.create",
+              "datasets.update",
+              "datasets.delete",
+              "module_settings.update",
+              "store.write",
+              "store.delete",
+              "files.write",
+              "files.put",
+              "files.delete",
+              "external"
+            ],
+            "type": "string"
+          },
+          "title": "Campaign Effects",
+          "type": "array"
+        },
+        "capabilities": {
+          "description": "[stable] Optional verbs/features implemented, e.g. job.plan.batch, result.merge, golden.compare, study.metrics, params.distance, result.upgrade.",
+          "items": {
+            "maxLength": 64,
+            "pattern": "^[a-z0-9][a-z0-9._-]*$",
+            "type": "string"
+          },
+          "title": "Capabilities",
+          "type": "array"
+        },
+        "concurrency": {
+          "default": 1,
+          "description": "[stable] Max in-flight requests the module accepts; 1 = serial.",
+          "maximum": 64,
+          "minimum": 1,
+          "title": "Concurrency",
+          "type": "integer"
+        },
+        "env": {
+          "description": "[beta] Extra environment for the coordinator process (names `^[A-Z][A-Z0-9_]*$`, never a reserved name). The host also sets OARBANK_PLATFORM. Needs requires.core >= 2.2.",
+          "patternProperties": {
+            "^[A-Z][A-Z0-9_]*$": {
+              "maxLength": 4096,
+              "type": "string"
+            }
+          },
+          "propertyNames": {
+            "maxLength": 64
+          },
+          "title": "Env",
+          "type": "object"
+        },
+        "exec": {
+          "description": "[stable] argv (spec/manifest.md, \"Exec\"); cwd is the bundle root; the process speaks module protocol JSON-RPC on stdin/stdout.",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Exec",
+          "type": "array"
+        },
+        "move": {
+          "$ref": "#/$defs/MoveSection"
+        },
+        "permissions": {
+          "description": "[stable] Host callbacks the module may call; everything else is denied.",
+          "items": {
+            "enum": [
+              "datasets:read",
+              "blobs:stat",
+              "settings:read:self",
+              "store:read:self",
+              "nodes:read",
+              "jobs:read:self",
+              "files:read:self"
+            ],
+            "type": "string"
+          },
+          "title": "Permissions",
+          "type": "array"
+        },
+        "runtime": {
+          "$ref": "#/$defs/Runtime"
+        },
+        "timeouts_s": {
+          "additionalProperties": {
+            "exclusiveMinimum": 0,
+            "maximum": 3600,
+            "type": "number"
+          },
+          "description": "[stable] Per-verb timeouts; key `default` applies to unlisted verbs.",
+          "title": "Timeouts S",
+          "type": "object"
+        },
+        "variants": {
+          "description": "[beta] Per-platform overrides for the coordinator host, keyed by platform token or OS (checked against requires.coordinator_platforms when set). Needs requires.core >= 2.2.",
+          "patternProperties": {
+            "^[a-z][a-z0-9]*(-[a-z0-9_]+)?$": {
+              "$ref": "#/$defs/CoordinatorVariant"
+            }
+          },
+          "propertyNames": {
+            "maxLength": 40
+          },
+          "title": "Variants",
+          "type": "object"
+        }
+      },
+      "required": [
+        "exec",
+        "runtime"
+      ],
+      "title": "Coordinator",
+      "type": "object"
+    },
+    "CoordinatorVariant": {
+      "additionalProperties": false,
+      "description": "Per-platform overrides of [coordinator] for the coordinator host's platform (key: a platform token or an OS name;\nthe most specific key wins; `timeouts_s` and `env` merge key by key). [beta]",
+      "properties": {
+        "concurrency": {
+          "anyOf": [
+            {
+              "maximum": 64,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "[beta] Replaces coordinator.concurrency.",
+          "title": "Concurrency"
+        },
+        "env": {
+          "anyOf": [
+            {
+              "patternProperties": {
+                "^[A-Z][A-Z0-9_]*$": {
+                  "maxLength": 4096,
+                  "type": "string"
+                }
+              },
+              "propertyNames": {
+                "maxLength": 64
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "[beta] Merged over coordinator.env name by name.",
+          "title": "Env"
+        },
+        "exec": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "[beta] Replaces coordinator.exec.",
+          "title": "Exec"
+        },
+        "runtime": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Runtime"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "[beta] Replaces coordinator.runtime."
+        },
+        "timeouts_s": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "exclusiveMinimum": 0,
+                "maximum": 3600,
+                "type": "number"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "[beta] Merged over coordinator.timeouts_s verb by verb.",
+          "title": "Timeouts S"
+        }
+      },
+      "title": "CoordinatorVariant",
+      "type": "object"
+    },
+    "DatasetAttr": {
+      "additionalProperties": false,
+      "properties": {
+        "indexed": {
+          "default": false,
+          "title": "Indexed",
+          "type": "boolean"
+        },
+        "name": {
+          "maxLength": 64,
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "title": "Name",
+          "type": "string"
+        },
+        "type": {
+          "enum": [
+            "number",
+            "integer",
+            "string",
+            "boolean"
+          ],
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "type"
+      ],
+      "title": "DatasetAttr",
+      "type": "object"
+    },
+    "Datasets": {
+      "additionalProperties": false,
+      "properties": {
+        "attrs": {
+          "items": {
+            "$ref": "#/$defs/DatasetAttr"
+          },
+          "title": "Attrs",
+          "type": "array"
+        },
+        "kinds": {
+          "description": "[stable] Dataset kinds this module registers; stored namespaced as '<module-short>/<kind>'.",
+          "items": {
+            "maxLength": 64,
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "type": "string"
+          },
+          "title": "Kinds",
+          "type": "array"
+        },
+        "platform_bound": {
+          "description": "[beta] Kinds whose datasets only make sense on one platform (an index built by a native tool): datasets.create must give their `platform`, and jobs using them run only there. Needs requires.core >= 2.2.",
+          "items": {
+            "maxLength": 64,
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "type": "string"
+          },
+          "title": "Platform Bound",
+          "type": "array"
+        }
+      },
+      "title": "Datasets",
+      "type": "object"
+    },
+    "Digest": {
+      "additionalProperties": false,
+      "properties": {
+        "over": {
+          "description": "[stable] Result payload fields the digest covers (documentation; the module computes it in result.evaluate).",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Over",
+          "type": "array"
+        },
+        "version": {
+          "description": "[stable] Replica/golden comparisons happen only between equal digest versions.",
+          "minimum": 1,
+          "title": "Version",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "version",
+        "over"
+      ],
+      "title": "Digest",
+      "type": "object"
+    },
+    "FieldUI": {
+      "additionalProperties": false,
+      "properties": {
+        "column": {
+          "anyOf": [
+            {
+              "maxLength": 40,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "[stable] Column header in result tables; absent = not shown.",
+          "title": "Column"
+        },
+        "format": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "[stable] Restricted format spec: .Nf, .Ne, .N%, d, ,d or s.",
+          "title": "Format"
+        },
+        "unit": {
+          "anyOf": [
+            {
+              "maxLength": 16,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Unit"
+        }
+      },
+      "title": "FieldUI",
+      "type": "object"
+    },
+    "GPUNeed": {
+      "additionalProperties": false,
+      "description": "The runner's GPU use. [beta]",
+      "properties": {
+        "apis_any": {
+          "description": "[beta] Any of these GPU APIs (open set: metal, cuda, rocm, directml, vulkan).",
+          "items": {
+            "pattern": "^[a-z][a-z0-9]*$",
+            "type": "string"
+          },
+          "title": "Apis Any",
+          "type": "array"
+        },
+        "in_container": {
+          "default": false,
+          "description": "[beta] The GPU is used from inside a broker-run container.",
+          "title": "In Container",
+          "type": "boolean"
+        },
+        "min_vram_gb": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "[beta] Minimum device memory where memory is not unified.",
+          "title": "Min Vram Gb"
+        },
+        "use": {
+          "default": "none",
+          "description": "[beta] `shared`/`exclusive` jobs are not admitted while a protected process group uses that GPU.",
+          "enum": [
+            "none",
+            "shared",
+            "exclusive"
+          ],
+          "title": "Use",
+          "type": "string"
+        }
+      },
+      "title": "GPUNeed",
+      "type": "object"
+    },
+    "Goldens": {
+      "additionalProperties": false,
+      "properties": {
+        "compare": {
+          "default": "digest",
+          "description": "[stable] `verb` calls golden.compare instead of digest equality.",
+          "enum": [
+            "digest",
+            "verb"
+          ],
+          "title": "Compare",
+          "type": "string"
+        },
+        "fixtures": {
+          "description": "[stable] Glob (bundle path) of golden fixtures: inputs plus the expected digest, optionally per platform (`Golden.platforms`, `Golden.expected_by_platform`; oarbank_sdk.goldens.load reads them).",
+          "title": "Fixtures",
+          "type": "string"
+        }
+      },
+      "required": [
+        "fixtures"
+      ],
+      "title": "Goldens",
+      "type": "object"
+    },
+    "IframeDecl": {
+      "additionalProperties": false,
+      "properties": {
+        "bridge": {
+          "description": "Bridge capabilities the frame may use.",
+          "items": {
+            "enum": [
+              "read.query",
+              "read.view",
+              "request.operation",
+              "resize",
+              "navigate"
+            ],
+            "type": "string"
+          },
+          "title": "Bridge",
+          "type": "array"
+        },
+        "entry": {
+          "description": "Bundle path of the HTML entry (served from the module origin with its own CSP).",
+          "title": "Entry",
+          "type": "string"
+        },
+        "id": {
+          "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "title": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "entry",
+        "title"
+      ],
+      "title": "IframeDecl",
+      "type": "object"
+    },
+    "LinuxRequirements": {
+      "additionalProperties": false,
+      "properties": {
+        "glibc": {
+          "anyOf": [
+            {
+              "pattern": "^\\s*(==|>=|<=|>|<|~=)\\s*[0-9][0-9A-Za-z.]*(\\s*,\\s*(==|>=|<=|>|<|~=)\\s*[0-9][0-9A-Za-z.]*)*\\s*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "[stable] glibc versions, e.g. '>=2.35'.",
+          "title": "Glibc"
+        },
+        "kernel": {
+          "anyOf": [
+            {
+              "pattern": "^\\s*(==|>=|<=|>|<|~=)\\s*[0-9][0-9A-Za-z.]*(\\s*,\\s*(==|>=|<=|>|<|~=)\\s*[0-9][0-9A-Za-z.]*)*\\s*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "[stable] Kernel versions, e.g. '>=6.1'.",
+          "title": "Kernel"
+        }
+      },
+      "title": "LinuxRequirements",
+      "type": "object"
+    },
+    "ModuleInfo": {
+      "additionalProperties": false,
+      "properties": {
+        "codeowners": {
+          "description": "[stable] Maintainers; modules without codeowners cannot be verified.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Codeowners",
+          "type": "array"
+        },
+        "compat": {
+          "description": "[stable] Result-semantics tag. Part of every job_key: bump it only when results for the same inputs change meaning. Patch releases keep it, so caches survive.",
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9._-]+$",
+          "title": "Compat",
+          "type": "string"
+        },
+        "description": {
+          "default": "",
+          "description": "[stable] One-line description for the console and docs.",
+          "title": "Description",
+          "type": "string"
+        },
+        "id": {
+          "description": "[stable] Namespaced, globally unique module id (reverse DNS). Removed ids are tombstoned, never reused.",
+          "maxLength": 128,
+          "pattern": "^[a-z0-9]+(\\.[a-z0-9][a-z0-9-]*)+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "license": {
+          "description": "[stable] SPDX license expression of the module.",
+          "title": "License",
+          "type": "string"
+        },
+        "publisher": {
+          "description": "[stable] Publisher identity (today a free-form owner name).",
+          "title": "Publisher",
+          "type": "string"
+        },
+        "stability": {
+          "default": "beta",
+          "description": "[stable] Maturity of the module itself.",
+          "enum": [
+            "experimental",
+            "beta",
+            "stable"
+          ],
+          "title": "Stability",
+          "type": "string"
+        },
+        "version": {
+          "description": "[stable] SemVer of the module package.",
+          "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(-[0-9A-Za-z.-]+)?(\\+[0-9A-Za-z.-]+)?$",
+          "title": "Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "version",
+        "compat",
+        "publisher",
+        "license"
+      ],
+      "title": "ModuleInfo",
+      "type": "object"
+    },
+    "MoveRule": {
+      "additionalProperties": false,
+      "description": "What happens to part of a module's coordinator state when the coordinator moves to another machine. [beta]",
+      "properties": {
+        "class": {
+          "description": "[beta] `carry` (the default for everything): moved and verified by digest; `rebuild`: not transferred, the module recreates it in move.postflight; `drop`: scratch, deleted on the new coordinator.",
+          "enum": [
+            "carry",
+            "rebuild",
+            "drop"
+          ],
+          "title": "Class",
+          "type": "string"
+        },
+        "files": {
+          "anyOf": [
+            {
+              "maxLength": 512,
+              "pattern": "^([A-Za-z0-9._-]+/)*[A-Za-z0-9._-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "[beta] A path prefix in the module's files ('' = all of them).",
+          "title": "Files"
+        },
+        "store": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "pattern": "^[a-z][a-z0-9_]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "[beta] A store collection.",
+          "title": "Store"
+        }
+      },
+      "required": [
+        "class"
+      ],
+      "title": "MoveRule",
+      "type": "object"
+    },
+    "MoveSection": {
+      "additionalProperties": false,
+      "description": "The module's say in a coordinator move (spec/module-protocol.md, \"Coordinator moves\"). [beta]",
+      "properties": {
+        "effects": {
+          "description": "[beta] Effects move.preflight, move.postflight and move.cancelled may request.",
+          "items": {
+            "enum": [
+              "jobs.enqueue",
+              "jobs.cancel",
+              "campaigns.create",
+              "campaigns.update",
+              "campaigns.cancel",
+              "datasets.create",
+              "datasets.update",
+              "datasets.delete",
+              "module_settings.update",
+              "store.write",
+              "store.delete",
+              "files.write",
+              "files.put",
+              "files.delete",
+              "external"
+            ],
+            "type": "string"
+          },
+          "title": "Effects",
+          "type": "array"
+        },
+        "rules": {
+          "description": "[beta] The first matching rule wins; unmatched state is carried.",
+          "items": {
+            "$ref": "#/$defs/MoveRule"
+          },
+          "title": "Rules",
+          "type": "array"
+        }
+      },
+      "title": "MoveSection",
+      "type": "object"
+    },
+    "OSRequirements": {
+      "additionalProperties": false,
+      "description": "Per-OS version requirements; keys for undeclared OSes are ignored. [stable]",
+      "properties": {
+        "darwin": {
+          "anyOf": [
+            {
+              "pattern": "^\\s*(==|>=|<=|>|<|~=)\\s*[0-9][0-9A-Za-z.]*(\\s*,\\s*(==|>=|<=|>|<|~=)\\s*[0-9][0-9A-Za-z.]*)*\\s*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Darwin"
+        },
+        "linux": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LinuxRequirements"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "windows": {
+          "anyOf": [
+            {
+              "pattern": "^\\s*(==|>=|<=|>|<|~=)\\s*[0-9][0-9A-Za-z.]*(\\s*,\\s*(==|>=|<=|>|<|~=)\\s*[0-9][0-9A-Za-z.]*)*\\s*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "[stable] Windows versions by build, e.g. '>=10.0.19045'.",
+          "title": "Windows"
+        }
+      },
+      "title": "OSRequirements",
+      "type": "object"
+    },
+    "OperationDecl": {
+      "additionalProperties": false,
+      "description": "Registered at install as mod.<module>.<verb> in the operation registry.",
+      "properties": {
+        "effects": {
+          "items": {
+            "enum": [
+              "jobs.enqueue",
+              "jobs.cancel",
+              "campaigns.create",
+              "campaigns.update",
+              "campaigns.cancel",
+              "datasets.create",
+              "datasets.update",
+              "datasets.delete",
+              "module_settings.update",
+              "store.write",
+              "store.delete",
+              "files.write",
+              "files.put",
+              "files.delete",
+              "external"
+            ],
+            "type": "string"
+          },
+          "title": "Effects",
+          "type": "array"
+        },
+        "min_role": {
+          "default": "operator",
+          "enum": [
+            "viewer",
+            "operator",
+            "admin"
+          ],
+          "title": "Min Role",
+          "type": "string"
+        },
+        "params_schema": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Bundle path of the parameter schema.",
+          "title": "Params Schema"
+        },
+        "preview": {
+          "default": false,
+          "description": "Implements op.plan (required when the effective tier is T2/T3).",
+          "title": "Preview",
+          "type": "boolean"
+        },
+        "target": {
+          "default": "none",
+          "enum": [
+            "none",
+            "dataset",
+            "job",
+            "node",
+            "campaign",
+            "store",
+            "module"
+          ],
+          "title": "Target",
+          "type": "string"
+        },
+        "tier": {
+          "default": "T1",
+          "enum": [
+            "T0",
+            "T1",
+            "T2",
+            "T3"
+          ],
+          "title": "Tier",
+          "type": "string"
+        },
+        "title": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        },
+        "verb": {
+          "pattern": "^[a-z][a-z0-9_]{0,40}$",
+          "title": "Verb",
+          "type": "string"
+        }
+      },
+      "required": [
+        "verb",
+        "title"
+      ],
+      "title": "OperationDecl",
+      "type": "object"
+    },
+    "PageDecl": {
+      "additionalProperties": false,
+      "properties": {
+        "file": {
+          "title": "File",
+          "type": "string"
+        },
+        "id": {
+          "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "slot": {
+          "enum": [
+            "module.overview",
+            "module.page",
+            "job.detail.panel",
+            "node.detail.panel",
+            "campaign.panel"
+          ],
+          "title": "Slot",
+          "type": "string"
+        },
+        "title": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        },
+        "when": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "When"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "slot",
+        "file"
+      ],
+      "title": "PageDecl",
+      "type": "object"
+    },
+    "Placement": {
+      "additionalProperties": false,
+      "description": "Keeps each unit of work on one platform class while other units use other classes (spec/platforms.md,\n\"Placement\"). Absent: mix `any`, today's behaviour. [beta]",
+      "properties": {
+        "bind": {
+          "anyOf": [
+            {
+              "enum": [
+                "capacity",
+                "first-claim",
+                "explicit"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "[beta] How a unit gets its class: `capacity` (the feasible class with the most free certified CPU, at creation), `first-claim` (the class of the first node that claims one of its jobs) or `explicit` (only a pin). Absent: `capacity` for campaigns, `first-claim` otherwise.",
+          "title": "Bind"
+        },
+        "mix": {
+          "default": "any",
+          "description": "[beta] Open set: `any`, `same-os`, `same-arch` or `same-platform`. An unknown value applies as `same-platform` (fail safe) and `oarbank-sdk check` warns.",
+          "maxLength": 40,
+          "pattern": "^[a-z][a-z0-9-]*$",
+          "title": "Mix",
+          "type": "string"
+        },
+        "rebind": {
+          "default": "never",
+          "description": "[beta] When no node of the bound class has been eligible for `stranded_after_s`: `never` raises an alert naming the remedy; `if-stranded` rebinds to the best feasible class and re-queues the unit's finished jobs.",
+          "enum": [
+            "never",
+            "if-stranded"
+          ],
+          "title": "Rebind",
+          "type": "string"
+        },
+        "stranded_after_s": {
+          "default": 1800.0,
+          "description": "[beta] Seconds before a bound unit counts as stranded.",
+          "maximum": 604800,
+          "minimum": 60,
+          "title": "Stranded After S",
+          "type": "number"
+        },
+        "unit": {
+          "default": "campaign",
+          "description": "[beta] What stays together: a campaign, a job group within a campaign (jobs.enqueue `group`), the jobs of one dataset within a campaign, or one pipeline (head and tail stages, replicas and tie-breaks).",
+          "enum": [
+            "campaign",
+            "group",
+            "dataset",
+            "pipeline"
+          ],
+          "title": "Unit",
+          "type": "string"
+        }
+      },
+      "title": "Placement",
+      "type": "object"
+    },
+    "Probe": {
+      "additionalProperties": false,
+      "description": "A read-only capability check (service protocol `fingerprint`). [beta]",
+      "properties": {
+        "exec": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Exec",
+          "type": "array"
+        },
+        "name": {
+          "maxLength": 64,
+          "pattern": "^[a-z0-9][a-z0-9._-]*$",
+          "title": "Name",
+          "type": "string"
+        },
+        "period_s": {
+          "default": 3600.0,
+          "minimum": 10,
+          "title": "Period S",
+          "type": "number"
+        },
+        "platforms": {
+          "description": "[beta] Only on these platforms (empty: every declared platform).",
+          "items": {
+            "maxLength": 40,
+            "pattern": "^[a-z][a-z0-9]*-[a-z0-9_]+$",
+            "type": "string"
+          },
+          "title": "Platforms",
+          "type": "array"
+        }
+      },
+      "required": [
+        "name",
+        "exec"
+      ],
+      "title": "Probe",
+      "type": "object"
+    },
+    "Requires": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "anyOf": [
+            {
+              "pattern": "^\\s*(==|>=|<=|>|<|~=)\\s*[0-9][0-9A-Za-z.]*(\\s*,\\s*(==|>=|<=|>|<|~=)\\s*[0-9][0-9A-Za-z.]*)*\\s*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "[stable] Supported agent versions.",
+          "title": "Agent"
+        },
+        "coordinator_platforms": {
+          "anyOf": [
+            {
+              "items": {
+                "maxLength": 40,
+                "pattern": "^[a-z][a-z0-9]*-[a-z0-9_]+$",
+                "type": "string"
+              },
+              "minItems": 1,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "[beta] Platforms the coordinator side runs on (the coordinator host's platform); `platforms` lists node platforms only. Absent: any platform. A core refuses to install or enable the module on a coordinator host not listed, and blocks a coordinator move to one. Needs requires.core >= 2.2.",
+          "title": "Coordinator Platforms"
+        },
+        "core": {
+          "description": "[stable] Supported oarbank core versions, e.g. '>=2.0,<3'.",
+          "pattern": "^\\s*(==|>=|<=|>|<|~=)\\s*[0-9][0-9A-Za-z.]*(\\s*,\\s*(==|>=|<=|>|<|~=)\\s*[0-9][0-9A-Za-z.]*)*\\s*$",
+          "title": "Core",
+          "type": "string"
+        },
+        "experimental": {
+          "description": "[stable] Opt-ins to experimental contract items; any opt-in blocks the verified badge.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Experimental",
+          "type": "array"
+        },
+        "features": {
+          "description": "[beta] Must-understand list: a reader that does not know a listed feature refuses the manifest. Known: `placement`. Needs requires.core >= 2.2.",
+          "items": {
+            "maxLength": 64,
+            "pattern": "^[a-z][a-z0-9._-]*$",
+            "type": "string"
+          },
+          "title": "Features",
+          "type": "array"
+        },
+        "module_protocol": {
+          "description": "[stable] Module protocol majors the coordinator side speaks.",
+          "items": {
+            "type": "integer"
+          },
+          "title": "Module Protocol",
+          "type": "array"
+        },
+        "os": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/OSRequirements"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "[stable] Supported OS versions per OS (only for the declared platforms)."
+        },
+        "platforms": {
+          "description": "[stable] Node platforms the module runs on, `<os>-<arch>` (spec/platforms.md). Required; an unknown token means no node of that platform, never an error.",
+          "items": {
+            "maxLength": 40,
+            "pattern": "^[a-z][a-z0-9]*-[a-z0-9_]+$",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Platforms",
+          "type": "array"
+        },
+        "runner_protocol": {
+          "description": "[stable] Runner protocol majors the runner speaks.",
+          "items": {
+            "type": "integer"
+          },
+          "title": "Runner Protocol",
+          "type": "array"
+        },
+        "service_protocol": {
+          "description": "[stable] Service protocol majors (only when services/probes are declared).",
+          "items": {
+            "type": "integer"
+          },
+          "title": "Service Protocol",
+          "type": "array"
+        },
+        "ui_contract": {
+          "anyOf": [
+            {
+              "pattern": "^\\s*(==|>=|<=|>|<|~=)\\s*[0-9][0-9A-Za-z.]*(\\s*,\\s*(==|>=|<=|>|<|~=)\\s*[0-9][0-9A-Za-z.]*)*\\s*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "[beta] UI contract versions the module's pages use, e.g. '>=1.0,<2' (spec/ui-contract.md).",
+          "title": "Ui Contract"
+        },
+        "unsupported": {
+          "$ref": "#/$defs/Unsupported",
+          "description": "[beta] Why the module does not run somewhere, shown by explain and the console. Needs requires.core >= 2.2."
+        }
+      },
+      "required": [
+        "core",
+        "platforms",
+        "module_protocol"
+      ],
+      "title": "Requires",
+      "type": "object"
+    },
+    "Resources": {
+      "additionalProperties": false,
+      "properties": {
+        "cpu": {
+          "default": 1.0,
+          "description": "[stable] CPU cores the job uses.",
+          "exclusiveMinimum": 0,
+          "maximum": 256,
+          "title": "Cpu",
+          "type": "number"
+        },
+        "mem_gb": {
+          "default": 1.0,
+          "description": "[stable] Peak memory (GB) the job may use; the agent budgets it before admission.",
+          "exclusiveMinimum": 0,
+          "maximum": 1024,
+          "title": "Mem Gb",
+          "type": "number"
+        }
+      },
+      "title": "Resources",
+      "type": "object"
+    },
+    "ResourcesPatch": {
+      "additionalProperties": false,
+      "properties": {
+        "cpu": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "maximum": 256,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "[beta] Replaces the stage's cpu on this platform.",
+          "title": "Cpu"
+        },
+        "mem_gb": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "maximum": 1024,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "[beta] Replaces the stage's mem_gb on this platform.",
+          "title": "Mem Gb"
+        }
+      },
+      "title": "ResourcesPatch",
+      "type": "object"
+    },
+    "RestartPolicy": {
+      "additionalProperties": false,
+      "properties": {
+        "backoff_initial_s": {
+          "default": 10.0,
+          "exclusiveMinimum": 0,
+          "title": "Backoff Initial S",
+          "type": "number"
+        },
+        "backoff_max_s": {
+          "default": 600.0,
+          "exclusiveMinimum": 0,
+          "title": "Backoff Max S",
+          "type": "number"
+        },
+        "max_failures": {
+          "default": 5,
+          "minimum": 1,
+          "title": "Max Failures",
+          "type": "integer"
+        }
+      },
+      "title": "RestartPolicy",
+      "type": "object"
+    },
+    "ResultField": {
+      "additionalProperties": false,
+      "properties": {
+        "indexed": {
+          "default": false,
+          "description": "[stable] Promote to a generated column with an index (sortable/filterable).",
+          "title": "Indexed",
+          "type": "boolean"
+        },
+        "name": {
+          "maxLength": 64,
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "title": "Name",
+          "type": "string"
+        },
+        "type": {
+          "enum": [
+            "number",
+            "integer",
+            "string",
+            "boolean"
+          ],
+          "title": "Type",
+          "type": "string"
+        },
+        "ui": {
+          "$ref": "#/$defs/FieldUI"
+        },
+        "unit": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Unit"
+        }
+      },
+      "required": [
+        "name",
+        "type"
+      ],
+      "title": "ResultField",
+      "type": "object"
+    },
+    "Results": {
+      "additionalProperties": false,
+      "properties": {
+        "determinism": {
+          "description": "[stable] exact: replicas must produce the same digest.",
+          "enum": [
+            "exact",
+            "within_tolerance",
+            "none"
+          ],
+          "title": "Determinism",
+          "type": "string"
+        },
+        "determinism_scope": {
+          "default": "global",
+          "description": "[stable] Open set. `global`: replicas on any platform must agree; `platform`: replicas and tie-breaks compare only within one platform (libm, BLAS and GPU differ across operating systems); `os` and `arch` [beta]: within one OS or one arch (they need requires.core >= 2.2). An unknown scope compares within one platform.",
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "title": "Determinism Scope",
+          "type": "string"
+        },
+        "digest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "fields": {
+          "items": {
+            "$ref": "#/$defs/ResultField"
+          },
+          "title": "Fields",
+          "type": "array"
+        },
+        "max_inline_kb": {
+          "default": 64,
+          "maximum": 1024,
+          "minimum": 1,
+          "title": "Max Inline Kb",
+          "type": "integer"
+        },
+        "schema": {
+          "description": "[stable] JSON Schema (bundle path) for the result payload.",
+          "title": "Schema",
+          "type": "string"
+        },
+        "schema_version": {
+          "minimum": 1,
+          "title": "Schema Version",
+          "type": "integer"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Value"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "schema",
+        "schema_version",
+        "determinism",
+        "digest"
+      ],
+      "title": "Results",
+      "type": "object"
+    },
+    "Retry": {
+      "additionalProperties": false,
+      "properties": {
+        "max_attempts": {
+          "default": 3,
+          "description": "[stable] Execution attempts before the job is quarantined.",
+          "maximum": 20,
+          "minimum": 1,
+          "title": "Max Attempts",
+          "type": "integer"
+        }
+      },
+      "title": "Retry",
+      "type": "object"
+    },
+    "Runner": {
+      "additionalProperties": false,
+      "description": "The node-side job runner (runner protocol). [stable]",
+      "properties": {
+        "bandwidth_class": {
+          "anyOf": [
+            {
+              "enum": [
+                "low",
+                "medium",
+                "high"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "[experimental] Measured memory-bandwidth appetite relative to the node's memory system (measured on Apple unified memory so far).",
+          "title": "Bandwidth Class"
+        },
+        "capabilities": {
+          "description": "[stable] By intent: cancellable (honours a stop request within stop_grace_s), freeze_ok (safe to freeze at any instruction), cooperative_pause (pauses on control.json), resumable (resumes from its own checkpoint after a restart), progress_events, deterministic_output, cooperative_throttle.",
+          "items": {
+            "maxLength": 64,
+            "pattern": "^[a-z0-9][a-z0-9._-]*$",
+            "type": "string"
+          },
+          "title": "Capabilities",
+          "type": "array"
+        },
+        "env": {
+          "description": "[beta] Extra environment for the runner and doctor, applied after the agent's own variables (names `^[A-Z][A-Z0-9_]*$`, never OARBANK_* or another reserved name), e.g. MKL_CBWR or OMP_NUM_THREADS for determinism. Needs requires.core >= 2.2.",
+          "patternProperties": {
+            "^[A-Z][A-Z0-9_]*$": {
+              "maxLength": 4096,
+              "type": "string"
+            }
+          },
+          "propertyNames": {
+            "maxLength": 64
+          },
+          "title": "Env",
+          "type": "object"
+        },
+        "exec": {
+          "description": "[stable] argv (spec/manifest.md, \"Exec\"); the agent appends `run --spec S --workdir W --out R [--events E]` or `doctor --json`.",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Exec",
+          "type": "array"
+        },
+        "gpu": {
+          "$ref": "#/$defs/GPUNeed"
+        },
+        "runtime": {
+          "$ref": "#/$defs/Runtime"
+        },
+        "stop_grace_s": {
+          "default": 20.0,
+          "description": "[stable] Seconds between the stop request and forced termination of the process container.",
+          "maximum": 600,
+          "minimum": 1,
+          "title": "Stop Grace S",
+          "type": "number"
+        },
+        "variants": {
+          "additionalProperties": {
+            "$ref": "#/$defs/RunnerVariant"
+          },
+          "description": "[beta] Per-platform overrides, keyed by platform token (`linux-amd64`) or OS (`linux`).",
+          "title": "Variants",
+          "type": "object"
+        }
+      },
+      "required": [
+        "exec",
+        "runtime"
+      ],
+      "title": "Runner",
+      "type": "object"
+    },
+    "RunnerVariant": {
+      "additionalProperties": false,
+      "description": "Per-platform overrides of [runner] (key: a platform token or an OS name; the most specific key wins). [beta]",
+      "properties": {
+        "capabilities": {
+          "anyOf": [
+            {
+              "items": {
+                "maxLength": 64,
+                "pattern": "^[a-z0-9][a-z0-9._-]*$",
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Capabilities"
+        },
+        "env": {
+          "anyOf": [
+            {
+              "patternProperties": {
+                "^[A-Z][A-Z0-9_]*$": {
+                  "maxLength": 4096,
+                  "type": "string"
+                }
+              },
+              "propertyNames": {
+                "maxLength": 64
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "[beta] Merged over [runner].env name by name. Needs requires.core >= 2.2.",
+          "title": "Env"
+        },
+        "exec": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Exec"
+        },
+        "gpu": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GPUNeed"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "runtime": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Runtime"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "stop_grace_s": {
+          "anyOf": [
+            {
+              "maximum": 600,
+              "minimum": 1,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Stop Grace S"
+        }
+      },
+      "title": "RunnerVariant",
+      "type": "object"
+    },
+    "Runtime": {
+      "additionalProperties": false,
+      "description": "How an entry point's dependencies are provided. [stable]",
+      "properties": {
+        "kind": {
+          "description": "[stable] Open set. `python`: the host's managed CPython with the SDK (plus the bundle's requirements, installed from wheels); `uv`: a locked uv project (wheels only, resolvable for every declared platform) built offline into a per-module environment; `native`: argv[0] is a native executable in the bundle (Mach-O, ELF or PE, or a POSIX shebang script in darwin/linux variants). An unknown kind means the entry point cannot run on this node.",
+          "pattern": "^[a-z][a-z0-9_-]*$",
+          "title": "Kind",
+          "type": "string"
+        },
+        "lock": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "[stable] Path of uv.lock inside the bundle (kind=uv).",
+          "title": "Lock"
+        },
+        "python": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "[stable] Exact Python version for the venv (kind=uv), e.g. 3.12.14.",
+          "title": "Python"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "title": "Runtime",
+      "type": "object"
+    },
+    "SandboxDevices": {
+      "additionalProperties": false,
+      "properties": {
+        "gpu": {
+          "default": "none",
+          "description": "[beta] Open set: `none` or `compute` (GPU compute through the platform's APIs, no display server; weakens isolation, so it is flagged at approval).",
+          "pattern": "^[a-z][a-z0-9-]*$",
+          "title": "Gpu",
+          "type": "string"
+        }
+      },
+      "title": "SandboxDevices",
+      "type": "object"
+    },
+    "SandboxNet": {
+      "additionalProperties": false,
+      "description": "Network for the module's node-side processes (spec/sandbox.md, \"Network\"). [beta]",
+      "properties": {
+        "allow": {
+          "description": "[beta] `host[:port]` entries (a leading `*.` matches subdomains); never IP addresses or CIDRs. Required with egress-allowlist; port defaults to 443.",
+          "items": {
+            "maxLength": 253,
+            "pattern": "^(\\*\\.)?[A-Za-z0-9-]+(\\.[A-Za-z0-9-]+)*(:[0-9]{1,5})?$",
+            "type": "string"
+          },
+          "title": "Allow",
+          "type": "array"
+        },
+        "mode": {
+          "default": "none",
+          "description": "[beta] Open set. `none`; `egress-allowlist`: only the `allow` hosts, through the agent's local proxy (the SDK sets HTTPS_PROXY/ALL_PROXY); `egress-any`: any public address, a separately approved full-trust grant. Never loopback or link-local, never listening.",
+          "pattern": "^[a-z][a-z0-9-]*$",
+          "title": "Mode",
+          "type": "string"
+        }
+      },
+      "title": "SandboxNet",
+      "type": "object"
+    },
+    "SandboxSection": {
+      "additionalProperties": false,
+      "description": "What the module's node-side processes (runner, services, probes) need beyond their bundle, runtime, data and work\ndirectories (spec/sandbox.md). Every request is shown to an operator, who approves it for each module version before\nthat version can run. The coordinator side never gets these grants. [beta]",
+      "properties": {
+        "containers": {
+          "description": "[beta] Images the agent's container broker may run for the module's jobs (a stage that uses them reserves the `containers` pool).",
+          "items": {
+            "$ref": "#/$defs/ContainerImage"
+          },
+          "title": "Containers",
+          "type": "array"
+        },
+        "contract": {
+          "const": 1,
+          "default": 1,
+          "description": "[beta] Sandbox contract version.",
+          "title": "Contract",
+          "type": "integer"
+        },
+        "devices": {
+          "$ref": "#/$defs/SandboxDevices"
+        },
+        "exec_writable": {
+          "default": false,
+          "description": "[beta] Runners may execute files they wrote into the data or work directory (downloaded tools). Not enforceable as `false` on Windows without application control; nodes report it.",
+          "title": "Exec Writable",
+          "type": "boolean"
+        },
+        "net": {
+          "$ref": "#/$defs/SandboxNet"
+        },
+        "tools": {
+          "description": "[beta] Host tools (registry ids) runners may read and execute.",
+          "items": {
+            "$ref": "#/$defs/ToolGrant"
+          },
+          "title": "Tools",
+          "type": "array"
+        }
+      },
+      "title": "SandboxSection",
+      "type": "object"
+    },
+    "Service": {
+      "additionalProperties": false,
+      "description": "A node helper the agent manages generically (service protocol). [beta]",
+      "properties": {
+        "exec": {
+          "description": "[beta] argv (spec/manifest.md, \"Exec\"); cwd is the bundle root; the agent appends the operation (fingerprint|start|stop|status|ready|list_owned|destroy).",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Exec",
+          "type": "array"
+        },
+        "freeze_ok": {
+          "default": false,
+          "description": "[beta] The agent may freeze the service's process container (freezing returns no memory).",
+          "title": "Freeze Ok",
+          "type": "boolean"
+        },
+        "idle_timeout_s": {
+          "default": 900.0,
+          "minimum": 0,
+          "title": "Idle Timeout S",
+          "type": "number"
+        },
+        "lifecycle": {
+          "default": "on_demand",
+          "description": "[beta] on_demand: refcounted by admitted jobs and stopped after idle_timeout_s.",
+          "enum": [
+            "on_demand",
+            "always",
+            "manual"
+          ],
+          "title": "Lifecycle",
+          "type": "string"
+        },
+        "name": {
+          "maxLength": 64,
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "title": "Name",
+          "type": "string"
+        },
+        "platforms": {
+          "description": "[beta] Only on these platforms (empty: every declared platform).",
+          "items": {
+            "maxLength": 40,
+            "pattern": "^[a-z][a-z0-9]*-[a-z0-9_]+$",
+            "type": "string"
+          },
+          "title": "Platforms",
+          "type": "array"
+        },
+        "provides": {
+          "$ref": "#/$defs/ServiceProvides"
+        },
+        "reserves_host_memory": {
+          "default": false,
+          "description": "[beta] The fingerprint's reserve.mem_gb is charged to the host while running.",
+          "title": "Reserves Host Memory",
+          "type": "boolean"
+        },
+        "restart": {
+          "$ref": "#/$defs/RestartPolicy"
+        },
+        "start_timeout_s": {
+          "default": 120.0,
+          "exclusiveMinimum": 0,
+          "title": "Start Timeout S",
+          "type": "number"
+        },
+        "stop_timeout_s": {
+          "default": 120.0,
+          "exclusiveMinimum": 0,
+          "title": "Stop Timeout S",
+          "type": "number"
+        },
+        "yieldable": {
+          "default": true,
+          "description": "[beta] The agent may stop it when idle under memory pressure.",
+          "title": "Yieldable",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "name",
+        "exec"
+      ],
+      "title": "Service",
+      "type": "object"
+    },
+    "ServiceProvides": {
+      "additionalProperties": false,
+      "properties": {
+        "capabilities": {
+          "items": {
+            "maxLength": 64,
+            "pattern": "^[a-z0-9][a-z0-9._-]*$",
+            "type": "string"
+          },
+          "title": "Capabilities",
+          "type": "array"
+        },
+        "pools": {
+          "description": "[stable] Pools whose token counts the service's `fingerprint` reports.",
+          "items": {
+            "maxLength": 64,
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "type": "string"
+          },
+          "title": "Pools",
+          "type": "array"
+        }
+      },
+      "title": "ServiceProvides",
+      "type": "object"
+    },
+    "Settings": {
+      "additionalProperties": false,
+      "properties": {
+        "schema": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "[stable] JSON Schema (bundle path) for the module's settings; the core stores but never interprets them.",
+          "title": "Schema"
+        }
+      },
+      "title": "Settings",
+      "type": "object"
+    },
+    "Stage": {
+      "additionalProperties": false,
+      "properties": {
+        "after": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "pattern": "^[a-z][a-z0-9_]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "[stable] Stage whose output this stage consumes (its artifacts become inputs).",
+          "title": "After"
+        },
+        "name": {
+          "description": "[stable] Stage name; unique within the manifest.",
+          "maxLength": 64,
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "title": "Name",
+          "type": "string"
+        },
+        "placement": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StagePlacement"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "[beta] Needs requires.core >= 2.2."
+        },
+        "requires": {
+          "$ref": "#/$defs/StageRequires"
+        },
+        "retry": {
+          "$ref": "#/$defs/Retry"
+        },
+        "timeout_s": {
+          "default": 1800.0,
+          "description": "[stable] Hard wall-clock limit per attempt.",
+          "exclusiveMinimum": 0,
+          "maximum": 86400,
+          "title": "Timeout S",
+          "type": "number"
+        },
+        "variants": {
+          "description": "[beta] Per-platform `timeout_s`, `requires.resources` and `retry`, keyed by platform token or OS. Needs requires.core >= 2.2.",
+          "patternProperties": {
+            "^[a-z][a-z0-9]*(-[a-z0-9_]+)?$": {
+              "$ref": "#/$defs/StageVariant"
+            }
+          },
+          "propertyNames": {
+            "maxLength": 40
+          },
+          "title": "Variants",
+          "type": "object"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "Stage",
+      "type": "object"
+    },
+    "StagePlacement": {
+      "additionalProperties": false,
+      "properties": {
+        "mix": {
+          "description": "[beta] Between this stage and its `after` stage: `any`, `same-os`, `same-arch` or `same-platform` (open set; an unknown value applies as `same-platform`). Combined with [placement].mix, the stricter one wins.",
+          "maxLength": 40,
+          "pattern": "^[a-z][a-z0-9-]*$",
+          "title": "Mix",
+          "type": "string"
+        }
+      },
+      "required": [
+        "mix"
+      ],
+      "title": "StagePlacement",
+      "type": "object"
+    },
+    "StageRequires": {
+      "additionalProperties": false,
+      "properties": {
+        "capabilities": {
+          "description": "[stable] Node capabilities that must be healthy (from probes/services).",
+          "items": {
+            "maxLength": 64,
+            "pattern": "^[a-z0-9][a-z0-9._-]*$",
+            "type": "string"
+          },
+          "title": "Capabilities",
+          "type": "array"
+        },
+        "needs_pools": {
+          "description": "[beta] Pools that must exist on the node but are not reserved (a short phase uses them).",
+          "items": {
+            "maxLength": 64,
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "type": "string"
+          },
+          "title": "Needs Pools",
+          "type": "array"
+        },
+        "platforms": {
+          "description": "[beta] Only on these platforms (empty: every declared platform).",
+          "items": {
+            "maxLength": 40,
+            "pattern": "^[a-z][a-z0-9]*-[a-z0-9_]+$",
+            "type": "string"
+          },
+          "title": "Platforms",
+          "type": "array"
+        },
+        "pools": {
+          "description": "[stable] Countable pool tokens reserved for the job's lifetime.",
+          "patternProperties": {
+            "^[a-z][a-z0-9_]*$": {
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          "propertyNames": {
+            "maxLength": 64
+          },
+          "title": "Pools",
+          "type": "object"
+        },
+        "resources": {
+          "$ref": "#/$defs/Resources"
+        }
+      },
+      "title": "StageRequires",
+      "type": "object"
+    },
+    "StageVariant": {
+      "additionalProperties": false,
+      "description": "Per-platform adjustments of a stage (key: a platform token or an OS name; the most specific key wins). [beta]",
+      "properties": {
+        "requires": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StageVariantRequires"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "[beta] Only `resources` may vary per platform."
+        },
+        "retry": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Retry"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "[beta] Replaces the stage's retry."
+        },
+        "timeout_s": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "maximum": 86400,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "[beta] Replaces the stage's timeout_s.",
+          "title": "Timeout S"
+        }
+      },
+      "title": "StageVariant",
+      "type": "object"
+    },
+    "StageVariantRequires": {
+      "additionalProperties": false,
+      "properties": {
+        "resources": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResourcesPatch"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "[beta] Merged over the stage's resources field by field."
+        }
+      },
+      "title": "StageVariantRequires",
+      "type": "object"
+    },
+    "ToolGrant": {
+      "additionalProperties": false,
+      "description": "A host tool from the operator's tool registry (logical id mapped to per-OS paths by the operator). [beta]",
+      "properties": {
+        "id": {
+          "description": "[beta] Logical tool id, e.g. `renderer4`.",
+          "pattern": "^[a-z][a-z0-9_.-]{0,63}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "trust": {
+          "default": "read",
+          "description": "[beta] `code-exec`: the tool runs arbitrary code (a JVM, an interpreter, a shell); the approval UI flags it. On Windows any readable binary is executable.",
+          "enum": [
+            "read",
+            "code-exec"
+          ],
+          "title": "Trust",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "title": "ToolGrant",
+      "type": "object"
+    },
+    "UISection": {
+      "additionalProperties": false,
+      "properties": {
+        "digest_line": {
+          "anyOf": [
+            {
+              "maxLength": 120,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Restricted template: {field} or {field:FMT} only.",
+          "title": "Digest Line"
+        },
+        "external_urls": {
+          "items": {
+            "pattern": "^https://",
+            "type": "string"
+          },
+          "maxItems": 10,
+          "title": "External Urls",
+          "type": "array"
+        },
+        "icon": {
+          "anyOf": [
+            {
+              "enum": [
+                "cpu",
+                "gpu",
+                "dna",
+                "chart",
+                "flask",
+                "cube",
+                "bolt"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Icon"
+        },
+        "iframes": {
+          "items": {
+            "$ref": "#/$defs/IframeDecl"
+          },
+          "maxItems": 4,
+          "title": "Iframes",
+          "type": "array"
+        },
+        "pages": {
+          "items": {
+            "$ref": "#/$defs/PageDecl"
+          },
+          "maxItems": 12,
+          "title": "Pages",
+          "type": "array"
+        },
+        "panels": {
+          "items": {
+            "$ref": "#/$defs/PageDecl"
+          },
+          "maxItems": 6,
+          "title": "Panels",
+          "type": "array"
+        },
+        "views": {
+          "patternProperties": {
+            "^[a-z0-9][a-z0-9_.-]{0,63}$": {
+              "$ref": "#/$defs/ViewDecl"
+            }
+          },
+          "title": "Views",
+          "type": "object"
+        }
+      },
+      "title": "UISection",
+      "type": "object"
+    },
+    "Unsupported": {
+      "additionalProperties": false,
+      "description": "Reasons a module does not run on some platforms (keys: tokens or OSes). They never contradict the allow-lists: a\nkey never names an allowed platform or the OS of one. [beta]",
+      "properties": {
+        "coordinator": {
+          "description": "[beta] Coordinator platforms, beside requires.coordinator_platforms (which must then be set: absent means any).",
+          "patternProperties": {
+            "^[a-z][a-z0-9]*(-[a-z0-9_]+)?$": {
+              "maxLength": 200,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "propertyNames": {
+            "maxLength": 40
+          },
+          "title": "Coordinator",
+          "type": "object"
+        },
+        "runner": {
+          "description": "[beta] Node platforms, beside requires.platforms.",
+          "patternProperties": {
+            "^[a-z][a-z0-9]*(-[a-z0-9_]+)?$": {
+              "maxLength": 200,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "propertyNames": {
+            "maxLength": 40
+          },
+          "title": "Runner",
+          "type": "object"
+        }
+      },
+      "title": "Unsupported",
+      "type": "object"
+    },
+    "Value": {
+      "additionalProperties": false,
+      "properties": {
+        "direction": {
+          "default": "maximize",
+          "enum": [
+            "maximize",
+            "minimize"
+          ],
+          "title": "Direction",
+          "type": "string"
+        },
+        "field": {
+          "description": "[stable] Result field studies optimise.",
+          "maxLength": 64,
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "title": "Field",
+          "type": "string"
+        }
+      },
+      "required": [
+        "field"
+      ],
+      "title": "Value",
+      "type": "object"
+    },
+    "ViewDecl": {
+      "additionalProperties": false,
+      "description": "A module-computed view (verb ui.view.compute), materialized by oarbankd per data version.",
+      "properties": {
+        "columns": {
+          "items": {
+            "$ref": "#/$defs/Column"
+          },
+          "maxItems": 30,
+          "title": "Columns",
+          "type": "array"
+        },
+        "inputs": {
+          "description": "What invalidates it: results, jobs, datasets:<kind>, store:<collection>.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Inputs",
+          "type": "array"
+        },
+        "max_rows": {
+          "default": 1000,
+          "maximum": 5000,
+          "minimum": 1,
+          "title": "Max Rows",
+          "type": "integer"
+        },
+        "params": {
+          "additionalProperties": false,
+          "description": "Restricted JSON Schema properties for view params.",
+          "title": "Params",
+          "type": "object"
+        },
+        "refresh_s": {
+          "anyOf": [
+            {
+              "minimum": 300,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Clock-driven refresh; floor 5 minutes.",
+          "title": "Refresh S"
+        },
+        "shape": {
+          "enum": [
+            "rows",
+            "kv",
+            "series",
+            "stat"
+          ],
+          "title": "Shape",
+          "type": "string"
+        }
+      },
+      "required": [
+        "shape"
+      ],
+      "title": "ViewDecl",
+      "type": "object"
+    }
+  },
+  "$id": "https://codonic.dev/oarbank/schemas/manifest-1.strict.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "oarbank-module.toml. [stable]",
+  "properties": {
+    "bundle": {
+      "$ref": "#/$defs/BundleSection"
+    },
+    "cli": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/CLI"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "coordinator": {
+      "$ref": "#/$defs/Coordinator"
+    },
+    "datasets": {
+      "$ref": "#/$defs/Datasets"
+    },
+    "goldens": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Goldens"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "manifest": {
+      "const": 1,
+      "default": 1,
+      "description": "[stable] Manifest schema major.",
+      "title": "Manifest",
+      "type": "integer"
+    },
+    "module": {
+      "$ref": "#/$defs/ModuleInfo"
+    },
+    "operations": {
+      "description": "[beta] Module operations, registered as mod.<module>.<verb>.",
+      "items": {
+        "$ref": "#/$defs/OperationDecl"
+      },
+      "title": "Operations",
+      "type": "array"
+    },
+    "placement": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Placement"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "[beta] Needs requires.core >= 2.2."
+    },
+    "probes": {
+      "items": {
+        "$ref": "#/$defs/Probe"
+      },
+      "title": "Probes",
+      "type": "array"
+    },
+    "requires": {
+      "$ref": "#/$defs/Requires"
+    },
+    "results": {
+      "$ref": "#/$defs/Results"
+    },
+    "runner": {
+      "$ref": "#/$defs/Runner"
+    },
+    "sandbox": {
+      "$ref": "#/$defs/SandboxSection"
+    },
+    "services": {
+      "items": {
+        "$ref": "#/$defs/Service"
+      },
+      "title": "Services",
+      "type": "array"
+    },
+    "settings": {
+      "$ref": "#/$defs/Settings"
+    },
+    "stages": {
+      "items": {
+        "$ref": "#/$defs/Stage"
+      },
+      "minItems": 1,
+      "title": "Stages",
+      "type": "array"
+    },
+    "ui": {
+      "$ref": "#/$defs/UISection"
+    }
+  },
+  "required": [
+    "module",
+    "requires",
+    "coordinator",
+    "runner",
+    "stages",
+    "results"
+  ],
+  "title": "Manifest",
+  "type": "object"
+}

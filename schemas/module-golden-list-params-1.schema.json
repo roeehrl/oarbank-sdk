@@ -1,0 +1,80 @@
+{
+  "$defs": {
+    "NodeClass": {
+      "additionalProperties": true,
+      "description": "What golden.list may know about a node: its platform class, capabilities and pools; never identity. [stable]",
+      "properties": {
+        "capabilities": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Capabilities",
+          "type": "array"
+        },
+        "cpu": {
+          "additionalProperties": true,
+          "description": "[beta] {vendor, model, logical, core_classes, features}.",
+          "title": "Cpu",
+          "type": "object"
+        },
+        "gpus": {
+          "description": "[beta] [{vendor, model, apis, vram_gb}].",
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Gpus",
+          "type": "array"
+        },
+        "os_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "[stable] OS version (macOS 26.1, Windows build 10.0.26100, Linux distro release).",
+          "title": "Os Version"
+        },
+        "platform": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "[stable] Platform token, e.g. darwin-arm64.",
+          "title": "Platform"
+        },
+        "pools": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "Pools",
+          "type": "object"
+        }
+      },
+      "title": "NodeClass",
+      "type": "object"
+    }
+  },
+  "$id": "https://codonic.dev/oarbank/schemas/module-golden-list-params-1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "node_class": {
+      "$ref": "#/$defs/NodeClass"
+    }
+  },
+  "required": [
+    "node_class"
+  ],
+  "title": "GoldenListParams",
+  "type": "object"
+}

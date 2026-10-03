@@ -1,0 +1,27 @@
+{
+  "$id": "https://codonic.dev/oarbank/schemas/module-study-metrics-params-1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "results": {
+      "description": "[stable] Per trial: accepted result summaries and values.",
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "Results",
+      "type": "array"
+    },
+    "study": {
+      "additionalProperties": true,
+      "title": "Study",
+      "type": "object"
+    }
+  },
+  "required": [
+    "study",
+    "results"
+  ],
+  "title": "StudyMetricsParams",
+  "type": "object"
+}

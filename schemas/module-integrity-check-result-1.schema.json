@@ -1,0 +1,79 @@
+{
+  "$defs": {
+    "CheckItem": {
+      "additionalProperties": true,
+      "description": "One named check a module ran over its own state. [beta]",
+      "properties": {
+        "detail": {
+          "default": "",
+          "maxLength": 1000,
+          "title": "Detail",
+          "type": "string"
+        },
+        "name": {
+          "description": "[beta] Short, stable check name, e.g. `rounds_index_matches_files`.",
+          "maxLength": 120,
+          "title": "Name",
+          "type": "string"
+        },
+        "ok": {
+          "title": "Ok",
+          "type": "boolean"
+        },
+        "severity": {
+          "default": "error",
+          "description": "[beta] Only failed `error` checks fail the whole result.",
+          "enum": [
+            "error",
+            "warn",
+            "info"
+          ],
+          "title": "Severity",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "ok"
+      ],
+      "title": "CheckItem",
+      "type": "object"
+    }
+  },
+  "$id": "https://codonic.dev/oarbank/schemas/module-integrity-check-result-1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "checks": {
+      "items": {
+        "$ref": "#/$defs/CheckItem"
+      },
+      "title": "Checks",
+      "type": "array"
+    },
+    "fingerprint": {
+      "anyOf": [
+        {
+          "maxLength": 128,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "[beta] A digest of the state the module considers its own. During a move the host compares the source's and the target's fingerprints, and any difference aborts the move. Derive it from the state only (never from time).",
+      "title": "Fingerprint"
+    },
+    "ok": {
+      "description": "[beta] False when any `error` check failed.",
+      "title": "Ok",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "ok"
+  ],
+  "title": "IntegrityCheckResult",
+  "type": "object"
+}

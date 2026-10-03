@@ -1,0 +1,21 @@
+{
+  "$id": "https://codonic.dev/oarbank/schemas/module-host-store-get-params-1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "collection": {
+      "title": "Collection",
+      "type": "string"
+    },
+    "key": {
+      "title": "Key",
+      "type": "string"
+    }
+  },
+  "required": [
+    "collection",
+    "key"
+  ],
+  "title": "StoreGetParams",
+  "type": "object"
+}

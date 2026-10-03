@@ -1,0 +1,38 @@
+{
+  "$id": "https://codonic.dev/oarbank/schemas/module-op-plan-params-1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "actor": {
+      "title": "Actor",
+      "type": "string"
+    },
+    "params": {
+      "additionalProperties": true,
+      "title": "Params",
+      "type": "object"
+    },
+    "target": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Target"
+    },
+    "verb": {
+      "title": "Verb",
+      "type": "string"
+    }
+  },
+  "required": [
+    "verb",
+    "actor"
+  ],
+  "title": "OpPlanParams",
+  "type": "object"
+}

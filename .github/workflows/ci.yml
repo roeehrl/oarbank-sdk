@@ -1,0 +1,31 @@
+name: ci
+on: [push, pull_request]
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest, ubuntu-24.04-arm, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --frozen --group dev
+      - run: uv run oarbank-sdk check examples/toy/oarbank-module.toml
+      - run: uv run pytest -q
+      - name: schemas, reference and vectors are fresh
+        run: |
+          uv run oarbank-sdk export-schemas
+          uv run python scripts/gen_vectors.py
+          git diff --exit-code
+  dco:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - name: every commit is signed off
+        run: |
+          for c in $(git rev-list ${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}); do
+            git log -1 --format=%B $c | grep -q '^Signed-off-by: ' || { echo "commit $c is not signed off"; exit 1; }
+          done

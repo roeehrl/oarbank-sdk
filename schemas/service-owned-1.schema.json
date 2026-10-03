@@ -1,0 +1,65 @@
+{
+  "$defs": {
+    "OwnedObject": {
+      "additionalProperties": true,
+      "properties": {
+        "created_at": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Created At"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Kind"
+        },
+        "labels": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "[beta] Must include the oarbank.* ownership labels; unlabelled objects are never reaped.",
+          "title": "Labels",
+          "type": "object"
+        }
+      },
+      "required": [
+        "id",
+        "labels"
+      ],
+      "title": "OwnedObject",
+      "type": "object"
+    }
+  },
+  "$id": "https://codonic.dev/oarbank/schemas/service-owned-1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "objects": {
+      "items": {
+        "$ref": "#/$defs/OwnedObject"
+      },
+      "title": "Objects",
+      "type": "array"
+    }
+  },
+  "title": "OwnedList",
+  "type": "object"
+}

@@ -1,0 +1,89 @@
+{
+  "$defs": {
+    "Golden": {
+      "additionalProperties": true,
+      "properties": {
+        "datasets": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Datasets",
+          "type": "array"
+        },
+        "expected": {
+          "additionalProperties": true,
+          "description": "[stable] At least {digest, digest_version}; more for golden.compare.",
+          "title": "Expected",
+          "type": "object"
+        },
+        "expected_by_platform": {
+          "description": "[beta] `expected` per platform token or OS, for results that legitimately differ across platforms; the most specific key wins, then `expected`. Keys are declared platforms or their OSes.",
+          "patternProperties": {
+            "^[a-z][a-z0-9]*(-[a-z0-9_]+)?$": {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          },
+          "propertyNames": {
+            "maxLength": 40
+          },
+          "title": "Expected By Platform",
+          "type": "object"
+        },
+        "key_inputs": {
+          "additionalProperties": true,
+          "title": "Key Inputs",
+          "type": "object"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "platforms": {
+          "description": "[beta] Only for nodes of these platforms (tokens or OSes; empty: every platform). The host drops the golden for other nodes.",
+          "items": {
+            "maxLength": 40,
+            "pattern": "^[a-z][a-z0-9]*(-[a-z0-9_]+)?$",
+            "type": "string"
+          },
+          "title": "Platforms",
+          "type": "array"
+        },
+        "stages": {
+          "description": "[stable] Stages this golden exercises (e.g. only 'call' on nodes without the scoring pool).",
+          "items": {
+            "maxLength": 64,
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "type": "string"
+          },
+          "title": "Stages",
+          "type": "array"
+        }
+      },
+      "required": [
+        "name",
+        "key_inputs",
+        "expected"
+      ],
+      "title": "Golden",
+      "type": "object"
+    }
+  },
+  "$id": "https://codonic.dev/oarbank/schemas/module-golden-list-result-1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "goldens": {
+      "items": {
+        "$ref": "#/$defs/Golden"
+      },
+      "title": "Goldens",
+      "type": "array"
+    }
+  },
+  "required": [
+    "goldens"
+  ],
+  "title": "GoldenListResult",
+  "type": "object"
+}

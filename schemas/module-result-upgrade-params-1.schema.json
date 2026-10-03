@@ -1,0 +1,27 @@
+{
+  "$id": "https://codonic.dev/oarbank/schemas/module-result-upgrade-params-1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "from_version": {
+      "title": "From Version",
+      "type": "integer"
+    },
+    "payload": {
+      "additionalProperties": true,
+      "title": "Payload",
+      "type": "object"
+    },
+    "to_version": {
+      "title": "To Version",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "payload",
+    "from_version",
+    "to_version"
+  ],
+  "title": "ResultUpgradeParams",
+  "type": "object"
+}

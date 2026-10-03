@@ -1,0 +1,154 @@
+{
+  "$defs": {
+    "InputRef": {
+      "additionalProperties": true,
+      "properties": {
+        "dataset": {
+          "description": "[stable] Dataset id (e.g. an artifact dataset `art:<digest>`).",
+          "title": "Dataset",
+          "type": "string"
+        },
+        "mount": {
+          "description": "[stable] Workdir-relative directory (a PortablePath) where the agent materialises it.",
+          "title": "Mount",
+          "type": "string"
+        }
+      },
+      "required": [
+        "dataset",
+        "mount"
+      ],
+      "title": "InputRef",
+      "type": "object"
+    }
+  },
+  "$id": "https://codonic.dev/oarbank/schemas/spec-envelope-1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "datasets": {
+      "description": "[stable] Dataset ids the agent must stage before spawn.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Datasets",
+      "type": "array"
+    },
+    "envelope": {
+      "const": 1,
+      "default": 1,
+      "title": "Envelope",
+      "type": "integer"
+    },
+    "inputs": {
+      "description": "[stable] Outputs of an upstream stage consumed by this stage.",
+      "patternProperties": {
+        "^[a-z][a-z0-9_]*$": {
+          "$ref": "#/$defs/InputRef"
+        }
+      },
+      "propertyNames": {
+        "maxLength": 64
+      },
+      "title": "Inputs",
+      "type": "object"
+    },
+    "job_key": {
+      "description": "[stable] Content key: sha256 of the RFC 8785 canonical JSON of {module, compat, inputs: key_inputs} (spec/platforms.md).",
+      "title": "Job Key",
+      "type": "string"
+    },
+    "module_id": {
+      "maxLength": 128,
+      "pattern": "^[a-z0-9]+(\\.[a-z0-9][a-z0-9-]*)+$",
+      "title": "Module Id",
+      "type": "string"
+    },
+    "module_version": {
+      "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(-[0-9A-Za-z.-]+)?(\\+[0-9A-Za-z.-]+)?$",
+      "title": "Module Version",
+      "type": "string"
+    },
+    "mounts": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "description": "[stable] dataset id -> workdir-relative mount directory (a PortablePath).",
+      "title": "Mounts",
+      "type": "object"
+    },
+    "payload": {
+      "additionalProperties": true,
+      "description": "[stable] Module-owned spec payload.",
+      "title": "Payload",
+      "type": "object"
+    },
+    "platform": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "[beta] The platform token of the node the spec was written for (also OARBANK_PLATFORM).",
+      "title": "Platform"
+    },
+    "protocol": {
+      "default": 1,
+      "description": "[stable] Runner protocol major chosen for this node (also OARBANK_PROTOCOL).",
+      "title": "Protocol",
+      "type": "integer"
+    },
+    "resources": {
+      "additionalProperties": true,
+      "description": "[stable] Resources the job reserves (cpu, mem_gb, pools).",
+      "title": "Resources",
+      "type": "object"
+    },
+    "schema": {
+      "description": "[stable] `<module>/spec@N` of the payload.",
+      "pattern": "^[a-z0-9][a-z0-9.-]*/(spec|result)@[1-9][0-9]*$",
+      "title": "Schema",
+      "type": "string"
+    },
+    "stage": {
+      "anyOf": [
+        {
+          "maxLength": 64,
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "[stable] Stage this spec runs (absent for single-stage modules).",
+      "title": "Stage"
+    },
+    "timeout_s": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Timeout S"
+    }
+  },
+  "required": [
+    "schema",
+    "module_id",
+    "module_version",
+    "job_key",
+    "payload"
+  ],
+  "title": "SpecEnvelope",
+  "type": "object"
+}

@@ -1,0 +1,14 @@
+{
+ "name": "toy-golden",
+ "key_inputs": {
+  "n": 1000
+ },
+ "expected": {
+  "digest": "c53287c86c50a889ed2d476b02483064365754d5a3424d7e44ec3aaeb95eba93",
+  "digest_version": 1
+ },
+ "stages": [
+  "run"
+ ],
+ "datasets": []
+}

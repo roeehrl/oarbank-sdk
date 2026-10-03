@@ -1,0 +1,48 @@
+{
+  "$id": "https://codonic.dev/oarbank/schemas/module-host-datasets-query-params-1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "attrs": {
+      "additionalProperties": true,
+      "title": "Attrs",
+      "type": "object"
+    },
+    "ids": {
+      "description": "[beta] Exact dataset ids (at most 5000); `kind` and `limit` then do not apply.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Ids",
+      "type": "array"
+    },
+    "kind": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "[stable] Dataset kind (optional with `ids`).",
+      "title": "Kind"
+    },
+    "limit": {
+      "default": 100,
+      "maximum": 5000,
+      "minimum": 1,
+      "title": "Limit",
+      "type": "integer"
+    },
+    "with_files": {
+      "default": false,
+      "description": "[beta] Include each dataset's file list.",
+      "title": "With Files",
+      "type": "boolean"
+    }
+  },
+  "title": "DatasetsQueryParams",
+  "type": "object"
+}

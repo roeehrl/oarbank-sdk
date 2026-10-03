@@ -1,0 +1,159 @@
+{
+  "$defs": {
+    "CampaignJob": {
+      "additionalProperties": true,
+      "properties": {
+        "dataset_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Dataset Id"
+        },
+        "digest": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Digest"
+        },
+        "done_at": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Done At"
+        },
+        "fields": {
+          "additionalProperties": true,
+          "title": "Fields",
+          "type": "object"
+        },
+        "group": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "[beta] The job's group (jobs.enqueue `group`).",
+          "title": "Group"
+        },
+        "job_id": {
+          "title": "Job Id",
+          "type": "integer"
+        },
+        "job_key": {
+          "title": "Job Key",
+          "type": "string"
+        },
+        "kind": {
+          "default": "eval",
+          "title": "Kind",
+          "type": "string"
+        },
+        "labels": {
+          "additionalProperties": true,
+          "title": "Labels",
+          "type": "object"
+        },
+        "platform": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "[beta] Platform of the node that produced the canonical result.",
+          "title": "Platform"
+        },
+        "stage": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Stage"
+        },
+        "state": {
+          "title": "State",
+          "type": "string"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Value"
+        }
+      },
+      "required": [
+        "job_id",
+        "job_key",
+        "state"
+      ],
+      "title": "CampaignJob",
+      "type": "object"
+    }
+  },
+  "$id": "https://codonic.dev/oarbank/schemas/module-campaign-tick-params-1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "description": "The host's periodic call for a running campaign of this module (and after its jobs change).",
+  "properties": {
+    "campaign": {
+      "additionalProperties": true,
+      "description": "[beta] {campaign_id, name, state, priority, weight, labels, placement}; placement [beta] is {mix, unit, class, state} (class: the bound class key or null; state: unbound, soft, hard or pinned).",
+      "title": "Campaign",
+      "type": "object"
+    },
+    "jobs": {
+      "description": "[beta] Every job of the campaign, with canonical results.",
+      "items": {
+        "$ref": "#/$defs/CampaignJob"
+      },
+      "title": "Jobs",
+      "type": "array"
+    },
+    "now": {
+      "title": "Now",
+      "type": "number"
+    }
+  },
+  "required": [
+    "campaign",
+    "now"
+  ],
+  "title": "CampaignTickParams",
+  "type": "object"
+}

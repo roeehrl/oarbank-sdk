@@ -1,0 +1,18 @@
+{
+  "$id": "https://codonic.dev/oarbank/schemas/module-host-store-query-result-1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "docs": {
+      "description": "[beta] Each with its `_key`.",
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "Docs",
+      "type": "array"
+    }
+  },
+  "title": "StoreQueryResult",
+  "type": "object"
+}

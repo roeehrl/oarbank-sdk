@@ -1,0 +1,17 @@
+{
+  "$id": "https://codonic.dev/oarbank/schemas/module-params-distance-result-1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "distance": {
+      "minimum": 0,
+      "title": "Distance",
+      "type": "number"
+    }
+  },
+  "required": [
+    "distance"
+  ],
+  "title": "ParamsDistanceResult",
+  "type": "object"
+}

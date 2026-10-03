@@ -1,0 +1,2694 @@
+{
+  "$defs": {
+    "Action": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "$ref": "#/$defs/ActionRef"
+        },
+        "fallback": {
+          "default": "placeholder",
+          "enum": [
+            "drop",
+            "placeholder"
+          ],
+          "title": "Fallback",
+          "type": "string"
+        },
+        "id": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Id"
+        },
+        "requires": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Minimum ui_contract minor for this component, e.g. '1.1'.",
+          "title": "Requires"
+        },
+        "type": {
+          "const": "action",
+          "title": "Type",
+          "type": "string"
+        },
+        "when": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Visibility, e.g. \"node.online == true\".",
+          "title": "When"
+        }
+      },
+      "required": [
+        "type",
+        "action"
+      ],
+      "title": "Action",
+      "type": "object"
+    },
+    "ActionRef": {
+      "additionalProperties": false,
+      "description": "A button bound to a registry operation. The host draws the label (registry title) and friction.",
+      "properties": {
+        "hint": {
+          "anyOf": [
+            {
+              "maxLength": 120,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Secondary line under the host label.",
+          "title": "Hint"
+        },
+        "op": {
+          "description": "A core operation id, or self.<verb> for this module's own operation (mod.<module>.<verb>).",
+          "pattern": "^([a-z]+(\\.[a-z_]+)+|self\\.[a-z_]+)$",
+          "title": "Op",
+          "type": "string"
+        },
+        "params": {
+          "additionalProperties": false,
+          "title": "Params",
+          "type": "object"
+        },
+        "target": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Literal or interpolation ($row.<field>, $route.*, $node, ...).",
+          "title": "Target"
+        },
+        "when": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "When"
+        }
+      },
+      "required": [
+        "op"
+      ],
+      "title": "ActionRef",
+      "type": "object"
+    },
+    "Callout": {
+      "additionalProperties": false,
+      "properties": {
+        "fallback": {
+          "default": "placeholder",
+          "enum": [
+            "drop",
+            "placeholder"
+          ],
+          "title": "Fallback",
+          "type": "string"
+        },
+        "id": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Id"
+        },
+        "requires": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Minimum ui_contract minor for this component, e.g. '1.1'.",
+          "title": "Requires"
+        },
+        "text": {
+          "maxLength": 3000,
+          "title": "Text",
+          "type": "string"
+        },
+        "tone": {
+          "default": "info",
+          "enum": [
+            "ok",
+            "warn",
+            "error",
+            "info",
+            "neutral",
+            "running"
+          ],
+          "title": "Tone",
+          "type": "string"
+        },
+        "type": {
+          "const": "callout",
+          "title": "Type",
+          "type": "string"
+        },
+        "when": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Visibility, e.g. \"node.online == true\".",
+          "title": "When"
+        }
+      },
+      "required": [
+        "type",
+        "text"
+      ],
+      "title": "Callout",
+      "type": "object"
+    },
+    "Chart": {
+      "additionalProperties": false,
+      "properties": {
+        "fallback": {
+          "default": "placeholder",
+          "enum": [
+            "drop",
+            "placeholder"
+          ],
+          "title": "Fallback",
+          "type": "string"
+        },
+        "id": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Id"
+        },
+        "kind": {
+          "enum": [
+            "line",
+            "bar",
+            "scatter",
+            "histogram",
+            "parallel_coords"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "requires": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Minimum ui_contract minor for this component, e.g. '1.1'.",
+          "title": "Requires"
+        },
+        "source": {
+          "$ref": "#/$defs/Source"
+        },
+        "summary": {
+          "description": "Required text alternative (accessibility); also shown as a caption.",
+          "maxLength": 3000,
+          "title": "Summary",
+          "type": "string"
+        },
+        "type": {
+          "const": "chart",
+          "title": "Type",
+          "type": "string"
+        },
+        "when": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Visibility, e.g. \"node.online == true\".",
+          "title": "When"
+        },
+        "x": {
+          "maxLength": 64,
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "title": "X",
+          "type": "string"
+        },
+        "y": {
+          "items": {
+            "maxLength": 64,
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "type": "string"
+          },
+          "maxItems": 6,
+          "minItems": 1,
+          "title": "Y",
+          "type": "array"
+        }
+      },
+      "required": [
+        "type",
+        "kind",
+        "source",
+        "x",
+        "y",
+        "summary"
+      ],
+      "title": "Chart",
+      "type": "object"
+    },
+    "Column": {
+      "additionalProperties": false,
+      "properties": {
+        "direction": {
+          "anyOf": [
+            {
+              "enum": [
+                "min",
+                "max"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Which way is better; enables best/colouring generically.",
+          "title": "Direction"
+        },
+        "format": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Format"
+        },
+        "key": {
+          "maxLength": 64,
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "title": "Key",
+          "type": "string"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "maxLength": 80,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Label"
+        },
+        "sortable": {
+          "default": true,
+          "title": "Sortable",
+          "type": "boolean"
+        },
+        "tone_by_sign": {
+          "default": false,
+          "title": "Tone By Sign",
+          "type": "boolean"
+        },
+        "type": {
+          "default": "text",
+          "enum": [
+            "text",
+            "number",
+            "integer",
+            "percent",
+            "bytes",
+            "duration",
+            "relative_time",
+            "timestamp",
+            "bool",
+            "digest",
+            "code",
+            "status",
+            "job_ref",
+            "node_ref",
+            "dataset_ref",
+            "campaign_ref",
+            "link"
+          ],
+          "title": "Type",
+          "type": "string"
+        },
+        "unit": {
+          "anyOf": [
+            {
+              "maxLength": 16,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Unit"
+        }
+      },
+      "required": [
+        "key"
+      ],
+      "title": "Column",
+      "type": "object"
+    },
+    "Columns": {
+      "additionalProperties": false,
+      "properties": {
+        "children": {
+          "items": {
+            "discriminator": {
+              "mapping": {
+                "action": "#/$defs/Action",
+                "callout": "#/$defs/Callout",
+                "chart": "#/$defs/Chart",
+                "columns": "#/$defs/Columns",
+                "empty": "#/$defs/Empty",
+                "filter_bar": "#/$defs/FilterBar",
+                "form": "#/$defs/Form",
+                "iframe": "#/$defs/Frame",
+                "json": "#/$defs/JSONView",
+                "kv": "#/$defs/KV",
+                "link": "#/$defs/LinkC",
+                "logs": "#/$defs/Logs",
+                "markdown": "#/$defs/Markdown",
+                "progress": "#/$defs/Progress",
+                "section": "#/$defs/Section",
+                "stat": "#/$defs/Stat",
+                "status": "#/$defs/Status",
+                "table": "#/$defs/Table",
+                "tabs": "#/$defs/Tabs",
+                "text": "#/$defs/TextC"
+              },
+              "propertyName": "type"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/Section"
+              },
+              {
+                "$ref": "#/$defs/Tabs"
+              },
+              {
+                "$ref": "#/$defs/Columns"
+              },
+              {
+                "$ref": "#/$defs/TextC"
+              },
+              {
+                "$ref": "#/$defs/Markdown"
+              },
+              {
+                "$ref": "#/$defs/KV"
+              },
+              {
+                "$ref": "#/$defs/Stat"
+              },
+              {
+                "$ref": "#/$defs/Status"
+              },
+              {
+                "$ref": "#/$defs/Progress"
+              },
+              {
+                "$ref": "#/$defs/Callout"
+              },
+              {
+                "$ref": "#/$defs/Empty"
+              },
+              {
+                "$ref": "#/$defs/Table"
+              },
+              {
+                "$ref": "#/$defs/Chart"
+              },
+              {
+                "$ref": "#/$defs/Logs"
+              },
+              {
+                "$ref": "#/$defs/JSONView"
+              },
+              {
+                "$ref": "#/$defs/Form"
+              },
+              {
+                "$ref": "#/$defs/FilterBar"
+              },
+              {
+                "$ref": "#/$defs/Action"
+              },
+              {
+                "$ref": "#/$defs/LinkC"
+              },
+              {
+                "$ref": "#/$defs/Frame"
+              }
+            ]
+          },
+          "maxItems": 3,
+          "minItems": 2,
+          "title": "Children",
+          "type": "array"
+        },
+        "fallback": {
+          "default": "placeholder",
+          "enum": [
+            "drop",
+            "placeholder"
+          ],
+          "title": "Fallback",
+          "type": "string"
+        },
+        "id": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Id"
+        },
+        "requires": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Minimum ui_contract minor for this component, e.g. '1.1'.",
+          "title": "Requires"
+        },
+        "type": {
+          "const": "columns",
+          "title": "Type",
+          "type": "string"
+        },
+        "when": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Visibility, e.g. \"node.online == true\".",
+          "title": "When"
+        }
+      },
+      "required": [
+        "type",
+        "children"
+      ],
+      "title": "Columns",
+      "type": "object"
+    },
+    "Empty": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ActionRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "fallback": {
+          "default": "placeholder",
+          "enum": [
+            "drop",
+            "placeholder"
+          ],
+          "title": "Fallback",
+          "type": "string"
+        },
+        "id": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Id"
+        },
+        "requires": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Minimum ui_contract minor for this component, e.g. '1.1'.",
+          "title": "Requires"
+        },
+        "text": {
+          "maxLength": 3000,
+          "title": "Text",
+          "type": "string"
+        },
+        "type": {
+          "const": "empty",
+          "title": "Type",
+          "type": "string"
+        },
+        "when": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Visibility, e.g. \"node.online == true\".",
+          "title": "When"
+        }
+      },
+      "required": [
+        "type",
+        "text"
+      ],
+      "title": "Empty",
+      "type": "object"
+    },
+    "FilterBar": {
+      "additionalProperties": false,
+      "properties": {
+        "fallback": {
+          "default": "placeholder",
+          "enum": [
+            "drop",
+            "placeholder"
+          ],
+          "title": "Fallback",
+          "type": "string"
+        },
+        "id": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Id"
+        },
+        "requires": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Minimum ui_contract minor for this component, e.g. '1.1'.",
+          "title": "Requires"
+        },
+        "type": {
+          "const": "filter_bar",
+          "title": "Type",
+          "type": "string"
+        },
+        "vars": {
+          "items": {
+            "$ref": "#/$defs/FilterVar"
+          },
+          "maxItems": 8,
+          "minItems": 1,
+          "title": "Vars",
+          "type": "array"
+        },
+        "when": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Visibility, e.g. \"node.online == true\".",
+          "title": "When"
+        }
+      },
+      "required": [
+        "type",
+        "vars"
+      ],
+      "title": "FilterBar",
+      "type": "object"
+    },
+    "FilterVar": {
+      "additionalProperties": false,
+      "properties": {
+        "default": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Default"
+        },
+        "enum": {
+          "anyOf": [
+            {
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ]
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Enum"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "maxLength": 80,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Label"
+        },
+        "name": {
+          "maxLength": 64,
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "title": "Name",
+          "type": "string"
+        },
+        "type": {
+          "default": "string",
+          "enum": [
+            "string",
+            "number",
+            "integer",
+            "boolean",
+            "date"
+          ],
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "FilterVar",
+      "type": "object"
+    },
+    "Form": {
+      "additionalProperties": false,
+      "properties": {
+        "fallback": {
+          "default": "placeholder",
+          "enum": [
+            "drop",
+            "placeholder"
+          ],
+          "title": "Fallback",
+          "type": "string"
+        },
+        "hints": {
+          "additionalProperties": false,
+          "description": "Order, grouping, help, widget from the host registry.",
+          "title": "Hints",
+          "type": "object"
+        },
+        "id": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Id"
+        },
+        "requires": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Minimum ui_contract minor for this component, e.g. '1.1'.",
+          "title": "Requires"
+        },
+        "schema": {
+          "description": "Bundle path of a restricted JSON Schema (spec/ui-contract.md).",
+          "title": "Schema",
+          "type": "string"
+        },
+        "submit": {
+          "$ref": "#/$defs/ActionRef"
+        },
+        "type": {
+          "const": "form",
+          "title": "Type",
+          "type": "string"
+        },
+        "when": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Visibility, e.g. \"node.online == true\".",
+          "title": "When"
+        }
+      },
+      "required": [
+        "type",
+        "schema",
+        "submit"
+      ],
+      "title": "Form",
+      "type": "object"
+    },
+    "Frame": {
+      "additionalProperties": false,
+      "properties": {
+        "fallback": {
+          "default": "placeholder",
+          "enum": [
+            "drop",
+            "placeholder"
+          ],
+          "title": "Fallback",
+          "type": "string"
+        },
+        "height": {
+          "default": 480,
+          "maximum": 2000,
+          "minimum": 120,
+          "title": "Height",
+          "type": "integer"
+        },
+        "id": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Id"
+        },
+        "requires": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Minimum ui_contract minor for this component, e.g. '1.1'.",
+          "title": "Requires"
+        },
+        "title": {
+          "description": "Accessible name of the frame.",
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        },
+        "type": {
+          "const": "iframe",
+          "title": "Type",
+          "type": "string"
+        },
+        "view": {
+          "description": "An iframe view declared in the manifest ([[ui.iframes]]).",
+          "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$",
+          "title": "View",
+          "type": "string"
+        },
+        "when": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Visibility, e.g. \"node.online == true\".",
+          "title": "When"
+        }
+      },
+      "required": [
+        "type",
+        "view",
+        "title"
+      ],
+      "title": "Frame",
+      "type": "object"
+    },
+    "JSONView": {
+      "additionalProperties": false,
+      "properties": {
+        "fallback": {
+          "default": "placeholder",
+          "enum": [
+            "drop",
+            "placeholder"
+          ],
+          "title": "Fallback",
+          "type": "string"
+        },
+        "id": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Id"
+        },
+        "requires": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Minimum ui_contract minor for this component, e.g. '1.1'.",
+          "title": "Requires"
+        },
+        "source": {
+          "$ref": "#/$defs/Source"
+        },
+        "type": {
+          "const": "json",
+          "title": "Type",
+          "type": "string"
+        },
+        "when": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Visibility, e.g. \"node.online == true\".",
+          "title": "When"
+        }
+      },
+      "required": [
+        "type",
+        "source"
+      ],
+      "title": "JSONView",
+      "type": "object"
+    },
+    "KV": {
+      "additionalProperties": false,
+      "properties": {
+        "fallback": {
+          "default": "placeholder",
+          "enum": [
+            "drop",
+            "placeholder"
+          ],
+          "title": "Fallback",
+          "type": "string"
+        },
+        "id": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Id"
+        },
+        "items": {
+          "items": {
+            "$ref": "#/$defs/KVItem"
+          },
+          "maxItems": 30,
+          "minItems": 1,
+          "title": "Items",
+          "type": "array"
+        },
+        "requires": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Minimum ui_contract minor for this component, e.g. '1.1'.",
+          "title": "Requires"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Source"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "type": {
+          "const": "kv",
+          "title": "Type",
+          "type": "string"
+        },
+        "when": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Visibility, e.g. \"node.online == true\".",
+          "title": "When"
+        }
+      },
+      "required": [
+        "type",
+        "items"
+      ],
+      "title": "KV",
+      "type": "object"
+    },
+    "KVItem": {
+      "additionalProperties": false,
+      "properties": {
+        "field": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "pattern": "^[a-z][a-z0-9_]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Field"
+        },
+        "format": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Format"
+        },
+        "label": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        },
+        "type": {
+          "default": "text",
+          "enum": [
+            "text",
+            "number",
+            "integer",
+            "percent",
+            "bytes",
+            "duration",
+            "relative_time",
+            "timestamp",
+            "bool",
+            "digest",
+            "code",
+            "status",
+            "job_ref",
+            "node_ref",
+            "dataset_ref",
+            "campaign_ref",
+            "link"
+          ],
+          "title": "Type",
+          "type": "string"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Value"
+        }
+      },
+      "required": [
+        "label"
+      ],
+      "title": "KVItem",
+      "type": "object"
+    },
+    "Link": {
+      "additionalProperties": false,
+      "description": "A typed reference the host turns into a URL; never a raw href (except allowlisted https).",
+      "properties": {
+        "campaign": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Campaign"
+        },
+        "dataset": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Dataset"
+        },
+        "job": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Job"
+        },
+        "node": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Node"
+        },
+        "page": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Page"
+        },
+        "url": {
+          "anyOf": [
+            {
+              "pattern": "^https://[^\\s\\\"'<>]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Must match manifest ui.external_urls.",
+          "title": "Url"
+        }
+      },
+      "title": "Link",
+      "type": "object"
+    },
+    "LinkC": {
+      "additionalProperties": false,
+      "properties": {
+        "fallback": {
+          "default": "placeholder",
+          "enum": [
+            "drop",
+            "placeholder"
+          ],
+          "title": "Fallback",
+          "type": "string"
+        },
+        "id": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Id"
+        },
+        "requires": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Minimum ui_contract minor for this component, e.g. '1.1'.",
+          "title": "Requires"
+        },
+        "text": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        },
+        "to": {
+          "$ref": "#/$defs/Link"
+        },
+        "type": {
+          "const": "link",
+          "title": "Type",
+          "type": "string"
+        },
+        "when": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Visibility, e.g. \"node.online == true\".",
+          "title": "When"
+        }
+      },
+      "required": [
+        "type",
+        "text",
+        "to"
+      ],
+      "title": "LinkC",
+      "type": "object"
+    },
+    "Logs": {
+      "additionalProperties": false,
+      "properties": {
+        "fallback": {
+          "default": "placeholder",
+          "enum": [
+            "drop",
+            "placeholder"
+          ],
+          "title": "Fallback",
+          "type": "string"
+        },
+        "id": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Id"
+        },
+        "requires": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Minimum ui_contract minor for this component, e.g. '1.1'.",
+          "title": "Requires"
+        },
+        "stream": {
+          "default": "module",
+          "enum": [
+            "module",
+            "job",
+            "attempt"
+          ],
+          "title": "Stream",
+          "type": "string"
+        },
+        "type": {
+          "const": "logs",
+          "title": "Type",
+          "type": "string"
+        },
+        "when": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Visibility, e.g. \"node.online == true\".",
+          "title": "When"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "Logs",
+      "type": "object"
+    },
+    "Markdown": {
+      "additionalProperties": false,
+      "properties": {
+        "fallback": {
+          "default": "placeholder",
+          "enum": [
+            "drop",
+            "placeholder"
+          ],
+          "title": "Fallback",
+          "type": "string"
+        },
+        "id": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Id"
+        },
+        "requires": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Minimum ui_contract minor for this component, e.g. '1.1'.",
+          "title": "Requires"
+        },
+        "text": {
+          "description": "Paragraphs, emphasis, code, lists and typed internal links only.",
+          "maxLength": 3000,
+          "title": "Text",
+          "type": "string"
+        },
+        "type": {
+          "const": "markdown",
+          "title": "Type",
+          "type": "string"
+        },
+        "when": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Visibility, e.g. \"node.online == true\".",
+          "title": "When"
+        }
+      },
+      "required": [
+        "type",
+        "text"
+      ],
+      "title": "Markdown",
+      "type": "object"
+    },
+    "Progress": {
+      "additionalProperties": false,
+      "properties": {
+        "fallback": {
+          "default": "placeholder",
+          "enum": [
+            "drop",
+            "placeholder"
+          ],
+          "title": "Fallback",
+          "type": "string"
+        },
+        "id": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Id"
+        },
+        "label": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        },
+        "requires": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Minimum ui_contract minor for this component, e.g. '1.1'.",
+          "title": "Requires"
+        },
+        "source": {
+          "$ref": "#/$defs/Source"
+        },
+        "total": {
+          "maxLength": 64,
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "title": "Total",
+          "type": "string"
+        },
+        "type": {
+          "const": "progress",
+          "title": "Type",
+          "type": "string"
+        },
+        "value": {
+          "maxLength": 64,
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "title": "Value",
+          "type": "string"
+        },
+        "when": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Visibility, e.g. \"node.online == true\".",
+          "title": "When"
+        }
+      },
+      "required": [
+        "type",
+        "label",
+        "source",
+        "value",
+        "total"
+      ],
+      "title": "Progress",
+      "type": "object"
+    },
+    "Section": {
+      "additionalProperties": false,
+      "properties": {
+        "children": {
+          "items": {
+            "discriminator": {
+              "mapping": {
+                "action": "#/$defs/Action",
+                "callout": "#/$defs/Callout",
+                "chart": "#/$defs/Chart",
+                "columns": "#/$defs/Columns",
+                "empty": "#/$defs/Empty",
+                "filter_bar": "#/$defs/FilterBar",
+                "form": "#/$defs/Form",
+                "iframe": "#/$defs/Frame",
+                "json": "#/$defs/JSONView",
+                "kv": "#/$defs/KV",
+                "link": "#/$defs/LinkC",
+                "logs": "#/$defs/Logs",
+                "markdown": "#/$defs/Markdown",
+                "progress": "#/$defs/Progress",
+                "section": "#/$defs/Section",
+                "stat": "#/$defs/Stat",
+                "status": "#/$defs/Status",
+                "table": "#/$defs/Table",
+                "tabs": "#/$defs/Tabs",
+                "text": "#/$defs/TextC"
+              },
+              "propertyName": "type"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/Section"
+              },
+              {
+                "$ref": "#/$defs/Tabs"
+              },
+              {
+                "$ref": "#/$defs/Columns"
+              },
+              {
+                "$ref": "#/$defs/TextC"
+              },
+              {
+                "$ref": "#/$defs/Markdown"
+              },
+              {
+                "$ref": "#/$defs/KV"
+              },
+              {
+                "$ref": "#/$defs/Stat"
+              },
+              {
+                "$ref": "#/$defs/Status"
+              },
+              {
+                "$ref": "#/$defs/Progress"
+              },
+              {
+                "$ref": "#/$defs/Callout"
+              },
+              {
+                "$ref": "#/$defs/Empty"
+              },
+              {
+                "$ref": "#/$defs/Table"
+              },
+              {
+                "$ref": "#/$defs/Chart"
+              },
+              {
+                "$ref": "#/$defs/Logs"
+              },
+              {
+                "$ref": "#/$defs/JSONView"
+              },
+              {
+                "$ref": "#/$defs/Form"
+              },
+              {
+                "$ref": "#/$defs/FilterBar"
+              },
+              {
+                "$ref": "#/$defs/Action"
+              },
+              {
+                "$ref": "#/$defs/LinkC"
+              },
+              {
+                "$ref": "#/$defs/Frame"
+              }
+            ]
+          },
+          "maxItems": 40,
+          "title": "Children",
+          "type": "array"
+        },
+        "fallback": {
+          "default": "placeholder",
+          "enum": [
+            "drop",
+            "placeholder"
+          ],
+          "title": "Fallback",
+          "type": "string"
+        },
+        "id": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Id"
+        },
+        "requires": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Minimum ui_contract minor for this component, e.g. '1.1'.",
+          "title": "Requires"
+        },
+        "span": {
+          "default": "full",
+          "enum": [
+            1,
+            2,
+            "full"
+          ],
+          "title": "Span"
+        },
+        "title": {
+          "anyOf": [
+            {
+              "maxLength": 80,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Title"
+        },
+        "type": {
+          "const": "section",
+          "title": "Type",
+          "type": "string"
+        },
+        "when": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Visibility, e.g. \"node.online == true\".",
+          "title": "When"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "Section",
+      "type": "object"
+    },
+    "Source": {
+      "additionalProperties": false,
+      "description": "Where a component's rows come from. Exactly one of `query` or `view`.",
+      "properties": {
+        "agg": {
+          "patternProperties": {
+            "^[a-z][a-z0-9_]*$": {
+              "enum": [
+                "count",
+                "mean",
+                "median",
+                "min",
+                "max",
+                "p95",
+                "sum"
+              ],
+              "type": "string"
+            }
+          },
+          "propertyNames": {
+            "maxLength": 64
+          },
+          "title": "Agg",
+          "type": "object"
+        },
+        "descending": {
+          "default": true,
+          "title": "Descending",
+          "type": "boolean"
+        },
+        "fields": {
+          "items": {
+            "maxLength": 64,
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "type": "string"
+          },
+          "title": "Fields",
+          "type": "array"
+        },
+        "group_by": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "pattern": "^[a-z][a-z0-9_]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Group By"
+        },
+        "limit": {
+          "default": 50,
+          "maximum": 200,
+          "minimum": 1,
+          "title": "Limit",
+          "type": "integer"
+        },
+        "order_by": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "pattern": "^[a-z][a-z0-9_]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Order By"
+        },
+        "params": {
+          "additionalProperties": false,
+          "description": "Literals, or $route / $var interpolations only (e.g. '$node', '$var.region').",
+          "title": "Params",
+          "type": "object"
+        },
+        "query": {
+          "anyOf": [
+            {
+              "enum": [
+                "results",
+                "jobs",
+                "attempts",
+                "campaigns",
+                "datasets",
+                "module_settings",
+                "module_events",
+                "nodes",
+                "node_metrics",
+                "store"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Query"
+        },
+        "view": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "A module view declared in the manifest ([ui.views.<id>]).",
+          "title": "View"
+        }
+      },
+      "title": "Source",
+      "type": "object"
+    },
+    "Stat": {
+      "additionalProperties": false,
+      "properties": {
+        "direction": {
+          "anyOf": [
+            {
+              "enum": [
+                "min",
+                "max"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Direction"
+        },
+        "fallback": {
+          "default": "placeholder",
+          "enum": [
+            "drop",
+            "placeholder"
+          ],
+          "title": "Fallback",
+          "type": "string"
+        },
+        "field": {
+          "maxLength": 64,
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "title": "Field",
+          "type": "string"
+        },
+        "format": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Format"
+        },
+        "id": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Id"
+        },
+        "label": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        },
+        "requires": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Minimum ui_contract minor for this component, e.g. '1.1'.",
+          "title": "Requires"
+        },
+        "source": {
+          "$ref": "#/$defs/Source"
+        },
+        "sparkline": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "pattern": "^[a-z][a-z0-9_]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sparkline"
+        },
+        "type": {
+          "const": "stat",
+          "title": "Type",
+          "type": "string"
+        },
+        "unit": {
+          "anyOf": [
+            {
+              "maxLength": 16,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Unit"
+        },
+        "when": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Visibility, e.g. \"node.online == true\".",
+          "title": "When"
+        }
+      },
+      "required": [
+        "type",
+        "label",
+        "source",
+        "field"
+      ],
+      "title": "Stat",
+      "type": "object"
+    },
+    "Status": {
+      "additionalProperties": false,
+      "properties": {
+        "fallback": {
+          "default": "placeholder",
+          "enum": [
+            "drop",
+            "placeholder"
+          ],
+          "title": "Fallback",
+          "type": "string"
+        },
+        "field": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "pattern": "^[a-z][a-z0-9_]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Field"
+        },
+        "id": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Id"
+        },
+        "label": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        },
+        "requires": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Minimum ui_contract minor for this component, e.g. '1.1'.",
+          "title": "Requires"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Source"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "tones": {
+          "additionalProperties": {
+            "enum": [
+              "ok",
+              "warn",
+              "error",
+              "info",
+              "neutral",
+              "running"
+            ],
+            "type": "string"
+          },
+          "description": "value -> tone",
+          "title": "Tones",
+          "type": "object"
+        },
+        "type": {
+          "const": "status",
+          "title": "Type",
+          "type": "string"
+        },
+        "when": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Visibility, e.g. \"node.online == true\".",
+          "title": "When"
+        }
+      },
+      "required": [
+        "type",
+        "label"
+      ],
+      "title": "Status",
+      "type": "object"
+    },
+    "Tab": {
+      "additionalProperties": false,
+      "properties": {
+        "children": {
+          "items": {
+            "discriminator": {
+              "mapping": {
+                "action": "#/$defs/Action",
+                "callout": "#/$defs/Callout",
+                "chart": "#/$defs/Chart",
+                "columns": "#/$defs/Columns",
+                "empty": "#/$defs/Empty",
+                "filter_bar": "#/$defs/FilterBar",
+                "form": "#/$defs/Form",
+                "iframe": "#/$defs/Frame",
+                "json": "#/$defs/JSONView",
+                "kv": "#/$defs/KV",
+                "link": "#/$defs/LinkC",
+                "logs": "#/$defs/Logs",
+                "markdown": "#/$defs/Markdown",
+                "progress": "#/$defs/Progress",
+                "section": "#/$defs/Section",
+                "stat": "#/$defs/Stat",
+                "status": "#/$defs/Status",
+                "table": "#/$defs/Table",
+                "tabs": "#/$defs/Tabs",
+                "text": "#/$defs/TextC"
+              },
+              "propertyName": "type"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/Section"
+              },
+              {
+                "$ref": "#/$defs/Tabs"
+              },
+              {
+                "$ref": "#/$defs/Columns"
+              },
+              {
+                "$ref": "#/$defs/TextC"
+              },
+              {
+                "$ref": "#/$defs/Markdown"
+              },
+              {
+                "$ref": "#/$defs/KV"
+              },
+              {
+                "$ref": "#/$defs/Stat"
+              },
+              {
+                "$ref": "#/$defs/Status"
+              },
+              {
+                "$ref": "#/$defs/Progress"
+              },
+              {
+                "$ref": "#/$defs/Callout"
+              },
+              {
+                "$ref": "#/$defs/Empty"
+              },
+              {
+                "$ref": "#/$defs/Table"
+              },
+              {
+                "$ref": "#/$defs/Chart"
+              },
+              {
+                "$ref": "#/$defs/Logs"
+              },
+              {
+                "$ref": "#/$defs/JSONView"
+              },
+              {
+                "$ref": "#/$defs/Form"
+              },
+              {
+                "$ref": "#/$defs/FilterBar"
+              },
+              {
+                "$ref": "#/$defs/Action"
+              },
+              {
+                "$ref": "#/$defs/LinkC"
+              },
+              {
+                "$ref": "#/$defs/Frame"
+              }
+            ]
+          },
+          "maxItems": 40,
+          "title": "Children",
+          "type": "array"
+        },
+        "title": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "title"
+      ],
+      "title": "Tab",
+      "type": "object"
+    },
+    "Table": {
+      "additionalProperties": false,
+      "properties": {
+        "columns": {
+          "items": {
+            "$ref": "#/$defs/Column"
+          },
+          "maxItems": 20,
+          "minItems": 1,
+          "title": "Columns",
+          "type": "array"
+        },
+        "fallback": {
+          "default": "placeholder",
+          "enum": [
+            "drop",
+            "placeholder"
+          ],
+          "title": "Fallback",
+          "type": "string"
+        },
+        "id": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Id"
+        },
+        "page_size": {
+          "default": 25,
+          "maximum": 200,
+          "minimum": 5,
+          "title": "Page Size",
+          "type": "integer"
+        },
+        "requires": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Minimum ui_contract minor for this component, e.g. '1.1'.",
+          "title": "Requires"
+        },
+        "row_actions": {
+          "items": {
+            "$ref": "#/$defs/ActionRef"
+          },
+          "maxItems": 4,
+          "title": "Row Actions",
+          "type": "array"
+        },
+        "row_link": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Link"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "source": {
+          "$ref": "#/$defs/Source"
+        },
+        "type": {
+          "const": "table",
+          "title": "Type",
+          "type": "string"
+        },
+        "when": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Visibility, e.g. \"node.online == true\".",
+          "title": "When"
+        }
+      },
+      "required": [
+        "type",
+        "source",
+        "columns"
+      ],
+      "title": "Table",
+      "type": "object"
+    },
+    "Tabs": {
+      "additionalProperties": false,
+      "properties": {
+        "fallback": {
+          "default": "placeholder",
+          "enum": [
+            "drop",
+            "placeholder"
+          ],
+          "title": "Fallback",
+          "type": "string"
+        },
+        "id": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Id"
+        },
+        "requires": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Minimum ui_contract minor for this component, e.g. '1.1'.",
+          "title": "Requires"
+        },
+        "tabs": {
+          "items": {
+            "$ref": "#/$defs/Tab"
+          },
+          "maxItems": 8,
+          "minItems": 1,
+          "title": "Tabs",
+          "type": "array"
+        },
+        "type": {
+          "const": "tabs",
+          "title": "Type",
+          "type": "string"
+        },
+        "when": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Visibility, e.g. \"node.online == true\".",
+          "title": "When"
+        }
+      },
+      "required": [
+        "type",
+        "tabs"
+      ],
+      "title": "Tabs",
+      "type": "object"
+    },
+    "TextC": {
+      "additionalProperties": false,
+      "properties": {
+        "fallback": {
+          "default": "placeholder",
+          "enum": [
+            "drop",
+            "placeholder"
+          ],
+          "title": "Fallback",
+          "type": "string"
+        },
+        "id": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Id"
+        },
+        "requires": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Minimum ui_contract minor for this component, e.g. '1.1'.",
+          "title": "Requires"
+        },
+        "text": {
+          "maxLength": 3000,
+          "title": "Text",
+          "type": "string"
+        },
+        "tone": {
+          "anyOf": [
+            {
+              "enum": [
+                "ok",
+                "warn",
+                "error",
+                "info",
+                "neutral",
+                "running"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tone"
+        },
+        "type": {
+          "const": "text",
+          "title": "Type",
+          "type": "string"
+        },
+        "when": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Visibility, e.g. \"node.online == true\".",
+          "title": "When"
+        }
+      },
+      "required": [
+        "type",
+        "text"
+      ],
+      "title": "TextC",
+      "type": "object"
+    }
+  },
+  "$id": "https://codonic.dev/oarbank/schemas/ui-page-1.strict.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "ui/pages/<id>.json and ui/panels/<id>.json (a panel is a page without tabs of its own).",
+  "properties": {
+    "body": {
+      "items": {
+        "discriminator": {
+          "mapping": {
+            "action": "#/$defs/Action",
+            "callout": "#/$defs/Callout",
+            "chart": "#/$defs/Chart",
+            "columns": "#/$defs/Columns",
+            "empty": "#/$defs/Empty",
+            "filter_bar": "#/$defs/FilterBar",
+            "form": "#/$defs/Form",
+            "iframe": "#/$defs/Frame",
+            "json": "#/$defs/JSONView",
+            "kv": "#/$defs/KV",
+            "link": "#/$defs/LinkC",
+            "logs": "#/$defs/Logs",
+            "markdown": "#/$defs/Markdown",
+            "progress": "#/$defs/Progress",
+            "section": "#/$defs/Section",
+            "stat": "#/$defs/Stat",
+            "status": "#/$defs/Status",
+            "table": "#/$defs/Table",
+            "tabs": "#/$defs/Tabs",
+            "text": "#/$defs/TextC"
+          },
+          "propertyName": "type"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/$defs/Section"
+          },
+          {
+            "$ref": "#/$defs/Tabs"
+          },
+          {
+            "$ref": "#/$defs/Columns"
+          },
+          {
+            "$ref": "#/$defs/TextC"
+          },
+          {
+            "$ref": "#/$defs/Markdown"
+          },
+          {
+            "$ref": "#/$defs/KV"
+          },
+          {
+            "$ref": "#/$defs/Stat"
+          },
+          {
+            "$ref": "#/$defs/Status"
+          },
+          {
+            "$ref": "#/$defs/Progress"
+          },
+          {
+            "$ref": "#/$defs/Callout"
+          },
+          {
+            "$ref": "#/$defs/Empty"
+          },
+          {
+            "$ref": "#/$defs/Table"
+          },
+          {
+            "$ref": "#/$defs/Chart"
+          },
+          {
+            "$ref": "#/$defs/Logs"
+          },
+          {
+            "$ref": "#/$defs/JSONView"
+          },
+          {
+            "$ref": "#/$defs/Form"
+          },
+          {
+            "$ref": "#/$defs/FilterBar"
+          },
+          {
+            "$ref": "#/$defs/Action"
+          },
+          {
+            "$ref": "#/$defs/LinkC"
+          },
+          {
+            "$ref": "#/$defs/Frame"
+          }
+        ]
+      },
+      "maxItems": 40,
+      "minItems": 1,
+      "title": "Body",
+      "type": "array"
+    },
+    "title": {
+      "anyOf": [
+        {
+          "maxLength": 80,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Title"
+    },
+    "ui_contract": {
+      "default": "1.0",
+      "pattern": "^1\\.\\d+$",
+      "title": "Ui Contract",
+      "type": "string"
+    },
+    "vars": {
+      "items": {
+        "$ref": "#/$defs/FilterVar"
+      },
+      "maxItems": 8,
+      "title": "Vars",
+      "type": "array"
+    }
+  },
+  "required": [
+    "body"
+  ],
+  "title": "Page",
+  "type": "object"
+}

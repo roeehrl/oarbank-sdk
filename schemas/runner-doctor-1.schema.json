@@ -1,0 +1,91 @@
+{
+  "$defs": {
+    "DoctorCheck": {
+      "additionalProperties": true,
+      "properties": {
+        "detail": {
+          "default": "",
+          "title": "Detail",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "ok": {
+          "title": "Ok",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "name",
+        "ok"
+      ],
+      "title": "DoctorCheck",
+      "type": "object"
+    },
+    "Versions": {
+      "additionalProperties": true,
+      "properties": {
+        "supported": {
+          "items": {
+            "type": "integer"
+          },
+          "minItems": 1,
+          "title": "Supported",
+          "type": "array"
+        }
+      },
+      "required": [
+        "supported"
+      ],
+      "title": "Versions",
+      "type": "object"
+    }
+  },
+  "$id": "https://codonic.dev/oarbank/schemas/runner-doctor-1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "description": "`doctor --json` stdout.",
+  "properties": {
+    "attrs": {
+      "additionalProperties": true,
+      "title": "Attrs",
+      "type": "object"
+    },
+    "capabilities": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Capabilities",
+      "type": "array"
+    },
+    "checks": {
+      "items": {
+        "$ref": "#/$defs/DoctorCheck"
+      },
+      "title": "Checks",
+      "type": "array"
+    },
+    "health": {
+      "description": "[stable] undetected = cannot run here, don't offer, don't alert.",
+      "enum": [
+        "healthy",
+        "unhealthy",
+        "undetected"
+      ],
+      "title": "Health",
+      "type": "string"
+    },
+    "runner_protocol": {
+      "$ref": "#/$defs/Versions",
+      "description": "[stable] Majors this runner speaks; the agent picks the highest shared one."
+    }
+  },
+  "required": [
+    "runner_protocol",
+    "health"
+  ],
+  "title": "DoctorOutput",
+  "type": "object"
+}

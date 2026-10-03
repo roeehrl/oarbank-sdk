@@ -1,0 +1,490 @@
+{
+ "mixes": [
+  "any",
+  "same-os",
+  "same-arch",
+  "same-platform"
+ ],
+ "class_key": [
+  {
+   "platform": "darwin-arm64",
+   "mix": "any",
+   "class": "*"
+  },
+  {
+   "platform": "darwin-arm64",
+   "mix": "same-os",
+   "class": "darwin"
+  },
+  {
+   "platform": "darwin-arm64",
+   "mix": "same-arch",
+   "class": "arm64"
+  },
+  {
+   "platform": "darwin-arm64",
+   "mix": "same-platform",
+   "class": "darwin-arm64"
+  },
+  {
+   "platform": "darwin-arm64",
+   "mix": "same-rack",
+   "class": "darwin-arm64"
+  },
+  {
+   "platform": "darwin-arm64",
+   "mix": null,
+   "class": "*"
+  },
+  {
+   "platform": "linux-amd64",
+   "mix": "any",
+   "class": "*"
+  },
+  {
+   "platform": "linux-amd64",
+   "mix": "same-os",
+   "class": "linux"
+  },
+  {
+   "platform": "linux-amd64",
+   "mix": "same-arch",
+   "class": "amd64"
+  },
+  {
+   "platform": "linux-amd64",
+   "mix": "same-platform",
+   "class": "linux-amd64"
+  },
+  {
+   "platform": "linux-amd64",
+   "mix": "same-rack",
+   "class": "linux-amd64"
+  },
+  {
+   "platform": "linux-amd64",
+   "mix": null,
+   "class": "*"
+  },
+  {
+   "platform": "windows-arm64",
+   "mix": "any",
+   "class": "*"
+  },
+  {
+   "platform": "windows-arm64",
+   "mix": "same-os",
+   "class": "windows"
+  },
+  {
+   "platform": "windows-arm64",
+   "mix": "same-arch",
+   "class": "arm64"
+  },
+  {
+   "platform": "windows-arm64",
+   "mix": "same-platform",
+   "class": "windows-arm64"
+  },
+  {
+   "platform": "windows-arm64",
+   "mix": "same-rack",
+   "class": "windows-arm64"
+  },
+  {
+   "platform": "windows-arm64",
+   "mix": null,
+   "class": "*"
+  },
+  {
+   "platform": "freebsd-riscv64",
+   "mix": "any",
+   "class": "*"
+  },
+  {
+   "platform": "freebsd-riscv64",
+   "mix": "same-os",
+   "class": "freebsd"
+  },
+  {
+   "platform": "freebsd-riscv64",
+   "mix": "same-arch",
+   "class": "riscv64"
+  },
+  {
+   "platform": "freebsd-riscv64",
+   "mix": "same-platform",
+   "class": "freebsd-riscv64"
+  },
+  {
+   "platform": "freebsd-riscv64",
+   "mix": "same-rack",
+   "class": "freebsd-riscv64"
+  },
+  {
+   "platform": "freebsd-riscv64",
+   "mix": null,
+   "class": "*"
+  }
+ ],
+ "applied": [
+  {
+   "mix": "any",
+   "applied": "any"
+  },
+  {
+   "mix": "same-os",
+   "applied": "same-os"
+  },
+  {
+   "mix": "same-arch",
+   "applied": "same-arch"
+  },
+  {
+   "mix": "same-platform",
+   "applied": "same-platform"
+  },
+  {
+   "mix": "same-rack",
+   "applied": "same-platform"
+  },
+  {
+   "mix": null,
+   "applied": "any"
+  }
+ ],
+ "stricter": [
+  {
+   "a": "any",
+   "b": "any",
+   "stricter": "any"
+  },
+  {
+   "a": "any",
+   "b": "same-os",
+   "stricter": "same-os"
+  },
+  {
+   "a": "any",
+   "b": "same-arch",
+   "stricter": "same-arch"
+  },
+  {
+   "a": "any",
+   "b": "same-platform",
+   "stricter": "same-platform"
+  },
+  {
+   "a": "any",
+   "b": "same-rack",
+   "stricter": "same-platform"
+  },
+  {
+   "a": "any",
+   "b": null,
+   "stricter": "any"
+  },
+  {
+   "a": "same-os",
+   "b": "any",
+   "stricter": "same-os"
+  },
+  {
+   "a": "same-os",
+   "b": "same-os",
+   "stricter": "same-os"
+  },
+  {
+   "a": "same-os",
+   "b": "same-arch",
+   "stricter": "same-platform"
+  },
+  {
+   "a": "same-os",
+   "b": "same-platform",
+   "stricter": "same-platform"
+  },
+  {
+   "a": "same-os",
+   "b": "same-rack",
+   "stricter": "same-platform"
+  },
+  {
+   "a": "same-os",
+   "b": null,
+   "stricter": "same-os"
+  },
+  {
+   "a": "same-arch",
+   "b": "any",
+   "stricter": "same-arch"
+  },
+  {
+   "a": "same-arch",
+   "b": "same-os",
+   "stricter": "same-platform"
+  },
+  {
+   "a": "same-arch",
+   "b": "same-arch",
+   "stricter": "same-arch"
+  },
+  {
+   "a": "same-arch",
+   "b": "same-platform",
+   "stricter": "same-platform"
+  },
+  {
+   "a": "same-arch",
+   "b": "same-rack",
+   "stricter": "same-platform"
+  },
+  {
+   "a": "same-arch",
+   "b": null,
+   "stricter": "same-arch"
+  },
+  {
+   "a": "same-platform",
+   "b": "any",
+   "stricter": "same-platform"
+  },
+  {
+   "a": "same-platform",
+   "b": "same-os",
+   "stricter": "same-platform"
+  },
+  {
+   "a": "same-platform",
+   "b": "same-arch",
+   "stricter": "same-platform"
+  },
+  {
+   "a": "same-platform",
+   "b": "same-platform",
+   "stricter": "same-platform"
+  },
+  {
+   "a": "same-platform",
+   "b": "same-rack",
+   "stricter": "same-platform"
+  },
+  {
+   "a": "same-platform",
+   "b": null,
+   "stricter": "same-platform"
+  },
+  {
+   "a": "same-rack",
+   "b": "any",
+   "stricter": "same-platform"
+  },
+  {
+   "a": "same-rack",
+   "b": "same-os",
+   "stricter": "same-platform"
+  },
+  {
+   "a": "same-rack",
+   "b": "same-arch",
+   "stricter": "same-platform"
+  },
+  {
+   "a": "same-rack",
+   "b": "same-platform",
+   "stricter": "same-platform"
+  },
+  {
+   "a": "same-rack",
+   "b": "same-rack",
+   "stricter": "same-platform"
+  },
+  {
+   "a": "same-rack",
+   "b": null,
+   "stricter": "same-platform"
+  },
+  {
+   "a": null,
+   "b": "any",
+   "stricter": "any"
+  },
+  {
+   "a": null,
+   "b": "same-os",
+   "stricter": "same-os"
+  },
+  {
+   "a": null,
+   "b": "same-arch",
+   "stricter": "same-arch"
+  },
+  {
+   "a": null,
+   "b": "same-platform",
+   "stricter": "same-platform"
+  },
+  {
+   "a": null,
+   "b": "same-rack",
+   "stricter": "same-platform"
+  },
+  {
+   "a": null,
+   "b": null,
+   "stricter": "any"
+  }
+ ],
+ "scope_mix": [
+  {
+   "scope": "global",
+   "mix": "any"
+  },
+  {
+   "scope": "os",
+   "mix": "same-os"
+  },
+  {
+   "scope": "arch",
+   "mix": "same-arch"
+  },
+  {
+   "scope": "platform",
+   "mix": "same-platform"
+  },
+  {
+   "scope": "rack",
+   "mix": "same-platform"
+  }
+ ],
+ "feasible": [
+  {
+   "platforms": [
+    "darwin-arm64",
+    "linux-amd64",
+    "linux-arm64",
+    "windows-amd64"
+   ],
+   "stage_platforms": [],
+   "job_platforms": [],
+   "mix": "any",
+   "classes": [
+    "*"
+   ]
+  },
+  {
+   "platforms": [
+    "darwin-arm64",
+    "linux-amd64",
+    "linux-arm64",
+    "windows-amd64"
+   ],
+   "stage_platforms": [],
+   "job_platforms": [],
+   "mix": "same-os",
+   "classes": [
+    "darwin",
+    "linux",
+    "windows"
+   ]
+  },
+  {
+   "platforms": [
+    "darwin-arm64",
+    "linux-amd64",
+    "linux-arm64",
+    "windows-amd64"
+   ],
+   "stage_platforms": [],
+   "job_platforms": [],
+   "mix": "same-arch",
+   "classes": [
+    "amd64",
+    "arm64"
+   ]
+  },
+  {
+   "platforms": [
+    "darwin-arm64",
+    "linux-amd64",
+    "linux-arm64",
+    "windows-amd64"
+   ],
+   "stage_platforms": [
+    [],
+    [
+     "darwin-arm64",
+     "linux-amd64"
+    ]
+   ],
+   "job_platforms": [],
+   "mix": "same-platform",
+   "classes": [
+    "darwin-arm64",
+    "linux-amd64"
+   ]
+  },
+  {
+   "platforms": [
+    "darwin-arm64",
+    "linux-amd64",
+    "linux-arm64",
+    "windows-amd64"
+   ],
+   "stage_platforms": [
+    [
+     "linux-amd64",
+     "linux-arm64",
+     "darwin-arm64"
+    ]
+   ],
+   "job_platforms": [
+    "linux"
+   ],
+   "mix": "same-os",
+   "classes": [
+    "linux"
+   ]
+  },
+  {
+   "platforms": [
+    "darwin-arm64",
+    "linux-amd64"
+   ],
+   "stage_platforms": [
+    [
+     "windows-amd64"
+    ]
+   ],
+   "job_platforms": [],
+   "mix": "any",
+   "classes": []
+  },
+  {
+   "platforms": [
+    "darwin-arm64",
+    "linux-amd64"
+   ],
+   "stage_platforms": [],
+   "job_platforms": [
+    "windows"
+   ],
+   "mix": "same-platform",
+   "classes": []
+  },
+  {
+   "platforms": [
+    "darwin-arm64",
+    "linux-amd64"
+   ],
+   "stage_platforms": [],
+   "job_platforms": [],
+   "mix": "same-rack",
+   "classes": [
+    "darwin-arm64",
+    "linux-amd64"
+   ]
+  }
+ ],
+ "note": "Absent mix is `any`; an unknown mix (or determinism scope) applies as `same-platform`. Strictness: any < same-os, same-arch < same-platform; same-os with same-arch is same-platform. Feasible classes: the module's platforms where every stage the unit runs and the job's platforms (tokens or OSes) allow, grouped by class; an empty list allows every platform."
+}

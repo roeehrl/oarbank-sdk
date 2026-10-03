@@ -1,0 +1,80 @@
+{
+  "$defs": {
+    "Versions": {
+      "additionalProperties": true,
+      "properties": {
+        "supported": {
+          "items": {
+            "type": "integer"
+          },
+          "minItems": 1,
+          "title": "Supported",
+          "type": "array"
+        }
+      },
+      "required": [
+        "supported"
+      ],
+      "title": "Versions",
+      "type": "object"
+    }
+  },
+  "$id": "https://codonic.dev/oarbank/schemas/service-fingerprint-1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "attrs": {
+      "additionalProperties": true,
+      "title": "Attrs",
+      "type": "object"
+    },
+    "health": {
+      "description": "[beta] undetected: not offered, no alert; unhealthy: offered at zero capacity, the agent tries to heal.",
+      "enum": [
+        "healthy",
+        "unhealthy",
+        "undetected"
+      ],
+      "title": "Health",
+      "type": "string"
+    },
+    "pools": {
+      "additionalProperties": {
+        "type": "integer"
+      },
+      "description": "[beta] Tokens this service can provide right now, computed by the module from its own settings.",
+      "title": "Pools",
+      "type": "object"
+    },
+    "reserve": {
+      "additionalProperties": {
+        "type": "number"
+      },
+      "description": "[beta] Host resources charged while running, e.g. {mem_gb: 8}.",
+      "title": "Reserve",
+      "type": "object"
+    },
+    "running": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "[beta] Services only: whether it is currently up (used for adoption after an agent restart).",
+      "title": "Running"
+    },
+    "service_protocol": {
+      "$ref": "#/$defs/Versions"
+    }
+  },
+  "required": [
+    "service_protocol",
+    "health"
+  ],
+  "title": "Fingerprint",
+  "type": "object"
+}

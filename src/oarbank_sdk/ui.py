@@ -1,0 +1,421 @@
+"""UI contract 1: how a module defines its GUI (spec/ui-contract.md).
+
+A module describes its pages and panels as *data*: static JSON layouts shipped in the bundle
+(`ui/pages/*.json`, `ui/panels/*.json`), made of about 16 host components, with dynamic rows bound to
+host-evaluated queries over the module's own data or to module-computed views that the host caches per
+data version. The console renders everything with its own templates; no module HTML, CSS or JavaScript
+ever runs in the console origin. Buttons and forms name registry operations (`mod.<module>.<verb>`,
+declared in the manifest); the host draws the label, tier, preview and confirmation.
+
+Rich UIs that cannot be expressed this way use an `iframe` component: a bundle-shipped HTML entry served
+from a separate origin inside `sandbox="allow-scripts allow-forms"`, talking to the host only through a
+MessageChannel bridge that can read the module's own data and *request* operations (the host confirms).
+
+Rules that make this safe, enforced by `oarbank-sdk check`, the installer and the renderer:
+- strings are plain text (<= 3000 chars) or a restricted markdown subset; never HTML;
+- values are raw and typed; the host formats them from a whitelist (CELL_TYPES, FORMAT_RE);
+- colours/styles are semantic `tone`s from a fixed list; links are typed internal references, or https
+  URLs from the manifest's allowlist;
+- sources are a closed catalogue, always filtered to the module's own rows; no query language;
+- unknown components or props degrade to a placeholder (per-component `fallback`), never a page error.
+"""
+import re
+from typing import Annotated, Any, Literal, Union
+
+from pydantic import Field, field_validator, model_validator
+
+from ._base import Contract, Name, StrictContract
+
+UI_CONTRACT = "1.0"
+UI_CONTRACT_MAJOR = 1
+
+Text = Annotated[str, Field(max_length=3000)]
+Label = Annotated[str, Field(min_length=1, max_length=80)]
+Ident = Annotated[str, Field(pattern=r"^[a-z0-9][a-z0-9_.-]{0,63}$")]
+Tone = Literal["ok", "warn", "error", "info", "neutral", "running"]
+
+CELL_TYPES = ("text", "number", "integer", "percent", "bytes", "duration", "relative_time", "timestamp", "bool",
+              "digest", "code", "status", "job_ref", "node_ref", "dataset_ref", "campaign_ref", "link")
+CellType = Literal["text", "number", "integer", "percent", "bytes", "duration", "relative_time", "timestamp", "bool",
+                   "digest", "code", "status", "job_ref", "node_ref", "dataset_ref", "campaign_ref", "link"]
+FORMAT_RE = re.compile(r"^([+]?\.\d{1,2}[fe%]|d|,d|s|\.\d{1,2}s|d/d)?$")
+
+# Closed, host-published catalogue of core queries (always filtered to the module's own rows).
+SOURCES = ("results", "jobs", "attempts", "campaigns", "datasets", "module_settings", "module_events", "nodes",
+           "node_metrics", "store")
+PLACEMENT_SLOTS = ("module.overview", "module.page", "job.detail.panel", "node.detail.panel", "campaign.panel")
+SLOT_LIMITS = {"module.overview": 1, "module.page": 6, "job.detail.panel": 2, "node.detail.panel": 1, "campaign.panel": 1}
+EFFECTS = ("jobs.enqueue", "jobs.cancel", "campaigns.create", "campaigns.update", "campaigns.cancel",
+           "datasets.create", "datasets.update", "datasets.delete", "module_settings.update", "store.write",
+           "store.delete", "files.write", "files.put", "files.delete", "external")
+# Effects that force a minimum tier regardless of what the module declares.
+EFFECT_TIER_FLOOR = {"jobs.cancel": "T1", "campaigns.cancel": "T2", "datasets.delete": "T2", "store.delete": "T1", "files.delete": "T1",
+                     "external": "T1"}
+
+
+# ------------------------------------------------------------------------------------------ bindings
+
+class Source(StrictContract):
+    """Where a component's rows come from. Exactly one of `query` or `view`."""
+    query: Literal["results", "jobs", "attempts", "campaigns", "datasets", "module_settings", "module_events", "nodes",
+                   "node_metrics", "store"] | None = None
+    view: Ident | None = Field(None, description="A module view declared in the manifest ([ui.views.<id>]).")
+    params: dict[str, Any] = Field(default_factory=dict,
+                                   description="Literals, or $route / $var interpolations only (e.g. '$node', '$var.region').")
+    fields: list[Name] = Field(default_factory=list)
+    group_by: Name | None = None
+    agg: dict[Name, Literal["count", "mean", "median", "min", "max", "p95", "sum"]] = Field(default_factory=dict)
+    order_by: Name | None = None
+    descending: bool = True
+    limit: Annotated[int, Field(ge=1, le=200)] = 50
+
+    @model_validator(mode="after")
+    def _one(self):
+        if (self.query is None) == (self.view is None):
+            raise ValueError("a source names exactly one of `query` or `view`")
+        for v in self.params.values():
+            if isinstance(v, str) and v.startswith("$") and not re.match(r"^\$(route\.[a-z_]+|var\.[a-z_]+|node|job|campaign|self)$", v):
+                raise ValueError(f"interpolation {v!r} is not allowed (only $route.*, $var.*, $node, $job, $campaign, $self)")
+        return self
+
+
+class Column(StrictContract):
+    key: Name
+    label: Label | None = None
+    type: CellType = "text"
+    format: str | None = None
+    unit: Annotated[str, Field(max_length=16)] | None = None
+    direction: Literal["min", "max"] | None = Field(None, description="Which way is better; enables best/colouring generically.")
+    tone_by_sign: bool = False
+    sortable: bool = True
+
+    @field_validator("format")
+    @classmethod
+    def _fmt(cls, v):
+        if v is not None and not FORMAT_RE.match(v):
+            raise ValueError(f"format {v!r} not in the whitelist")
+        return v
+
+
+class Link(StrictContract):
+    """A typed reference the host turns into a URL; never a raw href (except allowlisted https)."""
+    job: int | None = None
+    node: str | None = None
+    dataset: str | None = None
+    campaign: str | None = None
+    page: Ident | None = None
+    url: Annotated[str, Field(pattern=r"^https://[^\s\"'<>]+$")] | None = Field(None, description="Must match manifest ui.external_urls.")
+
+    @model_validator(mode="after")
+    def _one(self):
+        if sum(v is not None for v in (self.job, self.node, self.dataset, self.campaign, self.page, self.url)) != 1:
+            raise ValueError("a link names exactly one target")
+        return self
+
+
+class ActionRef(StrictContract):
+    """A button bound to a registry operation. The host draws the label (registry title) and friction."""
+    op: Annotated[str, Field(pattern=r"^([a-z]+(\.[a-z_]+)+|self\.[a-z_]+)$")] = Field(
+        description="A core operation id, or self.<verb> for this module's own operation (mod.<module>.<verb>).")
+    target: str | None = Field(None, description="Literal or interpolation ($row.<field>, $route.*, $node, ...).")
+    params: dict[str, Any] = Field(default_factory=dict)
+    hint: Annotated[str, Field(max_length=120)] | None = Field(None, description="Secondary line under the host label.")
+    when: Annotated[str, Field(max_length=200)] | None = None
+
+
+# ------------------------------------------------------------------------------------------ components
+
+class _C(StrictContract):
+    id: Ident | None = None
+    when: Annotated[str, Field(max_length=200)] | None = Field(None, description="Visibility, e.g. \"node.online == true\".")
+    requires: str | None = Field(None, description="Minimum ui_contract minor for this component, e.g. '1.1'.")
+    fallback: Literal["drop", "placeholder"] = "placeholder"
+
+
+class Section(_C):
+    type: Literal["section"]
+    title: Label | None = None
+    span: Literal[1, 2, "full"] = "full"
+    children: list["Component"] = Field(default_factory=list, max_length=40)
+
+
+class Tab(StrictContract):
+    title: Label
+    children: list["Component"] = Field(default_factory=list, max_length=40)
+
+
+class Tabs(_C):
+    type: Literal["tabs"]
+    tabs: list[Tab] = Field(min_length=1, max_length=8)
+
+
+class Columns(_C):
+    type: Literal["columns"]
+    children: list["Component"] = Field(min_length=2, max_length=3)
+
+
+class TextC(_C):
+    type: Literal["text"]
+    text: Text
+    tone: Tone | None = None
+
+
+class Markdown(_C):
+    type: Literal["markdown"]
+    text: Text = Field(description="Paragraphs, emphasis, code, lists and typed internal links only.")
+
+
+class KVItem(StrictContract):
+    label: Label
+    field: Name | None = None
+    value: str | int | float | bool | None = None
+    type: CellType = "text"
+    format: str | None = None
+
+
+class KV(_C):
+    type: Literal["kv"]
+    source: Source | None = None
+    items: list[KVItem] = Field(min_length=1, max_length=30)
+
+
+class Stat(_C):
+    type: Literal["stat"]
+    label: Label
+    source: Source
+    field: Name
+    format: str | None = None
+    unit: Annotated[str, Field(max_length=16)] | None = None
+    direction: Literal["min", "max"] | None = None
+    sparkline: Name | None = None
+
+
+class Status(_C):
+    type: Literal["status"]
+    label: Label
+    source: Source | None = None
+    field: Name | None = None
+    tones: dict[str, Tone] = Field(default_factory=dict, description="value -> tone")
+
+
+class Progress(_C):
+    type: Literal["progress"]
+    label: Label
+    source: Source
+    value: Name
+    total: Name
+
+
+class Callout(_C):
+    type: Literal["callout"]
+    tone: Tone = "info"
+    text: Text
+
+
+class Empty(_C):
+    type: Literal["empty"]
+    text: Text
+    action: ActionRef | None = None
+
+
+class Table(_C):
+    type: Literal["table"]
+    source: Source
+    columns: list[Column] = Field(min_length=1, max_length=20)
+    row_link: Link | None = None
+    row_actions: list[ActionRef] = Field(default_factory=list, max_length=4)
+    page_size: Annotated[int, Field(ge=5, le=200)] = 25
+
+
+class Chart(_C):
+    type: Literal["chart"]
+    kind: Literal["line", "bar", "scatter", "histogram", "parallel_coords"]
+    source: Source
+    x: Name
+    y: list[Name] = Field(min_length=1, max_length=6)
+    summary: Text = Field(description="Required text alternative (accessibility); also shown as a caption.")
+
+
+class Logs(_C):
+    type: Literal["logs"]
+    stream: Literal["module", "job", "attempt"] = "module"
+
+
+class JSONView(_C):
+    type: Literal["json"]
+    source: Source
+
+
+class Form(_C):
+    type: Literal["form"]
+    schema_: str = Field(alias="schema", description="Bundle path of a restricted JSON Schema (spec/ui-contract.md).")
+    hints: dict[str, Any] = Field(default_factory=dict, description="Order, grouping, help, widget from the host registry.")
+    submit: ActionRef
+
+
+class FilterVar(StrictContract):
+    name: Name
+    label: Label | None = None
+    type: Literal["string", "number", "integer", "boolean", "date"] = "string"
+    enum: list[str | int | float] | None = None
+    default: str | int | float | bool | None = None
+
+
+class FilterBar(_C):
+    type: Literal["filter_bar"]
+    vars: list[FilterVar] = Field(min_length=1, max_length=8)
+
+
+class Action(_C):
+    type: Literal["action"]
+    action: ActionRef
+
+
+class LinkC(_C):
+    type: Literal["link"]
+    text: Label
+    to: Link
+
+
+class Frame(_C):
+    type: Literal["iframe"]
+    view: Ident = Field(description="An iframe view declared in the manifest ([[ui.iframes]]).")
+    height: Annotated[int, Field(ge=120, le=2000)] = 480
+    title: Label = Field(description="Accessible name of the frame.")
+
+
+Component = Annotated[Union[Section, Tabs, Columns, TextC, Markdown, KV, Stat, Status, Progress, Callout, Empty, Table,
+                            Chart, Logs, JSONView, Form, FilterBar, Action, LinkC, Frame], Field(discriminator="type")]
+for _m in (Section, Tab, Tabs, Columns):
+    _m.model_rebuild()
+
+COMPONENT_TYPES = ("section", "tabs", "columns", "text", "markdown", "kv", "stat", "status", "progress", "callout",
+                   "empty", "table", "chart", "logs", "json", "form", "filter_bar", "action", "link", "iframe")
+
+
+class Page(StrictContract):
+    """ui/pages/<id>.json and ui/panels/<id>.json (a panel is a page without tabs of its own)."""
+    ui_contract: Annotated[str, Field(pattern=r"^1\.\d+$")] = UI_CONTRACT
+    title: Label | None = None
+    vars: list[FilterVar] = Field(default_factory=list, max_length=8)
+    body: list[Component] = Field(min_length=1, max_length=40)
+
+
+# ------------------------------------------------------------------------------------------ manifest parts
+
+class PageDecl(Contract):
+    id: Ident
+    title: Label
+    slot: Literal["module.overview", "module.page", "job.detail.panel", "node.detail.panel", "campaign.panel"]
+    file: str
+    when: Annotated[str, Field(max_length=200)] | None = None
+
+
+class ViewDecl(Contract):
+    """A module-computed view (verb ui.view.compute), materialized by oarbankd per data version."""
+    shape: Literal["rows", "kv", "series", "stat"]
+    inputs: list[str] = Field(default_factory=list, description="What invalidates it: results, jobs, datasets:<kind>, store:<collection>.")
+    params: dict[str, Any] = Field(default_factory=dict, description="Restricted JSON Schema properties for view params.")
+    columns: list[Column] = Field(default_factory=list, max_length=30)
+    refresh_s: Annotated[int, Field(ge=300)] | None = Field(None, description="Clock-driven refresh; floor 5 minutes.")
+    max_rows: Annotated[int, Field(ge=1, le=5000)] = 1000
+
+
+class IframeDecl(Contract):
+    id: Ident
+    entry: str = Field(description="Bundle path of the HTML entry (served from the module origin with its own CSP).")
+    title: Label
+    bridge: list[Literal["read.query", "read.view", "request.operation", "resize", "navigate"]] = Field(
+        default_factory=lambda: ["read.view", "resize"], description="Bridge capabilities the frame may use.")
+
+
+class OperationDecl(Contract):
+    """Registered at install as mod.<module>.<verb> in the operation registry."""
+    verb: Annotated[str, Field(pattern=r"^[a-z][a-z0-9_]{0,40}$")]
+    title: Label
+    tier: Literal["T0", "T1", "T2", "T3"] = "T1"
+    min_role: Literal["viewer", "operator", "admin"] = "operator"
+    target: Literal["none", "dataset", "job", "node", "campaign", "store", "module"] = "none"
+    params_schema: str | None = Field(None, description="Bundle path of the parameter schema.")
+    effects: list[Literal["jobs.enqueue", "jobs.cancel", "campaigns.create", "campaigns.update", "campaigns.cancel",
+                          "datasets.create", "datasets.update", "datasets.delete", "module_settings.update",
+                          "store.write", "store.delete", "files.write", "files.put", "files.delete", "external"]] = Field(default_factory=list)
+    preview: bool = Field(False, description="Implements op.plan (required when the effective tier is T2/T3).")
+
+    def effective_tier(self) -> str:
+        order = ("T0", "T1", "T2", "T3")
+        t = max([order.index(self.tier)] + [order.index(EFFECT_TIER_FLOOR[e]) for e in self.effects if e in EFFECT_TIER_FLOOR])
+        return order[t]
+
+
+DIGEST_LINE_RE = re.compile(r"^(?:[^{}]|\{\{|\}\}|\{[a-z][a-z0-9_]*(?::(?:\.\d{1,2}[fe%]|d|,d|s))?\})*$")
+
+
+class UISection(Contract):
+    icon: Literal["cpu", "gpu", "dna", "chart", "flask", "cube", "bolt"] | None = None
+    digest_line: str | None = Field(None, max_length=120, description="Restricted template: {field} or {field:FMT} only.")
+    pages: list[PageDecl] = Field(default_factory=list, max_length=12)
+    panels: list[PageDecl] = Field(default_factory=list, max_length=6)
+    views: dict[Ident, ViewDecl] = Field(default_factory=dict)
+    iframes: list[IframeDecl] = Field(default_factory=list, max_length=4)
+    external_urls: list[Annotated[str, Field(pattern=r"^https://")]] = Field(default_factory=list, max_length=10)
+
+    @field_validator("digest_line")
+    @classmethod
+    def _line(cls, v):
+        if v is not None and not DIGEST_LINE_RE.match(v):
+            raise ValueError("digest_line may contain text and {field} / {field:FMT} placeholders only")
+        return v
+
+    @model_validator(mode="after")
+    def _slots(self):
+        counts = {}
+        for d in [*self.pages, *self.panels]:
+            counts[d.slot] = counts.get(d.slot, 0) + 1
+        for slot, n in counts.items():
+            if n > SLOT_LIMITS[slot]:
+                raise ValueError(f"slot {slot} allows at most {SLOT_LIMITS[slot]} contributions, got {n}")
+        for d in self.pages:
+            if d.slot not in ("module.overview", "module.page"):
+                raise ValueError(f"page {d.id}: pages go in module.overview or module.page (panels go in [[ui.panels]])")
+        for d in self.panels:
+            if d.slot in ("module.overview", "module.page"):
+                raise ValueError(f"panel {d.id}: panels go in a detail slot")
+        ids = [d.id for d in [*self.pages, *self.panels]] + [f.id for f in self.iframes]
+        if len(ids) != len(set(ids)):
+            raise ValueError("page, panel and iframe ids must be unique")
+        return self
+
+
+def walk(components):
+    """Every component in a tree (depth first)."""
+    for c in components:
+        yield c
+        for child in getattr(c, "children", []) or []:
+            yield from walk([child])
+        for tab in getattr(c, "tabs", []) or []:
+            yield from walk(tab.children)
+
+
+def check_page(page: Page, ui: UISection, operations: list[OperationDecl], bundle_files: set[str] | None = None) -> list[str]:
+    """Cross-references a page must satisfy (the installer runs this; so does oarbank-sdk check)."""
+    errs = []
+    verbs = {o.verb for o in operations}
+    frames = {f.id for f in ui.iframes}
+    for c in walk(page.body):
+        src = getattr(c, "source", None)
+        if src is not None and src.view and src.view not in ui.views:
+            errs.append(f"{c.type}: view {src.view!r} is not declared in [ui.views]")
+        refs = [getattr(c, "action", None), getattr(c, "submit", None)] + list(getattr(c, "row_actions", []) or [])
+        if isinstance(c, Empty) and c.action:
+            refs.append(c.action)
+        for a in [r for r in refs if r is not None]:
+            if a.op.startswith("self.") and a.op[5:] not in verbs:
+                errs.append(f"{c.type}: operation {a.op!r} is not declared in [[operations]]")
+        if isinstance(c, Frame) and c.view not in frames:
+            errs.append(f"iframe: view {c.view!r} is not declared in [[ui.iframes]]")
+        if isinstance(c, LinkC) and c.to.url and not any(c.to.url.startswith(u) for u in ui.external_urls):
+            errs.append(f"link: {c.to.url!r} is not in ui.external_urls")
+        if isinstance(c, Form) and bundle_files is not None and c.schema_ not in bundle_files:
+            errs.append(f"form: schema file {c.schema_!r} is not in the bundle")
+    return errs

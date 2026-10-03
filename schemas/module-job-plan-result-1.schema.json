@@ -1,0 +1,105 @@
+{
+  "$defs": {
+    "PlanItem": {
+      "additionalProperties": true,
+      "description": "One evaluation the module wants run (e.g. one (params, dataset) pair).",
+      "properties": {
+        "datasets": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Datasets",
+          "type": "array"
+        },
+        "group": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "[beta] A job group within the campaign: with [placement] unit = \"group\", the jobs of one group stay on one platform class.",
+          "title": "Group"
+        },
+        "key_inputs": {
+          "additionalProperties": true,
+          "description": "[stable] Canonical inputs of the job key; the host hashes (module_id, compat, key_inputs).",
+          "title": "Key Inputs",
+          "type": "object"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Label"
+        },
+        "platforms": {
+          "description": "[beta] Only on these platforms (tokens or OSes; empty: every platform the stages allow).",
+          "items": {
+            "maxLength": 40,
+            "pattern": "^[a-z][a-z0-9]*(-[a-z0-9_]+)?$",
+            "type": "string"
+          },
+          "title": "Platforms",
+          "type": "array"
+        },
+        "resources": {
+          "description": "[stable] Per-stage resource overrides within the manifest's bounds.",
+          "patternProperties": {
+            "^[a-z][a-z0-9_]*$": {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          },
+          "propertyNames": {
+            "maxLength": 64
+          },
+          "title": "Resources",
+          "type": "object"
+        },
+        "stages": {
+          "description": "[stable] Stages to run (subset of the manifest's, in dependency order); empty = all.",
+          "items": {
+            "maxLength": 64,
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "type": "string"
+          },
+          "title": "Stages",
+          "type": "array"
+        }
+      },
+      "required": [
+        "key_inputs"
+      ],
+      "title": "PlanItem",
+      "type": "object"
+    }
+  },
+  "$id": "https://codonic.dev/oarbank/schemas/module-job-plan-result-1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "jobs": {
+      "items": {
+        "$ref": "#/$defs/PlanItem"
+      },
+      "title": "Jobs",
+      "type": "array"
+    }
+  },
+  "required": [
+    "jobs"
+  ],
+  "title": "JobPlanResult",
+  "type": "object"
+}

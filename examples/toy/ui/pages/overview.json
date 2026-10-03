@@ -1,0 +1,150 @@
+{
+ "ui_contract": "1.0",
+ "title": "Toy",
+ "body": [
+  {
+   "type": "columns",
+   "children": [
+    {
+     "type": "stat",
+     "label": "results",
+     "source": {
+      "query": "results",
+      "agg": {
+       "value": "count"
+      }
+     },
+     "field": "value",
+     "format": ",d"
+    },
+    {
+     "type": "stat",
+     "label": "largest sum",
+     "source": {
+      "query": "results",
+      "agg": {
+       "value": "max"
+      }
+     },
+     "field": "value",
+     "format": ",d",
+     "direction": "max"
+    }
+   ]
+  },
+  {
+   "type": "section",
+   "title": "Checked sums (computed by the module)",
+   "children": [
+    {
+     "type": "table",
+     "source": {
+      "view": "sums"
+     },
+     "columns": [
+      {
+       "key": "n",
+       "type": "integer",
+       "format": ",d"
+      },
+      {
+       "key": "sum",
+       "type": "integer",
+       "format": ",d",
+       "direction": "max"
+      },
+      {
+       "key": "ok",
+       "label": "matches n(n-1)/2",
+       "type": "bool"
+      }
+     ],
+     "row_actions": [
+      {
+       "op": "self.set_favorite",
+       "params": {
+        "n": "$row.n"
+       },
+       "hint": "remember this n"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "type": "section",
+   "title": "Recent results",
+   "children": [
+    {
+     "type": "table",
+     "source": {
+      "query": "results",
+      "fields": [
+       "job_id",
+       "value",
+       "at"
+      ],
+      "order_by": "at"
+     },
+     "columns": [
+      {
+       "key": "job_id",
+       "label": "job",
+       "type": "job_ref"
+      },
+      {
+       "key": "value",
+       "label": "sum",
+       "type": "number",
+       "format": ",d"
+      },
+      {
+       "key": "at",
+       "label": "when",
+       "type": "relative_time"
+      }
+     ]
+    },
+    {
+     "type": "chart",
+     "kind": "line",
+     "source": {
+      "query": "results",
+      "fields": [
+       "at",
+       "value"
+      ],
+      "order_by": "at"
+     },
+     "x": "at",
+     "y": [
+      "value"
+     ],
+     "summary": "Sum of each accepted result over time."
+    }
+   ]
+  },
+  {
+   "type": "section",
+   "title": "Explorer (sandboxed frame)",
+   "children": [
+    {
+     "type": "iframe",
+     "view": "explorer",
+     "title": "Toy explorer",
+     "height": 320
+    }
+   ]
+  },
+  {
+   "type": "action",
+   "action": {
+    "op": "self.set_favorite",
+    "params": {
+     "n": 1000
+    },
+    "hint": "the golden n"
+   }
+  }
+ ]
+}

@@ -1,0 +1,17 @@
+{
+  "$id": "https://codonic.dev/oarbank/schemas/module-result-merge-result-1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "result": {
+      "additionalProperties": true,
+      "title": "Result",
+      "type": "object"
+    }
+  },
+  "required": [
+    "result"
+  ],
+  "title": "ResultMergeResult",
+  "type": "object"
+}

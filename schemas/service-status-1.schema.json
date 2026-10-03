@@ -1,0 +1,33 @@
+{
+  "$id": "https://codonic.dev/oarbank/schemas/service-status-1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "detail": {
+      "default": "",
+      "title": "Detail",
+      "type": "string"
+    },
+    "ready": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Ready"
+    },
+    "running": {
+      "title": "Running",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "running"
+  ],
+  "title": "Status",
+  "type": "object"
+}

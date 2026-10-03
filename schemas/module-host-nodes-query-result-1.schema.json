@@ -1,0 +1,18 @@
+{
+  "$id": "https://codonic.dev/oarbank/schemas/module-host-nodes-query-result-1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "nodes": {
+      "description": "[beta] {node_id, hostname, online, module_state, platform, os, arch, os_version}; the platform fields need the nodes.platform host capability.",
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "Nodes",
+      "type": "array"
+    }
+  },
+  "title": "NodesQueryResult",
+  "type": "object"
+}

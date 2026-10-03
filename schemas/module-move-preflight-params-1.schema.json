@@ -1,0 +1,42 @@
+{
+  "$id": "https://codonic.dev/oarbank/schemas/module-move-preflight-params-1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "description": "A coordinator move is planned or starting. [beta]",
+  "properties": {
+    "move_id": {
+      "title": "Move Id",
+      "type": "string"
+    },
+    "not_before": {
+      "title": "Not Before",
+      "type": "number"
+    },
+    "now": {
+      "title": "Now",
+      "type": "number"
+    },
+    "phase": {
+      "description": "[beta] `planned`: the operator is reviewing or requesting the move (report blockers; effects are ignored); `draining`: the time lock passed and dispatch stopped. The host calls again every few seconds until no blocker remains or the wait expires.",
+      "enum": [
+        "planned",
+        "draining"
+      ],
+      "title": "Phase",
+      "type": "string"
+    },
+    "to_url": {
+      "title": "To Url",
+      "type": "string"
+    }
+  },
+  "required": [
+    "move_id",
+    "to_url",
+    "not_before",
+    "phase",
+    "now"
+  ],
+  "title": "MovePreflightParams",
+  "type": "object"
+}

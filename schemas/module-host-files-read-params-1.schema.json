@@ -1,0 +1,31 @@
+{
+  "$id": "https://codonic.dev/oarbank/schemas/module-host-files-read-params-1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "length": {
+      "default": 1048576,
+      "maximum": 1048576,
+      "minimum": 1,
+      "title": "Length",
+      "type": "integer"
+    },
+    "offset": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Offset",
+      "type": "integer"
+    },
+    "path": {
+      "maxLength": 512,
+      "pattern": "^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*$",
+      "title": "Path",
+      "type": "string"
+    }
+  },
+  "required": [
+    "path"
+  ],
+  "title": "FilesReadParams",
+  "type": "object"
+}

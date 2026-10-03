@@ -1,0 +1,72 @@
+{
+  "$id": "https://codonic.dev/oarbank/schemas/runner-control-1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "description": "<workdir>/control.json: written atomically by the agent for every job, at start (`{\"seq\": 0}`) and on every\nchange, each change followed by a nudge: SIGUSR1 to the runner process on POSIX, the inherited event named by\nOARBANK_CONTROL_EVENT on Windows. The runner re-reads the document when nudged and acts at its next safe point; it\nnever re-reads on a timer. Absent fields mean \"no constraint\". [stable]",
+  "properties": {
+    "gpu_duty": {
+      "anyOf": [
+        {
+          "maximum": 1,
+          "minimum": 0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "[beta] Max GPU duty fraction (reduce batch size/concurrency).",
+      "title": "Gpu Duty"
+    },
+    "pause": {
+      "default": false,
+      "description": "[stable] Hold at the next safe point until a newer document clears it (cooperative_pause).",
+      "title": "Pause",
+      "type": "boolean"
+    },
+    "reason": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "[beta] Human-readable reason code for logs.",
+      "title": "Reason"
+    },
+    "seq": {
+      "description": "[stable] Monotonic; apply only newer documents.",
+      "title": "Seq",
+      "type": "integer"
+    },
+    "stop": {
+      "default": false,
+      "description": "[stable] Finish now: exit non-zero (or write a result if done) within stop_grace_s; the agent then terminates the process container.",
+      "title": "Stop",
+      "type": "boolean"
+    },
+    "threads": {
+      "anyOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "[beta] Max active compute threads.",
+      "title": "Threads"
+    }
+  },
+  "required": [
+    "seq"
+  ],
+  "title": "Control",
+  "type": "object"
+}

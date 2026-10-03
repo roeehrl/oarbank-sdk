@@ -1,0 +1,31 @@
+{
+  "$id": "https://codonic.dev/oarbank/schemas/module-host-jobs-query-params-1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "campaign_id": {
+      "title": "Campaign Id",
+      "type": "string"
+    },
+    "limit": {
+      "default": 5000,
+      "maximum": 50000,
+      "minimum": 1,
+      "title": "Limit",
+      "type": "integer"
+    },
+    "states": {
+      "description": "[beta] Job states to include (empty: all).",
+      "items": {
+        "type": "string"
+      },
+      "title": "States",
+      "type": "array"
+    }
+  },
+  "required": [
+    "campaign_id"
+  ],
+  "title": "JobsQueryParams",
+  "type": "object"
+}

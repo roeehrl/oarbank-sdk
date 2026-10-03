@@ -1,0 +1,16 @@
+{
+  "$id": "https://codonic.dev/oarbank/schemas/module-host-settings-get-params-1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "key": {
+      "title": "Key",
+      "type": "string"
+    }
+  },
+  "required": [
+    "key"
+  ],
+  "title": "SettingsGetParams",
+  "type": "object"
+}

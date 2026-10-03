@@ -1,0 +1,101 @@
+{
+ "cases": [
+  {
+   "input": {
+    "a": 3.0,
+    "b": 3,
+    "c": 1e+16,
+    "d": 1e-07,
+    "e": "é",
+    "g": 2500000000000000.0
+   },
+   "canonical": "{\"a\":3,\"b\":3,\"c\":10000000000000000,\"d\":1e-7,\"e\":\"é\",\"g\":2500000000000000}",
+   "sha256": "0a6db6bf4838b8b3876826af0c3917b1892a659699b57ead62d1626ef6421b87"
+  },
+  {
+   "input": {
+    "z": 1,
+    "€": 2,
+    "é": 3,
+    "a": {
+     "y": [],
+     "x": {}
+    }
+   },
+   "canonical": "{\"a\":{\"x\":{},\"y\":[]},\"z\":1,\"é\":3,\"€\":2}",
+   "sha256": "d6344f4ff6633b230d1db448bdd48d7901383d81ba2f060f03afc32391f71d31"
+  },
+  {
+   "input": [
+    1e+21,
+    1e-06,
+    1e-07,
+    1.2345678901234568e+20,
+    0.1,
+    -0.0,
+    4.5e+21,
+    5e-324,
+    1.7976931348623157e+308
+   ],
+   "canonical": "[1e+21,0.000001,1e-7,123456789012345680000,0.1,0,4.5e+21,5e-324,1.7976931348623157e+308]",
+   "sha256": "2e71f827b04bfe0463f05eddeb85e41d17a985b3aa005fb55d44f1cb1146016e"
+  },
+  {
+   "input": {
+    "s": "line\nbreak \"quoted\" back\\slash \u0001 tab\t",
+    "n": null,
+    "t": true,
+    "f": false
+   },
+   "canonical": "{\"f\":false,\"n\":null,\"s\":\"line\\nbreak \\\"quoted\\\" back\\\\slash \\u0001 tab\\t\",\"t\":true}",
+   "sha256": "60fda1f8f00a414f6daaf1bc1d71a8320e347343064aefea3e2ab82cbf020bc1"
+  },
+  {
+   "input": {
+    "😀": "astral",
+    "￿": "bmp",
+    "a": "ascii"
+   },
+   "canonical": "{\"a\":\"ascii\",\"😀\":\"astral\",\"￿\":\"bmp\"}",
+   "sha256": "acc1899922c618af2892f4616406a49db0b86833d8a4e47cc0b32ccdabaf24c7"
+  },
+  {
+   "input": [
+    9007199254740992,
+    -9007199254740992,
+    0,
+    -1
+   ],
+   "canonical": "[9007199254740992,-9007199254740992,0,-1]",
+   "sha256": "9b272763eb769010658451146c3024ad169434becd26bd8d446a4b566148428c"
+  },
+  {
+   "input": [
+    2330662528422.6562,
+    0.5,
+    1.5,
+    2.5,
+    1e+21,
+    1e-07,
+    1.2345678901234568e+20
+   ],
+   "canonical": "[2330662528422.6562,0.5,1.5,2.5,1e+21,1e-7,123456789012345680000]",
+   "sha256": "fd44b613b856802701564d51031b1e002dea18205865542b48b8f676f8afb848"
+  }
+ ],
+ "refused": [
+  {
+   "value": "NaN",
+   "why": "NaN has no canonical form"
+  },
+  {
+   "value": "Infinity",
+   "why": "infinities have no canonical form"
+  },
+  {
+   "value": 9007199254740993,
+   "why": "integer beyond 2^53"
+  }
+ ],
+ "note": "RFC 8785 plus three refusals; inputs are JSON documents (numbers parsed as IEEE-754 doubles, except integers within ±2^53)."
+}

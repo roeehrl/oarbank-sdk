@@ -1,0 +1,71 @@
+{
+  "$id": "https://codonic.dev/oarbank/schemas/runner-failure-1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "description": "<workdir>/failure.json, written (atomically) by a runner that exits non-zero. Exit codes 2, 3 and 75 are\nattributed only when this file exists.",
+  "properties": {
+    "detail": {
+      "default": "",
+      "description": "[stable] Human-readable detail (truncated to 4 KiB by the agent).",
+      "title": "Detail",
+      "type": "string"
+    },
+    "fault": {
+      "anyOf": [
+        {
+          "enum": [
+            "job",
+            "host",
+            "transient"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "[stable] Who is at fault; overrides the exit code (job: never succeeds; host: the node lacks something; transient: retry).",
+      "title": "Fault"
+    },
+    "reason": {
+      "anyOf": [
+        {
+          "enum": [
+            "bad_input",
+            "mode_mismatch",
+            "oom",
+            "doctor",
+            "no_metrics"
+          ],
+          "type": "string"
+        },
+        {
+          "maxLength": 80,
+          "pattern": "^[a-z0-9][a-z0-9_-]*/[a-z0-9][a-z0-9_.-]*$",
+          "type": "string"
+        }
+      ],
+      "description": "[stable] One of the agent's end reasons: `bad_input` (the spec can never succeed), `mode_mismatch`, `oom`, `doctor` (a node dependency is missing) or `no_metrics`, which the coordinator maps to its reason codes; or the module's own `<module-short>/<code>`, which ends the attempt as `exit_nonzero` with the code kept in its detail.",
+      "title": "Reason"
+    },
+    "retryable": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "[beta] Overrides the exit-code attribution when set (true = transient).",
+      "title": "Retryable"
+    }
+  },
+  "required": [
+    "reason"
+  ],
+  "title": "Failure",
+  "type": "object"
+}

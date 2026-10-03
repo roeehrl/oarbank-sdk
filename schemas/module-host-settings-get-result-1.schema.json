@@ -1,0 +1,19 @@
+{
+  "$id": "https://codonic.dev/oarbank/schemas/module-host-settings-get-result-1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "value": {
+      "anyOf": [
+        {},
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Value"
+    }
+  },
+  "title": "SettingsGetResult",
+  "type": "object"
+}

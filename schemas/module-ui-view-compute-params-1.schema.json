@@ -1,0 +1,33 @@
+{
+  "$id": "https://codonic.dev/oarbank/schemas/module-ui-view-compute-params-1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "data_version": {
+      "description": "[beta] The input data version this computation is for (echoed back).",
+      "title": "Data Version",
+      "type": "integer"
+    },
+    "inputs": {
+      "additionalProperties": true,
+      "description": "[beta] Data the host resolved for the view's declared inputs.",
+      "title": "Inputs",
+      "type": "object"
+    },
+    "params": {
+      "additionalProperties": true,
+      "title": "Params",
+      "type": "object"
+    },
+    "view_id": {
+      "title": "View Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "view_id",
+    "data_version"
+  ],
+  "title": "ViewComputeParams",
+  "type": "object"
+}

@@ -1,0 +1,25 @@
+{
+  "$id": "https://codonic.dev/oarbank/schemas/service-op-result-1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "detail": {
+      "default": "",
+      "title": "Detail",
+      "type": "string"
+    },
+    "escalated": {
+      "default": false,
+      "description": "[beta] stop/destroy needed the forceful path.",
+      "title": "Escalated",
+      "type": "boolean"
+    },
+    "ok": {
+      "default": true,
+      "title": "Ok",
+      "type": "boolean"
+    }
+  },
+  "title": "OpResult",
+  "type": "object"
+}

@@ -1,0 +1,104 @@
+{#- UI contract 1 renderer. Everything is autoescaped; module data never reaches |safe (md filter escapes first). -#}
+{%- macro op_button(ref, row=None, label=None) -%}
+{%- set op_id = ref.op if not ref.op.startswith('self.') else 'mod.' ~ host.module | replace('-', '_') ~ '.' ~ ref.op[5:] -%}
+{%- set meta = host.operation(op_id) -%}
+{%- if meta and when_ok(ref.when, ctx, row) -%}
+<form class="inline mod-op" method="post" action="{{ host.op_url(op_id) }}"{% if meta.tier == 'T1' %} data-confirm="{{ meta.title }}{% if ref.target %} ({{ interpolate(ref.target, ctx, row) }}){% endif %}?"{% endif %}>
+<input type="hidden" name="target" value="{{ interpolate(ref.target, ctx, row) if ref.target else '' }}">
+{%- for k, v in ref.params.items() %}<input type="hidden" name="p.{{ k }}" value="{{ interpolate(v, ctx, row) }}">{% endfor %}
+<input type="hidden" name="idem" value="{{ host.new_key() }}">
+<input type="hidden" name="return_to" value="{{ host.return_to }}">
+<input type="hidden" name="reason" value="">
+<button class="{{ TIER_CLASS[meta.tier] }}" title="{{ meta.summary }} ({{ meta.tier }})">{{ label or meta.title }}</button>
+{%- if ref.hint %} <span class="small mut">{{ ref.hint }}</span>{% endif %}
+</form>
+{%- elif not meta -%}<span class="chip bad" title="unknown operation">{{ op_id }}?</span>{%- endif -%}
+{%- endmacro -%}
+
+{%- macro placeholder(c, why) -%}<div class="mod-placeholder small mut" role="note">{{ c.type }}: {{ why }}</div>{%- endmacro -%}
+
+{%- macro cell(row, col) -%}
+{%- set v = row.get(col.key) -%}
+{%- if col.type in ('job_ref', 'node_ref', 'dataset_ref', 'campaign_ref') and v is not none -%}
+<a href="{{ host.link_url({'job_ref': {'job': v}, 'node_ref': {'node': v}, 'dataset_ref': {'dataset': v}, 'campaign_ref': {'campaign': v}}[col.type] | link_obj) }}">{{ v }}</a>
+{%- elif col.type == 'status' -%}<span class="chip">{{ v | fmt('text') }}</span>
+{%- elif col.type == 'code' -%}<code>{{ v | fmt('code') }}</code>
+{%- else -%}
+{%- set cls = '' -%}
+{%- if col.tone_by_sign and v is number -%}{%- set cls = 'pos' if v > 0 else ('neg' if v < 0 else '') -%}{%- endif -%}
+<span class="{{ cls }}"{% if col.type == 'relative_time' %} title="{{ v | fmt('timestamp') }}"{% endif %}>{{ v | fmt(col.type, col.format, col.unit) }}</span>
+{%- endif -%}
+{%- endmacro -%}
+
+{%- macro component(c) -%}
+{%- if not when_ok(c.when, ctx) -%}{%- elif c.type == 'section' -%}
+<section class="mod-section mod-span-{{ c.span }}">{% if c.title %}<h3>{{ c.title }}</h3>{% endif %}{% for ch in c.children %}{{ component(ch) }}{% endfor %}</section>
+{%- elif c.type == 'tabs' -%}
+<div class="mod-tabs">{% for t in c.tabs %}<details{% if loop.first %} open{% endif %}><summary>{{ t.title }}</summary>{% for ch in t.children %}{{ component(ch) }}{% endfor %}</details>{% endfor %}</div>
+{%- elif c.type == 'columns' -%}
+<div class="mod-cols mod-cols-{{ c.children | length }}">{% for ch in c.children %}<div>{{ component(ch) }}</div>{% endfor %}</div>
+{%- elif c.type == 'text' -%}<p class="{{ 'tone-' ~ c.tone if c.tone }}">{{ c.text }}</p>
+{%- elif c.type == 'markdown' -%}<div class="mod-md">{{ c.text | md }}</div>
+{%- elif c.type == 'callout' -%}<div class="mod-callout tone-{{ c.tone }}" role="note">{{ c.text }}</div>
+{%- elif c.type == 'empty' -%}<div class="mod-empty mut">{{ c.text }}{% if c.action %} {{ op_button(c.action) }}{% endif %}</div>
+{%- elif c.type == 'action' -%}<div class="mod-action">{{ op_button(c.action) }}</div>
+{%- elif c.type == 'link' -%}<a href="{{ host.link_url(c.to) }}"{% if c.to.url %} rel="noopener noreferrer" target="_blank"{% endif %}>{{ c.text }}</a>
+{%- elif c.type == 'logs' -%}<p class="small mut">Logs: see the module's Health tab.</p>
+{%- elif c.type == 'iframe' -%}
+<iframe class="mod-frame" src="{{ host.frame_url(c.view) }}" title="{{ c.title }}" height="{{ c.height }}" sandbox="allow-scripts allow-forms" referrerpolicy="no-referrer" loading="lazy" data-bridge-module="{{ host.module }}" data-bridge-view="{{ c.view }}" data-max-height="{{ c.height * 2 }}"></iframe>
+{%- else -%}
+{#- data components -#}
+{%- set d = resolve(host, c.source, ctx) if c.source else {} -%}
+{%- if d.error -%}{{ placeholder(c, 'data unavailable') }}
+{%- else -%}
+{%- if d.computed_at %}<div class="small mut mod-watermark">computed {{ d.computed_at | fmt('relative_time') }}{% if d.stale %} · module unavailable{% endif %}</div>{% endif -%}
+{%- if c.type == 'kv' -%}
+{%- set src = d.kv or ((d.rows or [{}])[0]) -%}
+<dl class="kv small">{% for it in c.items %}<dt class="mut">{{ it.label }}</dt><dd>{{ (src.get(it.field) if it.field else it.value) | fmt(it.type, it.format) }}</dd>{% endfor %}</dl>
+{%- elif c.type == 'stat' -%}
+{%- set src = d.stat or d.kv or ((d.rows or [{}])[0]) -%}
+<div class="mod-stat"><div class="mut small">{{ c.label }}</div><div class="mod-stat-v">{{ src.get(c.field) | fmt('number', c.format, c.unit) }}</div></div>
+{%- elif c.type == 'status' -%}
+{%- set src = d.kv or ((d.rows or [{}])[0]) -%}{%- set v = src.get(c.field) | string -%}
+<div class="small">{{ c.label }} <span class="chip {{ TONE_CLASS[c.tones.get(v, 'neutral')] }}">{{ v }}</span></div>
+{%- elif c.type == 'progress' -%}
+{%- set src = d.kv or ((d.rows or [{}])[0]) -%}{%- set tot = src.get(c.total) or 0 -%}{%- set val = src.get(c.value) or 0 -%}
+<div class="small">{{ c.label }} {{ val }}/{{ tot }}</div><div class="bar" role="progressbar" aria-valuenow="{{ val }}" aria-valuemax="{{ tot }}"><i style="width:{{ (100 * val / tot) | round(1) if tot else 0 }}%"></i></div>
+{%- elif c.type == 'table' -%}
+{%- set rows = d.rows or [] -%}
+<table class="small mod-table"><thead><tr>{% for col in c.columns %}<th class="{{ 'num' if col.type in ('number', 'integer', 'percent', 'bytes', 'duration') }}" scope="col">{{ col.label or col.key }}{% if col.direction %} <span class="mut" aria-label="{{ 'higher is better' if col.direction == 'max' else 'lower is better' }}">{{ '↑' if col.direction == 'max' else '↓' }}</span>{% endif %}</th>{% endfor %}{% if c.row_actions %}<th scope="col"><span class="sr-only">actions</span></th>{% endif %}</tr></thead>
+<tbody>{% for r in rows[:c.page_size] %}<tr>{% for col in c.columns %}<td class="{{ 'num' if col.type in ('number', 'integer', 'percent', 'bytes', 'duration') }}">{{ cell(r, col) }}</td>{% endfor %}{% if c.row_actions %}<td>{% for a in c.row_actions %}{{ op_button(a, r) }}{% endfor %}</td>{% endif %}</tr>{% else %}<tr><td colspan="{{ c.columns | length + (1 if c.row_actions else 0) }}" class="mut">no rows</td></tr>{% endfor %}</tbody></table>
+{%- if rows | length > c.page_size %}<div class="small mut">{{ rows | length - c.page_size }} more rows</div>{% endif %}
+{%- elif c.type == 'chart' -%}
+{%- set rows = d.rows or [] -%}
+<figure class="mod-chart-fig"><div class="mod-chart" data-kind="{{ c.kind }}" data-series="{{ {'x': rows | map(attribute=c.x) | list, 'y': c.y, 'values': (c.y | map('extract_col', rows) | list)} | tojson_compact }}" role="img" aria-label="{{ c.summary }}"></div>
+<figcaption class="small mut">{{ c.summary }}</figcaption>
+<details class="small"><summary>Show as table</summary><table class="small"><tr><th>{{ c.x }}</th>{% for y in c.y %}<th>{{ y }}</th>{% endfor %}</tr>{% for r in rows[:200] %}<tr><td>{{ r.get(c.x) | fmt('text') }}</td>{% for y in c.y %}<td class="num">{{ r.get(y) | fmt('number') }}</td>{% endfor %}</tr>{% endfor %}</table></details></figure>
+{%- elif c.type == 'json' -%}<pre class="mono">{{ (d.rows or d.kv or d) | tojson(indent=1) }}</pre>
+{%- elif c.type == 'form' -%}
+{%- set schema = host.schema(c.schema_) -%}{%- set props = schema.get('properties', {}) -%}{%- set req = schema.get('required', []) -%}
+{%- set op_id = c.submit.op if not c.submit.op.startswith('self.') else 'mod.' ~ host.module | replace('-', '_') ~ '.' ~ c.submit.op[5:] -%}{%- set meta = host.operation(op_id) -%}
+<form class="mod-form" method="post" action="{{ host.op_url(op_id) }}"{% if meta and meta.tier == 'T1' %} data-confirm="{{ meta.title }}?"{% endif %}>
+<input type="hidden" name="target" value="{{ interpolate(c.submit.target, ctx) if c.submit.target else '' }}"><input type="hidden" name="idem" value="{{ host.new_key() }}"><input type="hidden" name="return_to" value="{{ host.return_to }}"><input type="hidden" name="reason" value="">
+{%- for name in (c.hints.get('order') or props.keys()) %}{%- set pr = props.get(name, {}) -%}
+<label class="small">{{ pr.get('title', name) }}
+{%- if pr.get('enum') %}<select name="p.{{ name }}"{% if name in req %} required{% endif %}>{% for e in pr.enum %}<option{% if e == pr.get('default') %} selected{% endif %}>{{ e }}</option>{% endfor %}</select>
+{%- elif pr.get('type') == 'boolean' %}<input type="checkbox" name="p.{{ name }}" value="true"{% if pr.get('default') %} checked{% endif %}>
+{%- elif pr.get('type') in ('object', 'array') %}<textarea class="mono" rows="{{ c.hints.get('rows', {}).get(name, 4) }}" name="pj.{{ name }}"{% if name in req %} required{% endif %} spellcheck="false">{{ pr.get('default') | tojson if pr.get('default') is not none else '' }}</textarea>
+{%- elif pr.get('type') in ('integer', 'number') %}<input type="number" name="p.{{ name }}"{% if pr.get('type') == 'number' %} step="any"{% endif %}{% if pr.get('minimum') is not none %} min="{{ pr.minimum }}"{% endif %}{% if pr.get('maximum') is not none %} max="{{ pr.maximum }}"{% endif %} value="{{ pr.get('default', '') }}"{% if name in req %} required{% endif %}>
+{%- else %}<input type="{{ 'password' if pr.get('x-secret') else 'text' }}" name="p.{{ name }}" value="{{ '' if pr.get('x-secret') else pr.get('default', '') }}"{% if pr.get('pattern') %} pattern="{{ pr.pattern }}"{% endif %}{% if name in req %} required{% endif %}>{% endif %}
+{%- if pr.get('description') %} <span class="mut">{{ pr.description }}</span>{% endif %}</label>
+{%- endfor %}
+<button class="{{ TIER_CLASS[meta.tier] if meta else '' }}">{{ meta.title if meta else op_id }}</button></form>
+{%- elif c.type == 'filter_bar' -%}
+<form class="row small mod-filter" method="get">{% for v in c.vars %}<label>{{ v.label or v.name }} {% if v.enum %}<select name="var.{{ v.name }}"><option value="">any</option>{% for e in v.enum %}<option{% if (ctx.var or {}).get(v.name) == e | string %} selected{% endif %}>{{ e }}</option>{% endfor %}</select>{% else %}<input name="var.{{ v.name }}" value="{{ (ctx.var or {}).get(v.name, v.default if v.default is not none else '') }}">{% endif %}</label>{% endfor %}<button>Apply</button></form>
+{%- else -%}{{ placeholder(c, 'not supported by this console version') }}
+{%- endif -%}
+{%- endif -%}
+{%- endif -%}
+{%- endmacro -%}
+
+<div class="mod-region" hx-disable data-module="{{ host.module }}" data-bridge-base="{{ host.context.get('bridge_base', '') }}" data-op-base="{{ host.op_url('') }}">
+{%- if page.title %}<h2 class="mod-title">{{ page.title }}</h2>{% endif -%}
+{%- for c in page.body %}{{ component(c) }}{% endfor -%}
+</div>

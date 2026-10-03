@@ -1,0 +1,92 @@
+# Test fixture: every per-platform and placement key (spec/platforms.md, "Per-platform declarations" and "Placement").
+# A two-stage module whose scorer is native on Windows, whose coordinator side runs on darwin and Linux only, and whose
+# campaigns stay on one OS.
+manifest = 1
+
+[module]
+id = "dev.example.perplat"
+version = "1.0.0"
+compat = "perplat1"
+publisher = "example"
+license = "Apache-2.0"
+codeowners = ["example"]
+stability = "experimental"
+description = "Exercises every per-platform key"
+
+[requires]
+core = ">=2.2,<3"
+platforms = ["darwin-arm64", "linux-amd64", "linux-arm64", "windows-amd64"]
+coordinator_platforms = ["darwin-arm64", "darwin-amd64", "linux-amd64", "linux-arm64"]
+features = ["placement"]
+module_protocol = [1]
+runner_protocol = [1]
+
+[requires.unsupported]
+runner = { windows-arm64 = "no arm64 build of the scorer" }
+coordinator = { windows = "the planner relies on fork()" }
+
+[coordinator]
+exec = ["python", "-I", "{bundle}/coordinator.py"]
+runtime = { kind = "python" }
+capabilities = ["result.merge"]
+env = { PYTHONHASHSEED = "0" }
+
+[coordinator.variants.linux]
+exec = ["python", "-I", "{bundle}/coordinator.py", "--fork-server"]
+timeouts_s = { default = 10.0, "job.plan" = 60.0 }
+concurrency = 2
+env = { OMP_NUM_THREADS = "1" }
+
+[runner]
+exec = ["python", "-I", "{bundle}/node/main.py"]
+runtime = { kind = "python" }
+capabilities = ["cancellable", "deterministic_output"]
+env = { MKL_CBWR = "COMPATIBLE", OMP_NUM_THREADS = "1" }
+
+[runner.variants.windows-amd64]
+exec = ["{bundle}/native/windows-amd64/scorer.exe"]
+runtime = { kind = "native" }
+env = { KMP_AFFINITY = "disabled" }
+
+[[stages]]
+name = "render"
+timeout_s = 3600
+requires.resources = { cpu = 4, mem_gb = 8 }
+
+[stages.variants.windows]
+timeout_s = 5400
+requires.resources = { mem_gb = 10 }
+retry = { max_attempts = 4 }
+
+[[stages]]
+name = "score"
+after = "render"
+requires.platforms = ["darwin-arm64", "linux-amd64"]
+placement = { mix = "same-platform" }
+
+[placement]
+mix = "same-os"
+unit = "campaign"
+bind = "capacity"
+rebind = "never"
+stranded_after_s = 1800
+
+[results]
+schema = "schemas/result.schema.json"
+schema_version = 1
+determinism = "exact"
+determinism_scope = "os"
+digest = { version = 1, over = ["score"] }
+value = { field = "score", direction = "maximize" }
+fields = [{ name = "score", type = "number" }]
+
+[datasets]
+kinds = ["index"]
+platform_bound = ["index"]
+
+[bundle]
+executables = ["native/**"]
+
+[bundle.platform_files]
+"native/windows-amd64/**" = ["windows-amd64"]
+"native/linux-*/**" = ["linux"]
