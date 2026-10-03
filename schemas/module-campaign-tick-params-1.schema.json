@@ -88,6 +88,24 @@
           "description": "[beta] Platform of the node that produced the canonical result.",
           "title": "Platform"
         },
+        "result": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CampaignResult"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "[beta] With the campaign.tick.results capability: the canonical result of a done job, when a module version declaring the capability accepted it. One tick carries at most TICK_RESULTS_BUDGET bytes of results, newest done first."
+        },
+        "result_omitted": {
+          "default": false,
+          "description": "[beta] A done job's result left out to keep the tick within its budget.",
+          "title": "Result Omitted",
+          "type": "boolean"
+        },
         "stage": {
           "anyOf": [
             {
@@ -124,6 +142,85 @@
       ],
       "title": "CampaignJob",
       "type": "object"
+    },
+    "CampaignResult": {
+      "additionalProperties": true,
+      "description": "A done job's canonical result as campaign.tick sees it (capability campaign.tick.results). [beta]",
+      "properties": {
+        "artifacts": {
+          "description": "[beta] The uploaded artifacts' files.",
+          "items": {
+            "$ref": "#/$defs/ResultArtifact"
+          },
+          "title": "Artifacts",
+          "type": "array"
+        },
+        "payload": {
+          "additionalProperties": true,
+          "description": "[beta] The result payload, valid against results.schema and within results.max_inline_kb (the host checked both when it accepted the result).",
+          "title": "Payload",
+          "type": "object"
+        }
+      },
+      "required": [
+        "payload"
+      ],
+      "title": "CampaignResult",
+      "type": "object"
+    },
+    "ResultArtifact": {
+      "additionalProperties": true,
+      "properties": {
+        "files": {
+          "items": {
+            "$ref": "#/$defs/ResultFile"
+          },
+          "title": "Files",
+          "type": "array"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "ResultArtifact",
+      "type": "object"
+    },
+    "ResultFile": {
+      "additionalProperties": true,
+      "properties": {
+        "digest": {
+          "description": "[beta] sha256 of the file: a blob the coordinator holds (datasets.create, files.put).",
+          "title": "Digest",
+          "type": "string"
+        },
+        "path": {
+          "description": "[beta] The file's path inside the artifact.",
+          "title": "Path",
+          "type": "string"
+        },
+        "size": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Size"
+        }
+      },
+      "required": [
+        "path",
+        "digest"
+      ],
+      "title": "ResultFile",
+      "type": "object"
     }
   },
   "$id": "https://codonic.dev/oarbank/schemas/module-campaign-tick-params-1.schema.json",
@@ -138,7 +235,7 @@
       "type": "object"
     },
     "jobs": {
-      "description": "[beta] Every job of the campaign, with canonical results.",
+      "description": "[beta] Every evaluation of the campaign, with its canonical result's value, digest and fields (and, with campaign.tick.results, its payload and artifacts).",
       "items": {
         "$ref": "#/$defs/CampaignJob"
       },

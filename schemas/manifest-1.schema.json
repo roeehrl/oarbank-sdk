@@ -216,7 +216,7 @@
           "type": "array"
         },
         "capabilities": {
-          "description": "[stable] Optional verbs/features implemented, e.g. job.plan.batch, result.merge, golden.compare, study.metrics, params.distance, result.upgrade.",
+          "description": "[stable] Optional verbs/features implemented, e.g. result.merge, golden.compare, study.metrics, params.distance, result.upgrade, and campaign.tick.results [beta] (campaign.tick sees each done job's payload and artifacts; the host validates payloads against results.schema at acceptance; needs requires.core >= 2.3).",
           "items": {
             "maxLength": 64,
             "pattern": "^[a-z0-9][a-z0-9._-]*$",

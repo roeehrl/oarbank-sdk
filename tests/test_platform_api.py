@@ -116,3 +116,14 @@ def test_a_job_item_names_its_stage():
     assert "stage" not in fx.job("k", {})
     with pytest.raises(ValueError, match="a stage name"):
         fx.job("k", {}, stage="Sync")
+
+
+def test_campaign_jobs_carry_structured_results_and_modules_advertise_features():
+    from oarbank_sdk.server import Module
+    j = mp.CampaignJob.model_validate({"job_id": 1, "job_key": "k", "state": "done", "result": {
+        "payload": {"items": [{"id": "r1"}]}, "artifacts": [{"name": "files", "files": [{"path": "a.vcf", "digest": "d" * 64, "size": 3}]}]}})
+    assert j.result.artifacts[0].files[0].path == "a.vcf" and not j.result_omitted
+    assert mp.CampaignJob(job_id=1, job_key="k", state="done").result is None
+    assert Module("dev.x.y", "1.0.0", features=(mp.CAP_TICK_RESULTS,)).capabilities == ["campaign.tick.results"]
+    with pytest.raises(ValueError, match="not module protocol features"):
+        Module("dev.x.y", "1.0.0", features=("campaign.tick.everything",))

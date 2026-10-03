@@ -83,7 +83,7 @@ The models enforce these, beyond the per-field types:
 2. Every pool a stage requires (`pools` or `needs_pools`) is provided by a declared service. Every required capability is provided by a service or a probe.
 3. If services or probes are declared, `requires.service_protocol` lists at least one major.
 4. `results.value.field` is a declared result field.
-5. A module with more than one stage implements `result.merge` (listed in `coordinator.capabilities`).
+5. A module with more than one stage implements `result.merge` (listed in `coordinator.capabilities`). The `campaign.tick.results` capability requires `campaign.tick`.
 6. `goldens.compare = "verb"` requires the `golden.compare` capability.
 7. With `runtime.kind = "uv"`, both `lock` and `python` are set.
 8. A move rule names exactly one of `files` or `store`. A `rebuild` rule requires the `move.postflight` capability, and `coordinator.move.effects` requires at least one move verb.
@@ -92,7 +92,7 @@ The models enforce these, beyond the per-field types:
 11. `env` names (runner, coordinator, their variants) match `^[A-Z][A-Z0-9_]*$` and are never reserved: `OARBANK_*`, `PATH`, `HOME`, `USERPROFILE`, `SYSTEMROOT`, `TEMP`, `TMP`, `TMPDIR`, `LOCALAPPDATA`, `APPDATA` and the other variables the host sets ([platforms.md](platforms.md#per-platform-declarations)). Stage variant resources keep the stage's bounds.
 12. A key older cores would ignore needs a `requires.core` range whose lower bound is at least the core that understands it ([versioning.md](versioning.md#additive-changes-within-manifest-1)):
     - **2.2:** the per-platform and placement keys (`requires.coordinator_platforms`, `requires.unsupported`, `requires.features`, `coordinator.env`, `coordinator.variants`, `runner.env` and runner variant `env`, `stages[].variants`, `stages[].placement`, `[placement]`, a `determinism_scope` other than `global` or `platform`, `bundle.platform_files`, `datasets.platform_bound`);
-    - **2.3:** `stages[].determinism`, `stages[].default`.
+    - **2.3:** `stages[].determinism`, `stages[].default`, the coordinator capability `campaign.tick.results`.
 
     Every entry of `requires.features` is one this SDK knows.
 13. Every bundle path a node exec names (argv[0], or the script a `python` exec runs) reaches each platform that runs it under `bundle.platform_files`. `datasets.platform_bound` kinds are declared kinds.

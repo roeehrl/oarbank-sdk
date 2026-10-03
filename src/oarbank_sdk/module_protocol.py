@@ -338,6 +338,31 @@ class OpApplyResult(Contract):
 
 # ---------------------------------------------------------------------------- campaigns
 
+# Coordinator capabilities that are features rather than verbs (a module advertises them with Module(features=...)).
+CAP_TICK_RESULTS = "campaign.tick.results"       # campaign.tick gets each done job's canonical payload and artifacts
+FEATURES = (CAP_TICK_RESULTS,)
+TICK_RESULTS_BUDGET = 8 << 20                    # bytes of results one campaign.tick carries at most (newest first)
+
+
+class ResultFile(Contract):
+    path: str = Field(description="[beta] The file's path inside the artifact.")
+    digest: str = Field(description="[beta] sha256 of the file: a blob the coordinator holds (datasets.create, files.put).")
+    size: int | None = None
+
+
+class ResultArtifact(Contract):
+    name: str
+    files: list[ResultFile] = Field(default_factory=list)
+
+
+class CampaignResult(Contract):
+    """A done job's canonical result as campaign.tick sees it (capability campaign.tick.results). [beta]"""
+    payload: dict[str, Any] = Field(description=(
+        "[beta] The result payload, valid against results.schema and within results.max_inline_kb (the host checked both "
+        "when it accepted the result)."))
+    artifacts: list[ResultArtifact] = Field(default_factory=list, description="[beta] The uploaded artifacts' files.")
+
+
 class CampaignJob(Contract):
     job_id: int
     job_key: str
@@ -352,6 +377,11 @@ class CampaignJob(Contract):
     done_at: float | None = None
     platform: str | None = Field(None, description="[beta] Platform of the node that produced the canonical result.")
     group: str | None = Field(None, description="[beta] The job's group (jobs.enqueue `group`).")
+    result: CampaignResult | None = Field(None, description=(
+        "[beta] With the campaign.tick.results capability: the canonical result of a done job, when a module version "
+        "declaring the capability accepted it. One tick carries at most TICK_RESULTS_BUDGET bytes of results, newest "
+        "done first."))
+    result_omitted: bool = Field(False, description="[beta] A done job's result left out to keep the tick within its budget.")
 
 
 class CampaignTickParams(Contract):
@@ -359,7 +389,9 @@ class CampaignTickParams(Contract):
     campaign: dict[str, Any] = Field(description=(
         "[beta] {campaign_id, name, state, priority, weight, labels, placement}; placement [beta] is {mix, unit, class, "
         "state} (class: the bound class key or null; state: unbound, soft, hard or pinned)."))
-    jobs: list[CampaignJob] = Field(default_factory=list, description="[beta] Every job of the campaign, with canonical results.")
+    jobs: list[CampaignJob] = Field(default_factory=list, description=(
+        "[beta] Every evaluation of the campaign, with its canonical result's value, digest and fields (and, with "
+        "campaign.tick.results, its payload and artifacts)."))
     now: float
 
 

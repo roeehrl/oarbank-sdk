@@ -33,7 +33,7 @@ The host owns leases, attempts, retries, certification, replication, disputes an
 | `op.plan` / `op.apply` | optional | Preview and apply one of the module's own `[[operations]]`; `op.apply` returns effects (below). |
 | `integrity.check` | optional | Verify the module's own state through host callbacks; see "Integrity checks" below. |
 | `move.preflight` / `move.postflight` / `move.cancelled` | optional | The module's part in a coordinator move; see "Coordinator moves" below. |
-| `campaign.tick` | optional | Advance one of the module's running campaigns. The host calls it every few seconds per running campaign, with the campaign (including [beta] its `placement {mix, unit, class, state}`) and all its jobs and canonical results (each with the `platform` that produced it); it returns effects limited to `coordinator.campaign_effects`. A campaign the module leaves running with no open jobs stays running until the module marks it `done`. |
+| `campaign.tick` | optional | Advance one of the module's running campaigns. The host calls it every few seconds per running campaign, with the campaign (including [beta] its `placement {mix, unit, class, state}`) and all its jobs and canonical results (each with the `platform` that produced it); it returns effects limited to `coordinator.campaign_effects`. With the `campaign.tick.results` capability each done job also carries its canonical `result` (see "Results in campaign.tick"). A campaign the module leaves running with no open jobs stays running until the module marks it `done`. |
 
 An optional verb is available only if the module lists it in `initialize.capabilities`. A call to an unadvertised verb fails with `-32003`.
 
@@ -47,6 +47,23 @@ An optional verb is available only if the module lists it in `initialize.capabil
 | `fail_permanent` | The job can never succeed. | Quarantines the job. The node is not blamed. |
 
 `reason` is a core reason code or a module code of the form `<module-short>/<code>`.
+
+### Results in campaign.tick
+
+A campaign's jobs carry their canonical result's `value`, `digest` and declared `fields` (scalars). A module whose tick
+needs the whole result, such as an ingestion job's list of new items and the files it uploaded, declares the
+coordinator capability `campaign.tick.results` (it needs `campaign.tick` and `requires.core >= 2.3`; a Python module
+advertises it with `Module(..., features=(mp.CAP_TICK_RESULTS,))`). Then:
+
+- **At acceptance** the host checks the payload of every evaluation's result (a job of the campaign, its chain's
+  merged result included) against `results.schema` (JSON Schema) and `results.max_inline_kb` (compact UTF-8 JSON). A
+  result that fails is refused with the reason `result_invalid`: the attempt ends failed and spends the job's stage
+  retry (never the node's breaker), so nothing invalid is ever canonical.
+- **In the tick** each done job carries `result: {payload, artifacts: [{name, files: [{path, digest, size}]}]}`. The
+  files are blobs the coordinator holds, so `datasets.create` and `files.put` can name them. A result accepted by a
+  module version without the capability (a result-cache hit from an older version) is not delivered (`result: null`).
+  One tick carries at most 8 MiB of results (`mp.TICK_RESULTS_BUDGET`), newest done jobs first; a done job left out
+  has `result_omitted: true`. Keep what you have consumed in your store, and let results you no longer need age out.
 
 ## Host callbacks (module → host)
 
@@ -233,6 +250,7 @@ An error response to `result.evaluate` is **not** a verdict. The host keeps the 
 - cancellation through `ctx.cancelled`;
 - `ctx.log`;
 - stdout protection: `print` goes to stderr.
+- capabilities that are not verbs (`campaign.tick.results`) through `Module(..., features=...)`.
 
 `oarbank_sdk.client.ModuleClient` is the matching unsupervised host, for tests and tools. The reference module is [examples/toy](../examples/toy).
 

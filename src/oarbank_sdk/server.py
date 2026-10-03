@@ -124,8 +124,14 @@ class Context:
 
 
 class Module:
-    def __init__(self, id: str, version: str, protocol_versions: tuple[int, ...] = (MODULE_PROTOCOL,), concurrency: int = 1):
+    def __init__(self, id: str, version: str, protocol_versions: tuple[int, ...] = (MODULE_PROTOCOL,), concurrency: int = 1,
+                 features: tuple[str, ...] = ()):
+        """`features`: capabilities that are not verbs, advertised with the verbs (mp.FEATURES, e.g. campaign.tick.results)."""
+        unknown = sorted(set(features) - set(mp.FEATURES))
+        if unknown:
+            raise ValueError(f"features {unknown}: not module protocol features; known: {list(mp.FEATURES)}")
         self.id, self.version = id, version
+        self.features = tuple(features)
         self.protocol_versions = protocol_versions
         self.concurrency = concurrency
         self._verbs: dict[str, Callable] = {}
@@ -152,7 +158,7 @@ class Module:
 
     @property
     def capabilities(self) -> list[str]:
-        return sorted(cap for m, (_, _, req, cap) in mp.VERBS.items() if not req and m in self._verbs)
+        return sorted({cap for m, (_, _, req, cap) in mp.VERBS.items() if not req and m in self._verbs} | set(self.features))
 
     def missing_required(self) -> list[str]:
         return [m for m in REQUIRED if m not in self._verbs]

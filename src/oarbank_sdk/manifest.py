@@ -18,6 +18,7 @@ from pydantic import AfterValidator, BaseModel, Field, field_validator, model_va
 from . import platform as pf
 from . import portable
 from ._base import Contract, ModuleId, Name, SemVer, Stability, VersionRange
+from .module_protocol import CAP_TICK_RESULTS
 from .ui import OperationDecl, UISection
 
 PlatformToken = Annotated[str, Field(pattern=portable.PLATFORM_TOKEN.pattern, max_length=40)]
@@ -187,6 +188,7 @@ EffectKind = Literal["jobs.enqueue", "jobs.cancel", "campaigns.create", "campaig
                      "datasets.create", "datasets.update", "datasets.delete", "module_settings.update",
                      "store.write", "store.delete", "files.write", "files.put", "files.delete", "external"]
 MOVE_VERBS = ("move.preflight", "move.postflight", "move.cancelled")
+TICK_RESULTS = CAP_TICK_RESULTS                  # campaign.tick sees canonical payloads and artifacts
 Capability = Annotated[str, Field(pattern=r"^[a-z0-9][a-z0-9._-]*$", max_length=64)]
 
 
@@ -340,7 +342,10 @@ class Coordinator(Contract):
     """The out-of-process coordinator side (module protocol over stdio). [stable]"""
     exec: Exec = Field(description="[stable] argv (spec/manifest.md, \"Exec\"); cwd is the bundle root; the process speaks module protocol JSON-RPC on stdin/stdout.")
     runtime: Runtime
-    capabilities: list[Capability] = Field(default_factory=list, description="[stable] Optional verbs/features implemented, e.g. job.plan.batch, result.merge, golden.compare, study.metrics, params.distance, result.upgrade.")
+    capabilities: list[Capability] = Field(default_factory=list, description=(
+        "[stable] Optional verbs/features implemented, e.g. result.merge, golden.compare, study.metrics, params.distance, "
+        "result.upgrade, and campaign.tick.results [beta] (campaign.tick sees each done job's payload and artifacts; the "
+        "host validates payloads against results.schema at acceptance; needs requires.core >= 2.3)."))
     concurrency: Annotated[int, Field(ge=1, le=64)] = Field(1, description="[stable] Max in-flight requests the module accepts; 1 = serial.")
     timeouts_s: dict[str, Timeout] = Field(
         default_factory=lambda: {"default": 10.0}, description="[stable] Per-verb timeouts; key `default` applies to unlisted verbs.")
@@ -652,6 +657,7 @@ class Manifest(Contract):
         sdk13 = [
             ("stages[].determinism", any(s.determinism for s in self.stages)),
             ("stages[].default", any(s.default for s in self.stages)),
+            ("coordinator.capabilities campaign.tick.results", TICK_RESULTS in self.coordinator.capabilities),
         ]
         return out + [(k, SDK13_KEYS_CORE) for k, on in sdk13 if on]
 
@@ -783,6 +789,8 @@ class Manifest(Contract):
                 raise ValueError(f"operation {o.verb}: effective tier {o.effective_tier()} requires preview (op.plan)")
         if self.coordinator.campaign_effects and "campaign.tick" not in self.coordinator.capabilities:
             raise ValueError("coordinator.campaign_effects requires the campaign.tick capability")
+        if TICK_RESULTS in self.coordinator.capabilities and "campaign.tick" not in self.coordinator.capabilities:
+            raise ValueError(f"the {TICK_RESULTS} capability requires the campaign.tick capability")
         caps = set(self.coordinator.capabilities)
         mv = self.coordinator.move
         if any(r.class_ == "rebuild" for r in mv.rules) and "move.postflight" not in caps:

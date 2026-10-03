@@ -156,3 +156,16 @@ def test_the_default_stage_is_explicit_when_several_stages_are_standalone():
     man = m.Manifest.model_validate(d)
     assert man.default_stage() == "run" and man.determinism_of(None) == "exact" and not man.compares("sync")
     assert m.load(path("render")).default_stage() == "eval"                 # the only standalone stage, unmarked
+
+
+def test_tick_results_need_the_tick_and_core_2_3():
+    def caps(*c, core=">=2.3,<3"):
+        def f(d):
+            d["requires"]["core"] = core
+            d["coordinator"]["capabilities"] += list(c)
+        return f
+    bad(caps("campaign.tick.results"), "requires the campaign.tick capability")
+    bad(caps("campaign.tick", "campaign.tick.results", core=">=2.2"), "campaign.tick.results need requires.core >= 2.3")
+    d = copy.deepcopy(doc())
+    caps("campaign.tick", "campaign.tick.results")(d)
+    assert m.Manifest.model_validate(d).core_keys_used() == [("coordinator.capabilities campaign.tick.results", (2, 3))]
