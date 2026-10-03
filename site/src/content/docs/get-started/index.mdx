@@ -8,9 +8,10 @@ platforms: [macos, linux, windows]
 import { Aside, Steps, TabItem, Tabs } from '@astrojs/starlight/components';
 
 <Aside type="caution" title="Not released yet">
-  Oarbank itself (the coordinator and the node agents) has no public release yet: there are no downloads. Installers
-  for the coordinator and for nodes arrive with the first public release. Until then, the installation steps below
-  are a preview of how setup works, and file names and details may change. The module SDK is already public.
+  Oarbank itself (the coordinator and the node agents) has no public release yet: there are no installers or
+  downloads. They arrive with the first public release. Until then, the installation steps below are a preview of how
+  setup works, and file names and details may change. The source is public: the core is at
+  [roeehrl/oarbank](https://github.com/roeehrl/oarbank) and the module SDK at [roeehrl/oarbank-sdk](https://github.com/roeehrl/oarbank-sdk).
 </Aside>
 
 ## What you can do today
@@ -19,6 +20,10 @@ import { Aside, Steps, TabItem, Tabs } from '@astrojs/starlight/components';
   join codes, modules, certification, sandboxing, host protection, signing and coordinator moves.
 - **Check your computers.** [Requirements](/oarbank/operate/requirements) lists what the coordinator and each node
   need on macOS, Linux and Windows, and what the network needs.
+- **Read the core's source.** The coordinator, console, agent and launcher are source-available at
+  [roeehrl/oarbank](https://github.com/roeehrl/oarbank). To try them before the release, you can build the packages yourself:
+  [docs/install.md](https://github.com/roeehrl/oarbank/blob/main/docs/install.md) in that repository lists the build scripts and the install
+  steps.
 - **Build a module.** The module SDK (`oarbank-sdk`, Apache-2.0) is open source on
   [GitHub](https://github.com/roeehrl/oarbank-sdk). Install it from source (it is not on PyPI yet) and follow
   [Build a module in a day](/oarbank/build/tutorial), which builds a complete module step by step. See
