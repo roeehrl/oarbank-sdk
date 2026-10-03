@@ -29,7 +29,10 @@ Suites:
 Fixtures (optional `conformance.json` next to the manifest) feed the fake host:
 `{"datasets": {id: {"kind", "attrs", "dir"?}}, "settings": {...}, "node_classes": [{"platform"?, "pools": {...},
 "capabilities": [...]}], "params": [...examples for params.check...], "store": {"<collection>/<key>": doc},
-"files": {"<path>": "<text content>"}}`.
+"files": {"<path>": "<text content>"}, "runner_specs": [{"name", "stage"?, "payload", "datasets"?, "mounts"?,
+"expect": {"exit"?, "artifacts"?, "reason"?}}]}`. Each runner spec (a non-golden task: an ingestion or provisioning job)
+runs like a golden, sandboxed with the egress proxy, and is checked against `expect`; any connection the proxy refused
+fails its run (goldens too).
 A dataset with a `dir` is mounted (copied) into the runner's workdir under the golden spec's mount name.
 """
 import json
@@ -44,7 +47,7 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from pydantic import ValidationError
+from pydantic import Field, ValidationError
 
 from . import bundle as B
 from . import platform as pf
@@ -53,7 +56,8 @@ from . import manifest as mf
 from . import module_protocol as mp
 from .envelopes import ResultEnvelope, SpecEnvelope
 from .keys import job_key
-from .runner_protocol import DoctorOutput
+from ._base import Name, StrictContract
+from .runner_protocol import DoctorOutput, Failure
 
 
 @dataclass
@@ -365,15 +369,22 @@ def check_lifecycle_verbs(cli, man, adv: set, r: Report):
 
 
 def _envelope(man, g, st, built) -> dict:
-    key = job_key(man.module.id, man.module.compat, g["key_inputs"], st.get("stage"))
+    return _spec_envelope(man, st.get("stage"), st["payload"], st.get("datasets") or g.get("datasets") or [],
+                          st.get("mounts") or {}, built.get("spec_version") or 1,
+                          job_key(man.module.id, man.module.compat, g["key_inputs"], st.get("stage")))
+
+
+def _spec_envelope(man, stage_name, payload: dict, datasets: list, mounts: dict, spec_version: int, key: str) -> dict:
+    """The SpecEnvelope an agent on this host writes: the stage's resources and timeout with its variant for this
+    platform applied (no stage: the default one)."""
     host = portable.host_platform()
-    stage = next((s for s in man.stages if s.name == st.get("stage")), man.stages[0]).for_platform(host)
+    stage = (man.stage(stage_name or man.default_stage() or "") or man.stages[0]).for_platform(host)
     return SpecEnvelope.model_validate({
-        "envelope": 1, "schema": f"{man.module.id.rsplit('.', 1)[-1]}/spec@{built.get('spec_version') or 1}",
-        "module_id": man.module.id, "module_version": man.module.version, "job_key": key, "stage": st.get("stage"),
-        "protocol": 1, "datasets": st.get("datasets") or g.get("datasets") or [], "mounts": st.get("mounts") or {},
+        "envelope": 1, "schema": f"{man.module.id.rsplit('.', 1)[-1]}/spec@{spec_version}",
+        "module_id": man.module.id, "module_version": man.module.version, "job_key": key, "stage": stage_name,
+        "protocol": 1, "datasets": datasets, "mounts": mounts,
         "inputs": {}, "resources": {"cpu": stage.requires.resources.cpu, "mem_gb": stage.requires.resources.mem_gb},
-        "timeout_s": stage.timeout_s, "platform": host, "payload": st["payload"]}).model_dump(mode="json", by_alias=True)
+        "timeout_s": stage.timeout_s, "platform": host, "payload": payload}).model_dump(mode="json", by_alias=True)
 
 
 class Grants:
@@ -680,6 +691,12 @@ def _check_runner(root: Path, man, fx: dict, runs: list, r: Report, g: "Grants")
                   f"{d.attrs['platform']!r} != {host!r}" if d.attrs["platform"] != host else "")
     except (ValueError, IndexError, ValidationError) as e:
         r.add("runner", "doctor --json", False, f"not a DoctorOutput: {e}")
+    _check_goldens(root, man, fx, runs, r)
+    _check_runner_specs(root, man, fx, r)
+
+
+def _check_goldens(root: Path, man, fx: dict, runs: list, r: Report):
+    host = portable.host_platform()
     if not runs:
         r.add("runner", "golden runs", None, "no goldens to run")
         return
@@ -735,6 +752,77 @@ def _check_runner(root: Path, man, fx: dict, runs: list, r: Report, g: "Grants")
         cli.close()
     if not ran:
         r.add("runner", "golden runs", None, "every golden needs datasets the fixtures do not provide")
+
+
+class RunnerSpecExpect(StrictContract):
+    exit: int = 0
+    artifacts: list[str] | None = None
+    reason: str | None = None
+
+
+class RunnerSpec(StrictContract):
+    """A conformance fixture's extra runner spec (`runner_specs`): a non-golden task the runner must handle, run like a
+    golden and checked against its expected outcome."""
+    name: str = Field(min_length=1, max_length=80)
+    stage: Name | None = None
+    payload: dict
+    datasets: list[str] = Field(default_factory=list)
+    mounts: dict[str, str] = Field(default_factory=dict)
+    expect: RunnerSpecExpect = Field(default_factory=RunnerSpecExpect)
+
+
+def _check_runner_specs(root: Path, man, fx: dict, r: Report):
+    """Every `runner_specs` entry runs as a golden does (sandboxed with the module's grants, the egress proxy for
+    egress-allowlist) and is checked against `expect`: the exit code; for exit 0 a valid ResultEnvelope (artifact names
+    are Names) with the expected artifact names; otherwise a valid failure.json with the expected reason."""
+    for i, raw in enumerate(fx.get("runner_specs") or []):
+        try:
+            spec = RunnerSpec.model_validate(raw)
+        except ValidationError as e:
+            r.add("runner", f"runner spec #{i}: fixture", False, str(e).replace("\n", " ")[:300])
+            continue
+        label = f"runner spec {spec.name}"
+        stage = man.stage(spec.stage) if spec.stage else man.stage(man.default_stage() or "")
+        if spec.stage and stage is None:
+            r.add("runner", f"{label}: fixture", False, f"stage {spec.stage!r} is not a declared stage")
+            continue
+        if stage is not None and stage.after:
+            r.add("runner", f"{label}: fixture", False, f"stage {stage.name!r} runs after {stage.after!r}: runner specs run "
+                  "stages without inputs")
+            continue
+        missing = [d for d in spec.datasets if not (fx.get("datasets") or {}).get(d, {}).get("dir")]
+        if missing:
+            r.add("runner", label, None, f"datasets not in fixtures: {missing[:3]}")
+            continue
+        if stage is not None and _needs_broker(man, stage.name):
+            r.add("runner", label, None, "its stage reserves the agent's `containers` pool; the kit has no container broker")
+            continue
+        sent = None if stage is None or stage.name == man.default_stage() else stage.name     # as the host sends it
+        env_doc = _spec_envelope(man, sent, spec.payload, spec.datasets, spec.mounts, 1,
+                                 job_key(man.module.id, man.module.compat, spec.payload, sent))
+        o = _run(root, man, env_doc, fx)
+        _egress(r, label, o)
+        r.add("runner", f"{label}: exit {spec.expect.exit}", o.code == spec.expect.exit,
+              f"exit {o.code}" + (f": {o.stderr}" if o.stderr else ""))
+        if o.code == 0:
+            try:
+                res = ResultEnvelope.model_validate(o.result)
+            except ValidationError as e:
+                r.add("runner", f"{label}: result envelope valid", False, str(e).replace("\n", " ")[:300])
+                continue
+            names = sorted(a.name for a in res.artifacts)
+            if spec.expect.artifacts is not None:
+                r.add("runner", f"{label}: artifacts", names == sorted(spec.expect.artifacts),
+                      f"wrote {names}, expected {sorted(spec.expect.artifacts)}")
+        elif isinstance(o.code, int):
+            try:
+                f = Failure.model_validate(o.failure)
+            except ValidationError:
+                r.add("runner", f"{label}: failure.json", False, "missing or not a Failure: exit codes 2, 3 and 75 need one")
+                continue
+            if spec.expect.reason is not None:
+                r.add("runner", f"{label}: failure reason", f.reason == spec.expect.reason,
+                      f"{f.reason!r}" + (f" ({f.detail[:200]})" if f.detail else ""))
 
 
 SANDBOX = {"on": sys.platform == "darwin"}
