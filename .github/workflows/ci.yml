@@ -20,6 +20,24 @@ jobs:
           uv run oarbank-sdk export-schemas
           uv run python scripts/gen_vectors.py
           git diff --exit-code
+  docs:
+    # Builds the docs site with every gate except the private hygiene terms, which
+    # only the deploy (Cloudflare Workers Builds, on main) has.
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: site
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: site/.nvmrc
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+      - run: npm ci
+      - run: npm run check
+      - run: npm run build
   dco:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest

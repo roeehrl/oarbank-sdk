@@ -1,0 +1,17 @@
+// The docs hub: an assets-only Worker serving deploy-hub/ (built by `npm run build`)
+// on the docs.codonic.dev custom domain. It owns /, robots.txt and the 404 page,
+// and redirects /oarbank to /oarbank/ (deploy-hub/_redirects).
+// Workers Builds runs `npm run deploy:hub` on pushes to main that touch the hub.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "codonic-docs-hub",
+  "compatibility_date": "2026-08-01",
+  "assets": {
+    "directory": "./deploy-hub",
+    "html_handling": "auto-trailing-slash",
+    "not_found_handling": "404-page"
+  },
+  "routes": [{ "pattern": "docs.codonic.dev", "custom_domain": true }],
+  "workers_dev": false,
+  "preview_urls": false
+}

@@ -12,7 +12,10 @@
     "check": "node scripts/sync-content.mjs && astro check",
     "check:dist": "node scripts/check-dist.mjs",
     "build:hub": "node scripts/build-hub.mjs",
-    "preview": "node scripts/serve.mjs"
+    "preview": "node scripts/serve.mjs",
+    "check:release": "node scripts/check-dist.mjs --require-private-terms",
+    "deploy": "wrangler deploy",
+    "deploy:hub": "wrangler deploy -c wrangler.hub.jsonc"
   },
   "dependencies": {
     "@astrojs/sitemap": "3.7.4",
@@ -30,6 +33,7 @@
   },
   "devDependencies": {
     "@astrojs/check": "0.9.10",
-    "typescript": "6.0.3"
+    "typescript": "6.0.3",
+    "wrangler": "4.147.0"
   }
 }
