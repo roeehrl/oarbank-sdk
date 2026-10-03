@@ -2,9 +2,13 @@
 only, so a runner can vendor this file instead of importing the SDK.
 
     ctl = Control(workdir)             # on POSIX, on the main thread
-    for chunk in work:
-        ctl.safe_point()               # raises Stopped on a stop request; holds while paused
-        do(chunk, threads=ctl.threads or default_threads)
+    ctl.phase("work")                  # the job is underway (the conformance kit times a stop from here)
+    try:
+        for chunk in work:
+            ctl.safe_point()           # raises Stopped on a stop request; holds while paused
+            do(chunk, threads=ctl.threads or default_threads)
+    except Stopped:
+        return ctl.acknowledge_stop()  # failure.json {reason: "<module>/stopped", fault: "transient"}; exit 75
 
 The agent replaces <W>/control.json and then nudges the runner: SIGUSR1 to the runner process on POSIX, the auto-reset
 event it inherits as OARBANK_CONTROL_EVENT on Windows. Control reads the document when it is created, and again only
@@ -24,6 +28,23 @@ import time
 from pathlib import Path
 
 ENV_CONTROL_EVENT = "OARBANK_CONTROL_EVENT"
+EXIT_STOPPED = 75                      # transient: the agent asked for the stop, so the job runs again later or elsewhere
+REPLACE_RETRY_S = 2.0                  # Windows: a replace fails while the agent has the file open
+
+
+def replace_text(path, text: str):
+    """Write `path` atomically (a temporary file, then rename), retrying a replace the reader blocks (Windows)."""
+    path = Path(path)
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(text, encoding="utf-8")
+    t = time.monotonic()
+    while True:
+        try:
+            return os.replace(tmp, path)
+        except PermissionError:
+            if time.monotonic() - t > REPLACE_RETRY_S:
+                raise
+            time.sleep(0.01)
 
 
 class Stopped(Exception):
@@ -134,6 +155,19 @@ class Control:
             self.refresh()
         if self.stop:
             raise Stopped()
+
+    def phase(self, name: str):
+        """Name the job's current phase in <W>/phase (one line, replaced atomically)."""
+        replace_text(self.path.with_name("phase"), name + "\n")
+
+    def acknowledge_stop(self, reason: str | None = None) -> int:
+        """Acknowledge a stop request: write <W>/failure.json (`fault = "transient"`; the reason defaults to
+        `<module-short>/stopped`) and return the exit code to end with (75). Call it where Stopped is caught."""
+        module = os.environ.get("OARBANK_MODULE") or "module"
+        replace_text(self.path.with_name("failure.json"), json.dumps(
+            {"reason": reason or f"{module}/stopped", "detail": "stopped at a safe point on the agent's request",
+             "fault": "transient"}))
+        return EXIT_STOPPED
 
     def safe_point(self):
         """Raise Stopped on a stop request; hold while a pause is in force, until a nudge brings a change."""

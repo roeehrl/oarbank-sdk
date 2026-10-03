@@ -226,11 +226,12 @@ def main() -> int:
         print(json.dumps({"runner_protocol": {"supported": [1]}, "health": "healthy", "checks": []}))
         return 0
     env = json.loads(Path(a.spec).read_text(encoding="utf-8"))
+    ctl = Control(a.workdir)
+    ctl.phase("sieve")                     # the job is underway
     try:
-        count = count_primes(int(env["payload"]["n"]), Control(a.workdir))
+        count = count_primes(int(env["payload"]["n"]), ctl)
     except Stopped:
-        write(Path(a.workdir) / "failure.json", {"reason": "primes/stopped"})
-        return 1
+        return ctl.acknowledge_stop()      # failure.json (fault transient), exit 75
     write(Path(a.out), {"envelope": 1, "schema": "primes/result@1", "module_version": env["module_version"],
                         "protocol": 1, "payload": {"count": count}})
     return 0
@@ -242,8 +243,9 @@ if __name__ == "__main__":
 
 `cancellable` promises to honour a stop request promptly. The agent asks through `control.json` and then nudges the
 runner (SIGUSR1 on POSIX, an inherited event on Windows); `Control` re-reads the document when nudged and
-`safe_point()` raises `Stopped`, so the same code stops on every platform, within the 0.5 s the conformance kit
-allows. Create `Control` on the main thread. Exit codes: 2 means the spec can never succeed, 3 a missing node dependency, 75 a transient
+`safe_point()` raises `Stopped`, so the same code stops on every platform. `acknowledge_stop()` records the stop in
+`failure.json` and returns 75; the conformance kit times that acknowledgement (at most 2 s after the nudge, counted
+from your first `phase`) and expects the exit within `stop_grace_s`. Create `Control` on the main thread. Exit codes: 2 means the spec can never succeed, 3 a missing node dependency, 75 a transient
 failure; each counts only with a `failure.json`. Keep your results deterministic if you declare
 `determinism = "exact"`: the conformance kit and the host's replica checks compare digests across nodes.
 

@@ -18,8 +18,10 @@ Suites:
   SpecEnvelope in a fresh workdir with a clean environment, **under the module sandbox** with the grants its
   manifest declares (spec/sandbox.md), and writes a valid ResultEnvelope, which
   `result.evaluate` accepts and the golden check passes; a second run with another locale gives the same
-  digest (the golden's stage has determinism `exact`); a control.json stop request, nudged as the agent nudges, ends a running job
-  within `STOP_REACTION_S` (`cancellable`);
+  digest (the golden's stage has determinism `exact`); for a `cancellable` runner, a control.json stop request sent
+  (and nudged as the agent nudges) once the runner wrote its first `phase` is acknowledged within `STOP_REACTION_S`
+  (failure.json with fault transient, timed to the runner's own acknowledgement, not to process teardown) and the runner
+  exits within `stop_grace_s`;
   `doctor --json` is a valid DoctorOutput whose `attrs.platform`, when present, is OARBANK_PLATFORM. The runner runs
   with this host's runner variant (exec and env), the stage's variant (timeout, resources) and the golden's expected
   value resolved for this host's platform.
@@ -37,6 +39,7 @@ import signal
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -414,7 +417,7 @@ class Grants:
 GRANTS: dict = {}
 
 
-STOP_REACTION_S = 0.5      # a cancellable runner exits this soon after a nudged stop request
+STOP_REACTION_S = 2.0      # a cancellable runner acknowledges a nudged stop this soon (at its next safe point)
 
 
 class _Nudge:
@@ -460,7 +463,32 @@ class _Nudge:
             self.event = None
 
 
-def _run(root: Path, man, env_doc: dict, fx: dict, locale: str = "C", kill_after: float | None = None):
+@dataclass
+class Outcome:
+    """One runner run: its exit code ("timeout" when the kit killed it at the stage's limit), result.json and
+    failure.json as written (when the exit code allows them), its stderr tail, its workdir, and the hosts the egress proxy
+    refused it. A stop run also says how the stop went: `stop` is no_phase, finished_first, stopped or ignored; `ack_s`
+    is the time from the nudge to the runner's acknowledgement (failure.json, or result.json if it was finishing) and
+    `exit_s` to its exit."""
+    code: int | str
+    result: dict | None
+    failure: dict | None
+    stderr: str
+    ws: Path
+    refused: list = field(default_factory=list)
+    stop: str | None = None
+    ack_s: float | None = None
+    exit_s: float | None = None
+
+
+def _read_json(path: Path) -> dict | None:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+
+
+def _run(root: Path, man, env_doc: dict, fx: dict, locale: str = "C", stop: bool = False) -> Outcome:
     ws = Path(tempfile.mkdtemp(prefix="conform-"))
     for did in env_doc["datasets"]:
         src = (fx.get("datasets") or {}).get(did, {}).get("dir")
@@ -472,37 +500,75 @@ def _run(root: Path, man, env_doc: dict, fx: dict, locale: str = "C", kill_after
     data = Path(tempfile.mkdtemp(prefix="conform-data-"))
     g = GRANTS["g"]
     nudge = _Nudge()
-    env = {**job_env(man, ws, data, locale), **man.runner.for_platform(portable.host_platform()).env, **g.env(), **nudge.env()}
+    run = man.runner.for_platform(portable.host_platform())
+    env = {**job_env(man, ws, data, locale), **run.env, **g.env(), **nudge.env()}
     (ws / "control.json").write_text(json.dumps({"seq": 0}), encoding="utf-8")
-    argv = _argv(man.runner.for_platform(portable.host_platform()).exec, root)
-    argv += ["run", "--spec", str(ws / "spec.json"), "--workdir", str(ws), "--out", str(ws / "result.json")]
+    argv = _argv(run.exec, root) + ["run", "--spec", str(ws / "spec.json"), "--workdir", str(ws), "--out", str(ws / "result.json")]
     if SANDBOX["on"]:
         from . import sandbox as S
         text, params = S.render(g.policy(man, root, ws, data))
         argv = S.launch_argv(S.write_profile(text, data.parent / f"{data.name}.sb"), params, argv)
+    seen = len(g.proxy.refused) if g.proxy else 0
+    out = {}
     try:
         p = _spawn(nudge.argv(argv), ws, env, nudge.popen_kwargs())
-        if kill_after is not None:
-            time.sleep(kill_after)
-            if p.poll() is None:
-                t = _request_stop(p, ws, nudge)        # control.json stop and the nudge, nothing else
-                try:
-                    p.wait(man.runner.stop_grace_s)
-                    return "stopped", p.returncode, time.monotonic() - t
-                except subprocess.TimeoutExpired:
-                    _kill_tree(p)
-                    p.wait()
-                    return "ignored_stop", p.returncode, None
-            return "finished_first", p.returncode, None
-        try:
-            _, err = p.communicate(timeout=float(env_doc.get("timeout_s") or 1800))
-        except subprocess.TimeoutExpired:
-            _kill_tree(p)
-            return None, "timeout", ws
+        reader = threading.Thread(target=lambda: out.update(err=p.communicate()[1]), daemon=True)
+        reader.start()                                   # drains the pipes while the kit watches the workdir
+        limit = float(env_doc.get("timeout_s") or 1800)
+        o = Outcome("timeout", None, None, "", ws)
+        if stop:
+            _stop(p, ws, nudge, run.stop_grace_s, limit, o)
+        else:
+            try:
+                p.wait(limit)
+            except subprocess.TimeoutExpired:
+                _kill_tree(p)
+                p.wait()
+                o.stop = "timeout"
+        reader.join()
     finally:
         nudge.close()
-    res = json.loads((ws / "result.json").read_text(encoding="utf-8")) if p.returncode == 0 and (ws / "result.json").exists() else None
-    return res, (err.decode(errors="replace")[-400:] if p.returncode else ""), ws
+    o.refused = list(g.proxy.refused[seen:]) if g.proxy else []
+    if o.stop != "timeout":
+        o.code = p.returncode
+    o.stderr = (out.get("err") or b"").decode(errors="replace")[-400:] if p.returncode else ""
+    o.result = _read_json(ws / "result.json") if p.returncode == 0 else None
+    o.failure = _read_json(ws / "failure.json") if p.returncode not in (0, None) else None
+    return o
+
+
+def _acknowledged(ws: Path) -> bool:
+    """The runner's own reaction to a stop: failure.json with fault transient, or the result if it was finishing."""
+    f = _read_json(ws / "failure.json")
+    return (f is not None and f.get("fault") == "transient") or (ws / "result.json").exists()
+
+
+def _stop(p, ws: Path, nudge: "_Nudge", grace: float, limit: float, o: Outcome):
+    """The agent's stop, timed on the runner's acknowledgement rather than on the OS tearing the process down: wait for
+    the runner's first `phase` write (its sign that work is underway, so start-up is never timed), send the stop, then
+    watch for the acknowledgement and the exit until stop_grace_s has passed (the agent kills the container then)."""
+    t0 = time.monotonic()
+    while p.poll() is None and not (ws / "phase").exists() and time.monotonic() - t0 < limit:
+        time.sleep(0.005)
+    if not (ws / "phase").exists():
+        o.stop = "no_phase"
+    elif p.poll() is not None or _acknowledged(ws):
+        o.stop = "finished_first"
+    else:
+        t = _request_stop(p, ws, nudge)                  # control.json stop and the nudge, nothing else
+        while p.poll() is None and time.monotonic() - t < grace:
+            if o.ack_s is None and _acknowledged(ws):
+                o.ack_s = time.monotonic() - t
+            time.sleep(0.005)
+        if p.poll() is None:
+            o.stop = "ignored"
+        else:
+            o.stop, o.exit_s = "stopped", time.monotonic() - t
+            if o.ack_s is None and _acknowledged(ws):
+                o.ack_s = o.exit_s                       # written just before it exited, between two looks
+    if p.poll() is None:
+        _kill_tree(p)
+        p.wait()
 
 
 def job_env(man, ws: Path, data: Path, locale: str = "C.UTF-8") -> dict:
@@ -551,6 +617,32 @@ def _kill_tree(p):
             pass
     else:
         p.kill()
+
+
+def _egress(r: Report, label: str, o: Outcome):
+    """A connection the allowlist proxy refused fails the run, even when the runner coped with the refusal."""
+    if o.refused:
+        r.add("runner", f"{label}: egress within the allowlist", False, "; ".join(sorted(set(o.refused)))[:600])
+
+
+def _check_stop(r: Report, label: str, o: Outcome):
+    """`cancellable`: the runner acknowledges a nudged stop at its next safe point (within STOP_REACTION_S, measured to
+    its acknowledgement), and exits within stop_grace_s (75 after failure.json; 0 if it was finishing its result)."""
+    name = f"{label}: a nudged stop is acknowledged within {STOP_REACTION_S:g} s"
+    if o.stop == "no_phase":
+        r.add("runner", name, None, "the runner wrote no <W>/phase before finishing: the kit times a stop from the "
+              "runner's first phase write (Control.phase), so start-up is never counted")
+        return
+    if o.stop == "finished_first":
+        r.add("runner", name, None, "the golden finished before the kit could send the stop; make one golden run longer")
+        return
+    r.add("runner", name, o.ack_s is not None and o.ack_s <= STOP_REACTION_S,
+          f"acknowledged {o.ack_s:.3f} s after the nudge" if o.ack_s is not None else
+          "no failure.json with fault transient (Control.acknowledge_stop) and no result")
+    want = 0 if o.result is not None else 75
+    r.add("runner", f"{label}: exits within stop_grace_s after a stop", o.stop == "stopped" and o.code == want,
+          f"exit {o.code}, {o.exit_s:.3f} s after the nudge" if o.stop == "stopped" else
+          "still running at stop_grace_s; the agent kills the container then")
 
 
 def check_runner(root: Path, man, fx: dict, runs: list, r: Report):
@@ -614,8 +706,10 @@ def _check_runner(root: Path, man, fx: dict, runs: list, r: Report, g: "Grants")
                       "broker, so it runs only on an agent")
                 continue
             ran = True
-            res, err, ws = _run(root, man, env_doc, fx)
-            if not r.add("runner", f"{label}: result envelope", res is not None, err):
+            o = _run(root, man, env_doc, fx)
+            _egress(r, label, o)
+            res = o.result
+            if not r.add("runner", f"{label}: result envelope", res is not None, o.stderr or f"exit {o.code}"):
                 continue
             try:
                 ResultEnvelope.model_validate(res)
@@ -630,19 +724,12 @@ def _check_runner(root: Path, man, fx: dict, runs: list, r: Report, g: "Grants")
                 ok = bool(v.get("digest")) and v.get("digest") == expected.get("digest")
             r.add("runner", f"{label}: matches the golden", ok)
             if man.determinism_of(st.get("stage")) == "exact":
-                res2, err2, _ = _run(root, man, env_doc, fx, locale="en_US.UTF-8")
-                v2 = cli.call("result.evaluate", {"spec": env_doc, "result": res2, "stage": st.get("stage")}) if res2 else {}
-                r.add("runner", f"{label}: deterministic across locales/workdirs", bool(res2) and v2.get("digest") == v.get("digest"),
-                      err2)
+                o2 = _run(root, man, env_doc, fx, locale="en_US.UTF-8")
+                v2 = cli.call("result.evaluate", {"spec": env_doc, "result": o2.result, "stage": st.get("stage")}) if o2.result else {}
+                r.add("runner", f"{label}: deterministic across locales/workdirs",
+                      bool(o2.result) and v2.get("digest") == v.get("digest"), o2.stderr)
             if "cancellable" in man.runner.capabilities:
-                how, code, took = _run(root, man, env_doc, fx, kill_after=0.3)
-                name = f"{label}: a nudged stop ends the job within {STOP_REACTION_S} s"
-                if how == "finished_first":
-                    r.add("runner", name, None, "the golden finished within 0.3 s; make one golden run longer to prove cancellation")
-                elif how == "stopped":
-                    r.add("runner", name, code != 0 and took < STOP_REACTION_S, f"exit {code}, {took:.3f} s after the nudge")
-                else:
-                    r.add("runner", name, False, f"still running {man.runner.stop_grace_s} s after the nudge (stop_grace_s)")
+                _check_stop(r, label, _run(root, man, env_doc, fx, stop=True))
             break                                           # one golden per module is enough for the runner suite
     finally:
         cli.close()

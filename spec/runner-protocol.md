@@ -107,9 +107,13 @@ thread (it installs the signal handler):
 
 ```python
 ctl = Control()                    # OARBANK_WORKDIR
-for chunk in work:
-    ctl.safe_point()               # raises Stopped on a stop request; holds while paused
-    do(chunk, threads=ctl.threads or default)
+ctl.phase("work")                  # <W>/phase: the job is underway
+try:
+    for chunk in work:
+        ctl.safe_point()           # raises Stopped on a stop request; holds while paused
+        do(chunk, threads=ctl.threads or default)
+except Stopped:
+    sys.exit(ctl.acknowledge_stop())   # failure.json {reason: "<module-short>/stopped", fault: "transient"}; 75
 ```
 
 - **Safe point:** any place where holding or stopping the job changes nothing already written: between work chunks,
@@ -119,8 +123,15 @@ for chunk in work:
   - On POSIX the agent also sends SIGTERM to the process container.
   - After the grace period it kills the container: SIGKILL, or `cgroup.kill` on Linux, or `TerminateJobObject` on
     Windows.
-  - A runner that declares `cancellable` honours stop promptly: the conformance kit expects it to exit within 0.5 s of
-    the nudge.
+  - A runner that declares `cancellable` honours stop promptly. At its next safe point it **acknowledges** the stop:
+    it writes `failure.json` with `fault = "transient"` (`Control.acknowledge_stop`; reason `<module-short>/stopped`),
+    or the result if it was already finishing, and then exits (75 after `failure.json`) within `stop_grace_s`. The
+    acknowledgement is the runner's own observable reaction; the process exit that follows includes interpreter and
+    tool teardown, which load on the machine stretches, so only `stop_grace_s` bounds it. Keep safe points at most about
+    a second of work apart.
+  - The conformance kit checks both: it sends the stop once the runner has written its first `phase` (so start-up is
+    never timed), expects the acknowledgement within 2 s of the nudge (a bound that holds on a loaded machine, and far
+    below any reasonable `stop_grace_s`), and expects the exit within `stop_grace_s`.
 - **Pause** (`pause: true`, for `cooperative_pause` runners): hold at the next safe point until a newer document clears
   it.
   - Runners that declare `freeze_ok` may instead be frozen at any instruction, with the platform's mechanism: SIGSTOP,

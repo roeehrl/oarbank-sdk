@@ -106,17 +106,21 @@ def test_lint_warnings_do_not_fail_the_report(tmp_path):
 
 
 def _slow_toy(tmp_path, listens: bool) -> Path:
-    """The toy runner, taking 1.5 s to answer: at safe points (listens) or deaf to control.json."""
+    """The toy runner, taking 1.5 s to answer: at safe points, acknowledging a stop (listens), or deaf to control.json
+    for longer than its stop_grace_s. Both name their phase once work starts."""
     d = copy(tmp_path)
     work = ("    from oarbank_sdk.control import Control, Stopped\n"
             "    ctl = Control(workdir)\n"
+            "    ctl.phase('summing')\n"
             "    t = __import__('time').monotonic()\n"
             "    try:\n"
             "        while __import__('time').monotonic() - t < 1.5:\n"
             "            ctl.safe_point()\n"
             "            __import__('time').sleep(0.01)\n"
             "    except Stopped:\n"
-            "        return 1\n") if listens else "    __import__('time').sleep(1.5)\n"
+            "        return ctl.acknowledge_stop()\n") if listens else (
+            "    (workdir / 'phase').write_text('summing', encoding='utf-8')\n"
+            "    __import__('time').sleep(5)\n")
     m = (d / "oarbank-module.toml").read_text(encoding="utf-8")
     (d / "oarbank-module.toml").write_text(m.replace('capabilities = ["cancellable", "deterministic_output", "freeze_ok"]',
                                                      'capabilities = ["cancellable", "deterministic_output", "freeze_ok"]\nstop_grace_s = 3'), encoding="utf-8", newline="\n")
@@ -125,19 +129,28 @@ def _slow_toy(tmp_path, listens: bool) -> Path:
     return d
 
 
-def _stop_check(rep):
-    return next(c for c in rep.checks if "a nudged stop ends the job" in c.name)
+def _stop_checks(rep):
+    return [c for c in rep.checks if "a nudged stop is acknowledged" in c.name or "exits within stop_grace_s" in c.name]
 
 
-def test_a_cancellable_runner_reacts_to_the_nudged_stop(tmp_path):
-    c = _stop_check(conform(_slow_toy(tmp_path, listens=True)))
-    assert c.status == "pass", c.detail
-    print(c.detail)
+def test_a_cancellable_runner_acknowledges_the_nudged_stop(tmp_path):
+    """Timed to the runner's acknowledgement (failure.json, fault transient), not to process teardown, and sent only once
+    the runner named its first phase, so a slow start on a loaded machine is never counted."""
+    checks = _stop_checks(conform(_slow_toy(tmp_path, listens=True)))
+    assert [c.status for c in checks] == ["pass", "pass"], [(c.name, c.detail) for c in checks]
 
 
-def test_a_runner_deaf_to_control_fails_the_stop_check(tmp_path):
-    c = _stop_check(conform(_slow_toy(tmp_path, listens=False)))
-    assert c.status == "fail", c.detail
+def test_a_runner_deaf_to_control_fails_the_stop_checks(tmp_path):
+    checks = _stop_checks(conform(_slow_toy(tmp_path, listens=False)))
+    assert [c.status for c in checks] == ["fail", "fail"], [(c.name, c.detail) for c in checks]
+
+
+def test_a_runner_that_names_no_phase_is_not_timed(tmp_path):
+    d = _slow_toy(tmp_path, listens=True)
+    r = (d / "toy_runner.py").read_text(encoding="utf-8").replace("    ctl.phase('summing')\n", "")
+    (d / "toy_runner.py").write_text(r, encoding="utf-8", newline="\n")
+    checks = _stop_checks(conform(d))
+    assert [c.status for c in checks] == ["skip"] and "phase" in checks[0].detail
 
 
 def test_a_golden_for_a_stage_that_does_not_compare_is_caught(tmp_path):
