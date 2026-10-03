@@ -41,7 +41,7 @@ then the manifest's `[runner].env` with the platform variant's `env` merged over
 | `OARBANK_SETTINGS_FILE` | stable | A UTF-8 JSON file with the module's settings for this node. It is a file because environment size limits differ per OS. |
 | `OARBANK_BROKER` | beta | The job's container broker endpoint, `unix:/path` or `npipe://./pipe/<name>` ([sandbox.md](sandbox.md#containers-the-agents-broker)). Set only for a module approved for containers. |
 | `OARBANK_TOOLS_FILE` | stable | A UTF-8 JSON file `{"<tool id>": ["<canonical path>", ...]}` for the module's approved `[sandbox].tools` on this node: exactly the paths the sandbox grants (resolved; conventional symlinks such as `/opt/homebrew/opt/...` are not readable inside the sandbox). `oarbank_sdk.tools.path(id)` reads it. |
-| `HTTPS_PROXY`, `HTTP_PROXY`, `ALL_PROXY` | stable | Set for `egress-allowlist`: the agent's local proxy, the only network route ([sandbox.md](sandbox.md#network)). |
+| `HTTPS_PROXY`, `HTTP_PROXY`, `ALL_PROXY` | stable | Set for `egress-allowlist`: the agent's local proxy, the only network route ([sandbox.md](sandbox.md#sandbox-grants)). |
 | `OARBANK_CONTROL_EVENT` | stable | Windows: the handle, in decimal, of the auto-reset event the runner inherits and the agent sets after every change to `control.json` ([Control](#control)). |
 | `PYTHONUTF8=1` | stable | For Python runtimes, on every OS. |
 
