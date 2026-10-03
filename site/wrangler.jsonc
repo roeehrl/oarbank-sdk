@@ -1,0 +1,17 @@
+// The docs site: an assets-only Worker serving deploy/ (built by `npm run build`)
+// on docs.codonic.dev/oarbank/*. Response headers come from deploy/_headers.
+// Workers Builds runs `npm run deploy` on every push to main that touches the
+// site or the Markdown and artefacts it publishes.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "oarbank-docs",
+  "compatibility_date": "2026-08-01",
+  "assets": {
+    "directory": "./deploy",
+    "html_handling": "auto-trailing-slash",
+    "not_found_handling": "404-page"
+  },
+  "routes": [{ "pattern": "docs.codonic.dev/oarbank/*", "zone_name": "codonic.dev" }],
+  "workers_dev": false,
+  "preview_urls": false
+}
