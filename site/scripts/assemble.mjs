@@ -5,7 +5,8 @@
 //   deploy/_headers      response headers, every rule scoped to /oarbank/
 //
 // The Worker serves deploy/ with html_handling "auto-trailing-slash" and
-// not_found_handling "404-page" (so misses under /oarbank/ get oarbank/404.html).
+// not_found_handling "404-page" (so misses under /oarbank/ get oarbank/404.html),
+// as set in site/wrangler.jsonc.
 import { cpSync, mkdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { BASE, CSP, MAX_DEPLOY_FILES, SECURITY_HEADERS } from '../site.config.mjs';
