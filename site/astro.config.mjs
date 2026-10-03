@@ -6,7 +6,7 @@ import starlight from '@astrojs/starlight';
 import { defineConfig } from 'astro/config';
 import starlightLinksValidator from 'starlight-links-validator';
 import starlightLlmsTxt from 'starlight-llms-txt';
-import { BASE, HOME_URL, PRODUCT, SECTIONS, SITE } from './site.config.mjs';
+import { BASE, HOME_URL, PRODUCT, REPO, SECTIONS, SITE } from './site.config.mjs';
 import { gitDateUtc, pageSource } from './scripts/lib/git-dates.mjs';
 
 export default defineConfig({
@@ -38,6 +38,9 @@ export default defineConfig({
       favicon: '/favicon.svg',
       customCss: ['./src/styles/codonic.css'],
       lastUpdated: true,
+      // Hand-written pages edit under site/; pages synced from docs/ and spec/ set
+      // their own editUrl to the repository file (scripts/sync-content.mjs).
+      ...(REPO.public ? { editLink: { baseUrl: `${REPO.url}/edit/${REPO.branch}/site/` } } : {}),
       credits: false,
       pagefind: true,
       expressiveCode: { themes: ['starlight-dark'] },

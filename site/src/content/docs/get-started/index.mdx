@@ -1,6 +1,6 @@
 ---
 title: Get started
-description: Oarbank is not released yet. This page shows what setting up a fleet will look like on macOS, Linux and Windows, and what you can do with the docs and the SDK today.
+description: Oarbank is not released yet. This page shows what setting up a fleet will look like on macOS, Linux and Windows, and how to install the open-source module SDK and build a module today.
 type: overview
 platforms: [macos, linux, windows]
 ---
@@ -8,9 +8,9 @@ platforms: [macos, linux, windows]
 import { Aside, Steps, TabItem, Tabs } from '@astrojs/starlight/components';
 
 <Aside type="caution" title="Not released yet">
-  Oarbank has no public release yet: there are no downloads, and its repositories are not public. Installers for the
-  coordinator and for nodes arrive with the first public release. Until then, the installation steps below are a
-  preview of how setup works, and file names and details may change.
+  Oarbank itself (the coordinator and the node agents) has no public release yet: there are no downloads. Installers
+  for the coordinator and for nodes arrive with the first public release. Until then, the installation steps below
+  are a preview of how setup works, and file names and details may change. The module SDK is already public.
 </Aside>
 
 ## What you can do today
@@ -19,12 +19,35 @@ import { Aside, Steps, TabItem, Tabs } from '@astrojs/starlight/components';
   join codes, modules, certification, sandboxing, host protection, signing and coordinator moves.
 - **Check your computers.** [Requirements](/oarbank/operate/requirements) lists what the coordinator and each node
   need on macOS, Linux and Windows, and what the network needs.
-- **Read the tutorial for module authors.** [Build a module in a day](/oarbank/build/tutorial) builds a complete
-  module step by step. The module SDK (`oarbank-sdk`) is not installable yet: its repository is private and it is not
-  on PyPI. Once the repository is public, you can install it from source and follow the tutorial on your own
-  computer.
+- **Build a module.** The module SDK (`oarbank-sdk`, Apache-2.0) is open source on
+  [GitHub](https://github.com/roeehrl/oarbank-sdk). Install it from source (it is not on PyPI yet) and follow
+  [Build a module in a day](/oarbank/build/tutorial), which builds a complete module step by step. See
+  [Install the module SDK](#install-the-module-sdk) below.
 - **Read the contracts.** The [specification](/oarbank/spec) describes everything a module can rely on, and the
   [JSON Schemas](/oarbank/reference/schemas) are published as files you can validate against.
+
+## Install the module SDK
+
+You need Python 3.12 or newer, on macOS, Linux or Windows. Install the SDK from its repository into your
+environment:
+
+```sh
+uv pip install "git+https://github.com/roeehrl/oarbank-sdk"   # or: pip install "git+https://github.com/roeehrl/oarbank-sdk"
+oarbank-sdk --help
+```
+
+To work with the reference module and the examples, clone the repository instead and check the toy module with the
+conformance kit:
+
+```sh
+git clone https://github.com/roeehrl/oarbank-sdk
+cd oarbank-sdk
+uv sync --group dev
+uv run oarbank-sdk conform examples/toy   # must end with "0 failed"
+```
+
+The conformance kit runs your module's runner as this computer's platform would, so you can build and test a module
+before Oarbank itself is released.
 
 ## What installation will look like
 
