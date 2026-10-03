@@ -1,0 +1,57 @@
+---
+// Starlight's footer (edit link, last updated, pagination), plus the page's
+// repository source and the codonic.dev links every Codonic page carries.
+import Default from '@astrojs/starlight/components/Footer.astro';
+import { PRODUCT, PUBLISHER, REPO } from '../../../site.config.mjs';
+
+const { source } = Astro.locals.starlightRoute.entry.data;
+const sourceHref = source && REPO.public ? `${REPO.url}/blob/${REPO.branch}/${source}` : undefined;
+const year = new Date().getUTCFullYear();
+---
+
+<Default />
+{
+  source && (
+    <p class="source">
+      Source: {sourceHref ? <a href={sourceHref}><code>{source}</code></a> : <code>{source}</code>} in the
+      oarbank-sdk repository
+    </p>
+  )
+}
+<nav class="codonic-links" aria-label="Codonic">
+  <a href={PRODUCT.productUrl}>Oarbank</a>
+  <a href={`${PUBLISHER.url}/privacy/oarbank`}>Privacy</a>
+  <a href={`${PUBLISHER.url}/terms`}>Terms</a>
+  <a href={`${PUBLISHER.url}/support`}>Support</a>
+  <span class="copy">© {year} Codonic</span>
+</nav>
+
+<style>
+  .source {
+    margin-top: 0;
+    font-size: var(--sl-text-sm);
+    color: var(--sl-color-gray-3);
+  }
+  .codonic-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1.5rem;
+    margin-top: 1rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--sl-color-hairline);
+    font-size: var(--sl-text-sm);
+  }
+  .codonic-links a {
+    color: var(--sl-color-gray-2);
+    text-decoration: none;
+  }
+  .codonic-links a:hover {
+    color: var(--sl-color-white);
+  }
+  .copy {
+    margin-inline-start: auto;
+    color: var(--sl-color-gray-3);
+    font-family: var(--sl-font-mono);
+    font-size: var(--sl-text-xs);
+  }
+</style>

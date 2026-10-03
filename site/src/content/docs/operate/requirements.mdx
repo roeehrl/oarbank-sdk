@@ -1,0 +1,114 @@
+---
+title: Requirements
+description: What the coordinator and each node need on macOS, Linux and Windows, and what the network needs, before you install Oarbank.
+type: reference
+platforms: [macos, linux, windows]
+sidebar:
+  order: 1
+---
+
+import { Aside, TabItem, Tabs } from '@astrojs/starlight/components';
+
+<Aside type="note">
+  Oarbank is not released yet. These are the requirements of the current build; installers arrive with the first
+  public release. See [Get started](/oarbank/get-started).
+</Aside>
+
+A fleet is one coordinator and any number of nodes. The coordinator can also be a node.
+
+## At a glance
+
+| | Versions | Architectures |
+|---|---|---|
+| macOS node | macOS 15 or later | Apple silicon |
+| Linux node | systemd, Linux 6.2 or later | x86_64, arm64 |
+| Windows node | Windows 10 version 1809 or later, Windows 11 | x64, ARM64 |
+| Coordinator on macOS | macOS 15 or later | Apple silicon |
+| Coordinator on Linux | systemd, Linux 6.2 or later | x86_64, arm64 |
+
+The coordinator does not run on Windows. Windows computers join a fleet as nodes.
+
+## Nodes
+
+<Tabs syncKey="os">
+  <TabItem label="macOS" icon="apple">
+    - **macOS 15 or later on Apple silicon.**
+    - **Installer:** a `.pkg`, installed by hand or through MDM. Administrator rights are needed to install it.
+    - **Service:** by default the agent runs as a LaunchAgent for the user who is logged in. Installed in system
+      scope, it runs as a system service under its own `_oarbank` account and starts at boot, before anyone logs in.
+    - **Sandbox:** Seatbelt. Each job runs in its own process group.
+    - **Host protection:** the memory guard and per-node caps, plus the owner's rules (named apps and processes,
+      someone using the computer) and back-off for heat and battery.
+    - **Containers**, for modules that use them, run in a Colima profile that the agent owns.
+  </TabItem>
+  <TabItem label="Linux" icon="linux">
+    - **x86_64 or arm64**, with glibc and systemd.
+    - **Linux 6.2 or later** for the module sandbox (Landlock and seccomp). Newer kernels enforce more:
+      | Kernel | What the sandbox enforces |
+      |---|---|
+      | 6.2 or later | files, no network, the GPU, no execution of writable files |
+      | 6.7 or later | also the network allowlist, and no loopback or link-local access |
+      | 6.12 or later | also local IPC (full parity with the other platforms) |
+
+      A node reports what its kernel cannot enforce, and work that needs it is not placed there. Unrestricted
+      network access (`egress-any`) is not available on Linux nodes.
+    - **Installer:** a `.deb` or an `.rpm`. Root is needed to install it. The package creates an `oarbank` account
+      and a systemd service with a delegated cgroup, so each job runs in its own cgroup v2 leaf.
+    - **Host protection:** the memory guard and per-node caps.
+    - **Containers**, for modules that use them, run in rootless Podman when it is installed (the `oarbank` account
+      then needs subordinate user and group ids), otherwise in Docker Engine.
+  </TabItem>
+  <TabItem label="Windows" icon="seti:windows">
+    - **Windows 10 version 1809 or later, or Windows 11, on x64 or ARM64.** There is one MSI per architecture.
+    - **Installer:** an `.msi`. Administrator rights are needed to install it.
+    - **Services:** the agent runs as a Windows service under its own virtual account. The MSI also installs a helper
+      service, `OarbankHelper`, that runs elevated and limits each job's network access to its own allowlist proxy.
+    - **Sandbox:** an AppContainer per module. Each job runs in its own Job Object.
+    - **Host protection:** the memory guard and per-node caps.
+    - **Containers** are not available on Windows nodes yet.
+  </TabItem>
+</Tabs>
+
+Modules can need more than the operating system: a JDK, a tool, a GPU. Each module's doctor checks for what it needs
+on every node, and a node that lacks it is reported as unable to run that module rather than given its jobs.
+
+## The coordinator
+
+- **A computer that stays on:** a Mac with Apple silicon and macOS 15 or later, or a Linux machine (x86_64 or
+  arm64) with systemd and Linux 6.2 or later.
+- **It runs as background services for your user account:** LaunchAgents on macOS, systemd user units on Linux. On
+  Linux, run `loginctl enable-linger` once so they start at boot without a login.
+- **Its module processes are sandboxed too,** with the same backend as on a node of that operating system. A
+  coordinator on an operating system without a sandbox backend refuses to start module processes.
+- **It can also be a node:** install the node package on the same computer.
+
+## Network
+
+Oarbank needs no particular network. A fleet works the same on one LAN, over Tailscale or ZeroTier, or over any other
+VPN, and nodes on different networks can share one coordinator as long as they can reach it.
+
+- **Nodes reach the coordinator on one address and one port: `7443/tcp`.** This is the only port a node needs, and
+  the only one the coordinator needs to accept from other computers. The connection is TLS with a client certificate
+  on both sides.
+- **The coordinator never connects to nodes.** Nodes open every connection, so they need no open inbound ports, and
+  nodes behind NAT work.
+- **Addresses can change.** The coordinator is authenticated by the certificate authority its join codes pin, not by
+  its host name, so a node can use any address that reaches it: a LAN address, a VPN address or a local network name.
+- **Discovery is optional.** On a local network, the coordinator announces itself and a node can find its address
+  that way, but join codes already carry the coordinator's addresses.
+
+By default, everything else on the coordinator listens on loopback only:
+
+| Port | What | Reachable from |
+|---|---|---|
+| `7443/tcp` | the agent API that nodes use | the network |
+| `7400/tcp` | the console | the coordinator only |
+| `7401/tcp` | the admin API that the console and the CLI use | the coordinator only |
+| `7402/tcp` | the origin that serves module console frames | the coordinator only |
+
+To use the console from another device, put it behind a reverse proxy that terminates TLS for a name you control,
+and add that name to the console's allowed host names (the `console_hosts` setting). Passkeys need such a name;
+password and TOTP sign-in work either way.
+
+Jobs themselves have no network access unless you grant it to their module. A granted module reaches only the hosts
+on its allowlist, through the agent's proxy on the node.

@@ -1,0 +1,68 @@
+/*
+  Codonic brand tokens, mapped onto Starlight's variables.
+  Mirrors codonic.dev's src/styles/global.css (:root tokens); keep the two in step
+  by hand. Dark only, like codonic.dev. Accent: Oarbank #3f9fbd, with the light
+  tint #9ad3e3 from the Oarbank mark for link text.
+*/
+:root,
+::backdrop {
+  --codonic-bg: #08090b;
+  --codonic-bg-raise: #0e1013;
+  --codonic-surface: #14171c;
+  --codonic-surface-2: #1b1f26;
+  --codonic-line: #23282f;
+  --codonic-line-soft: #191d23;
+  --codonic-text: #eceef1;
+  --codonic-text-dim: #a5adb8;
+  --codonic-text-faint: #8993a0;
+
+  --sl-color-white: var(--codonic-text);
+  --sl-color-gray-1: #d5d9df;
+  --sl-color-gray-2: #b6bdc7;
+  --sl-color-gray-3: var(--codonic-text-faint);
+  --sl-color-gray-4: #4a525d;
+  --sl-color-gray-5: var(--codonic-line);
+  --sl-color-gray-6: var(--codonic-surface);
+  --sl-color-black: var(--codonic-bg);
+
+  --sl-color-accent-low: #0f2a33;
+  --sl-color-accent: #3f9fbd;
+  --sl-color-accent-high: #9ad3e3;
+
+  --sl-color-bg: var(--codonic-bg);
+  --sl-color-bg-nav: var(--codonic-bg-raise);
+  --sl-color-bg-sidebar: var(--codonic-bg);
+  --sl-color-bg-inline-code: var(--codonic-surface);
+  --sl-color-hairline: var(--codonic-line-soft);
+  --sl-color-hairline-light: var(--codonic-line);
+  --sl-color-hairline-shade: var(--codonic-bg);
+
+  /* Draft banners: quiet, in the accent's dark tint. */
+  --sl-color-banner-bg: var(--sl-color-accent-low);
+  --sl-color-banner-text: var(--sl-color-accent-high);
+
+  --sl-font: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans',
+    sans-serif;
+  --sl-font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+
+  color-scheme: dark;
+}
+
+.sl-markdown-content :is(h1, h2, h3, h4) {
+  letter-spacing: -0.015em;
+}
+
+/* Tables can be wider than the content column: scroll them, never the page. */
+.sl-markdown-content table {
+  display: block;
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+/* Schema reference tables (src/components/JsonSchema.astro). */
+.schema-table code {
+  white-space: nowrap;
+}
+.schema-table td {
+  vertical-align: top;
+}

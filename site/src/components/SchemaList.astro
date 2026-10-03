@@ -1,0 +1,59 @@
+---
+// Lists every schema in the repository's schemas/ folder, grouped by contract,
+// with a link to each raw file. Built at build time; no client-side JavaScript.
+import { readdirSync } from 'node:fs';
+import { join } from 'node:path';
+import { BASE } from '../../site.config.mjs';
+
+const files = readdirSync(join(process.cwd(), '..', 'schemas'))
+  .filter((f) => f.endsWith('.schema.json'))
+  .sort();
+
+const GROUPS: [string, (f: string) => boolean][] = [
+  ['Manifest', (f) => f.startsWith('manifest-')],
+  ['Envelopes', (f) => f.startsWith('spec-envelope-') || f.startsWith('result-envelope-')],
+  ['Runner protocol', (f) => f.startsWith('runner-')],
+  ['Service protocol', (f) => f.startsWith('service-')],
+  ['UI contract', (f) => f.startsWith('ui-')],
+  ['Module protocol: messages', (f) => f.startsWith('module-rpc-')],
+  ['Module protocol: host callbacks', (f) => f.startsWith('module-host-')],
+  ['Module protocol: verbs', (f) => f.startsWith('module-')],
+];
+
+const grouped = new Map<string, string[]>(GROUPS.map(([g]) => [g, []]));
+const other: string[] = [];
+for (const f of files) {
+  const g = GROUPS.find(([, test]) => test(f));
+  (g ? grouped.get(g[0])! : other).push(f);
+}
+if (other.length) grouped.set('Other', other);
+---
+
+<p>{files.length} schemas.</p>
+{
+  [...grouped].filter(([, list]) => list.length).map(([group, list]) => (
+    <>
+      <h3>{group} ({list.length})</h3>
+      <ul class="schema-list">
+        {list.map((f) => (
+          <li>
+            <a href={`${BASE}/schemas/${f}`}><code>{f}</code></a>
+          </li>
+        ))}
+      </ul>
+    </>
+  ))
+}
+
+<style>
+  .schema-list {
+    columns: 2 22rem;
+    column-gap: 2rem;
+  }
+  .schema-list code {
+    overflow-wrap: anywhere;
+  }
+  .schema-list li {
+    break-inside: avoid;
+  }
+</style>

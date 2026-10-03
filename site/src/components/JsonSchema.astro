@@ -1,0 +1,155 @@
+---
+// Renders one of the SDK's generated JSON Schemas (repo schemas/<name>.schema.json)
+// as static HTML at build time: one table for the top-level object and one per
+// $defs entry, with types, required flags, stability labels, constraints and
+// links between definitions. No client-side JavaScript.
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { BASE } from '../../site.config.mjs';
+
+interface Props {
+  /** Schema file stem, e.g. "result-envelope-1" for schemas/result-envelope-1.schema.json. */
+  name: string;
+}
+
+type Schema = Record<string, any>;
+
+const { name } = Astro.props;
+const file = `${name}.schema.json`;
+// npm scripts run from site/, so the repository's schemas/ is one level up.
+const schema: Schema = JSON.parse(readFileSync(join(process.cwd(), '..', 'schemas', file), 'utf8'));
+const defs: Record<string, Schema> = schema.$defs ?? {};
+
+const esc = (s: string) =>
+  String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+/** Escape, then render `backticks` as <code>. */
+const prose = (s: string) => esc(s).replace(/`([^`]+)`/g, '<code>$1</code>');
+const defId = (n: string) => `def-${n.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+const code = (s: string) => `<code>${esc(s)}</code>`;
+
+function stability(description?: string) {
+  const m = description?.match(/^\[(stable|beta|experimental|deprecated)\]\s*/);
+  return { label: m?.[1], text: m ? description!.slice(m[0].length) : description ?? '' };
+}
+
+function typeHtml(s: Schema | undefined): string {
+  if (!s || Object.keys(s).length === 0) return code('any');
+  if (s.$ref) {
+    const n = s.$ref.split('/').pop();
+    return `<a href="#${defId(n)}">${code(n)}</a>`;
+  }
+  if (s.const !== undefined) return code(`const ${JSON.stringify(s.const)}`);
+  if (s.enum) return s.enum.map((v: unknown) => code(JSON.stringify(v))).join(' | ');
+  const union = s.anyOf ?? s.oneOf;
+  if (union) return union.map(typeHtml).join(' | ');
+  if (s.allOf?.length === 1) return typeHtml(s.allOf[0]);
+  if (Array.isArray(s.type)) return s.type.map((t: string) => code(t)).join(' | ');
+  if (s.type === 'array') return s.items ? `array of ${typeHtml(s.items)}` : code('array');
+  if (s.type === 'object' && !s.properties && s.additionalProperties && typeof s.additionalProperties === 'object')
+    return `map of string → ${typeHtml(s.additionalProperties)}`;
+  return code(s.type ?? 'any');
+}
+
+const CONSTRAINTS: [string, string][] = [
+  ['pattern', 'pattern'], ['format', 'format'], ['minLength', 'min length'], ['maxLength', 'max length'],
+  ['minimum', 'minimum'], ['maximum', 'maximum'], ['exclusiveMinimum', '>'], ['exclusiveMaximum', '<'],
+  ['minItems', 'min items'], ['maxItems', 'max items'], ['uniqueItems', 'unique items'],
+];
+
+function constraintsHtml(s: Schema): string {
+  const out: string[] = [];
+  const branches = [s, ...(s.anyOf ?? s.oneOf ?? []), ...(s.items ? [s.items] : [])];
+  for (const b of branches)
+    for (const [key, label] of CONSTRAINTS) if (b[key] !== undefined) out.push(`${label} ${code(JSON.stringify(b[key]))}`);
+  if (s.default !== undefined) out.push(`default ${code(JSON.stringify(s.default))}`);
+  return out.join('<br>');
+}
+
+function rows(obj: Schema) {
+  const required = new Set<string>(obj.required ?? []);
+  return Object.entries<Schema>(obj.properties ?? {}).map(([prop, s]) => {
+    const { label, text } = stability(s.description);
+    return { prop, required: required.has(prop), type: typeHtml(s), label, text: prose(text), constraints: constraintsHtml(s) };
+  });
+}
+
+const sections = [
+  { id: 'top-level', title: schema.title ?? name, obj: schema, isRoot: true },
+  ...Object.keys(defs)
+    .sort()
+    .map((n) => ({ id: defId(n), title: n, obj: defs[n], isRoot: false })),
+];
+const rawUrl = `${BASE}/schemas/${file}`;
+const unknownFields = (obj: Schema) =>
+  obj.additionalProperties === false ? 'Unknown fields are rejected.' : obj.properties ? 'Unknown fields are allowed and kept.' : '';
+---
+
+<div class="json-schema">
+  <p>
+    <strong>Schema ID</strong> {schema.$id && <code>{schema.$id}</code>}<br />
+    <strong>Dialect</strong> <code>{schema.$schema}</code><br />
+    <strong>Raw file</strong> <a href={rawUrl}><code>{file}</code></a>
+  </p>
+  {
+    sections.map(({ id, title, obj, isRoot }) => {
+      const { label, text } = stability(obj.description);
+      const r = rows(obj);
+      return (
+        <section>
+          <h3 id={id}>
+            {isRoot ? 'Top level' : <code>{title}</code>}
+          </h3>
+          {label && <p class="stability">Stability: <strong>{label}</strong></p>}
+          {text && <p set:html={prose(text)} />}
+          {r.length > 0 ? (
+            <table class="schema-table">
+              <thead>
+                <tr>
+                  <th>Field</th>
+                  <th>Type</th>
+                  <th>Description</th>
+                  <th>Constraints</th>
+                </tr>
+              </thead>
+              <tbody>
+                {r.map((row) => (
+                  <tr>
+                    <td>
+                      <code>{row.prop}</code>
+                      {row.required && <span class="req"> required</span>}
+                    </td>
+                    <td set:html={row.type} />
+                    <td>
+                      {row.label && <span class="label">[{row.label}] </span>}
+                      <Fragment set:html={row.text} />
+                    </td>
+                    <td set:html={row.constraints} />
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <p>
+              Type: <Fragment set:html={typeHtml(obj)} />
+            </p>
+          )}
+          {unknownFields(obj) && <p class="unknown">{unknownFields(obj)}</p>}
+        </section>
+      );
+    })
+  }
+</div>
+
+<style>
+  .req {
+    font-size: var(--sl-text-xs);
+    color: var(--sl-color-accent-high);
+    white-space: nowrap;
+  }
+  .label,
+  .stability,
+  .unknown {
+    font-size: var(--sl-text-sm);
+    color: var(--sl-color-gray-3);
+  }
+</style>

@@ -1,0 +1,31 @@
+---
+title: Specification
+description: The versioned public contracts between Oarbank modules and the core, and which document is normative for each.
+type: spec
+sidebar:
+  order: 0
+  label: Overview
+---
+
+Modules talk to Oarbank's core **only** through these versioned contracts. Each page here is normative;
+the JSON Schemas generated from the SDK's models are authoritative for message shapes.
+
+| Contract | What it covers |
+|---|---|
+| [Manifest (schema 1)](/oarbank/spec/manifest) | Everything the core must know before running module code |
+| [Module protocol 1](/oarbank/spec/module-protocol) | Coordinator ↔ module: JSON-RPC 2.0 over stdio |
+| [Runner protocol 1](/oarbank/spec/runner-protocol) | Agent ↔ job runner: CLI, files, exit codes, events |
+| [Service protocol 1](/oarbank/spec/service-protocol) | Agent ↔ node services and probes |
+| [Envelopes](/oarbank/spec/envelopes) | Spec and result documents |
+| [Bundles and lifecycle](/oarbank/spec/bundles) | The `.mfb` file, its digest, install, canary, promote, rollback |
+| [Module sandbox](/oarbank/spec/sandbox) | What a module process may reach, its grants, and each platform's backend |
+| [UI contract 1](/oarbank/spec/ui-contract) | Console pages a module defines as data |
+| [Conformance kit](/oarbank/spec/conformance) | What a module must pass (`oarbank-sdk conform`) |
+
+The rules every contract shares:
+
+- [Public surface](/oarbank/spec/public-surface): exactly what a module may depend on.
+- [Versioning and deprecation](/oarbank/spec/versioning): how the contracts change.
+- [Platforms](/oarbank/spec/platforms): platform tokens, portable paths and per-platform declarations.
+
+Generated reference: [Manifest fields](/oarbank/reference/manifest) and [JSON Schemas](/oarbank/reference/schemas).

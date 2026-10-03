@@ -1,0 +1,178 @@
+---
+title: How Oarbank works
+description: The parts of an Oarbank fleet and how they fit together, from the coordinator, nodes and join codes to modules, campaigns, certification, sandboxing, host protection, signing and coordinator moves.
+type: concept
+sidebar:
+  order: 1
+---
+
+Oarbank is a self-hosted batch orchestrator for the computers you own. It spreads jobs across whichever machines are
+online, protects the work their owners are doing, certifies every node before trusting its results, and gives you a
+console to watch and control the whole fleet. Nodes can run macOS, Linux or Windows, and one fleet can mix all three.
+
+This page explains the ideas. For what each computer needs, see [Requirements](/oarbank/operate/requirements).
+
+## The parts of a fleet
+
+| Part | Runs on | What it does |
+|---|---|---|
+| **Coordinator** | one Mac or Linux machine | Holds all fleet state: nodes, modules, campaigns, jobs, results and the audit log. Plans work, hands it out, checks results and runs each module's coordinator side. |
+| **Console** | the coordinator | The web console. It only displays state; every change you make is sent to the coordinator as an operation and recorded in the audit log. |
+| **`oarbank` CLI** | anywhere | The same operations as the console, from a terminal. |
+| **Agent** | every node | Enrolls the node, installs its release, runs doctors, golden jobs and jobs in the module sandbox, applies host protection, and follows coordinator moves. |
+| **Launcher** | every node | Keeps the agent running under the operating system's service manager and decides which agent version runs, so updates can roll back. |
+| **Modules** | coordinator and nodes | Each module defines one kind of work. The core ships none of its own. |
+
+A **node** is any computer running the agent. The coordinator can be a node too. You, the **owner**, run the fleet
+from the console or the CLI.
+
+## Joining a fleet
+
+Nodes connect to the coordinator; the coordinator never connects to nodes. Each node reaches it on one address and
+port over whatever network you choose: a LAN, Tailscale, ZeroTier or any other VPN.
+
+To add a computer, you make a **join code** on the coordinator (`oarbank join-code`), one per node. The code carries
+the coordinator's addresses, a pin for the coordinator's own certificate authority and a one-time secret. When the
+node's installer uses it:
+
+1. The agent checks the coordinator's signed identity before it sends anything.
+2. It generates its own key, which never leaves the node, and asks the coordinator for a client certificate.
+3. The join code approves the node at once. A node that enrolls without a code waits until you approve it in the
+   console.
+
+From then on, the node and the coordinator talk over mutual TLS. Node certificates last 30 days and are renewed
+automatically. The coordinator stores only certificate fingerprints, so a copy of its database contains no
+credentials, and retiring a node revokes its certificate. Because the pinned certificate authority is what
+authenticates the coordinator, host names are never checked and changing addresses keep working.
+
+## Modules
+
+A **module** is a job type: a parameter sweep, a benchmark, a render, a test matrix. Module authors build modules with
+the [module SDK](/oarbank/build/tutorial), and a module talks to the core only through the versioned contracts in the
+[specification](/oarbank/spec). It has three parts:
+
+- a **manifest** (`oarbank-module.toml`) that declares everything the core needs to know before running any module
+  code: identity, platforms, resources, stages, sandbox grants, goldens and console pages;
+- a **coordinator side** that plans jobs and judges results. It runs on the coordinator as its own sandboxed
+  process, never inside the core. It changes nothing directly: it returns effects, such as "create this campaign" or
+  "enqueue these jobs", which the core checks and applies;
+- a **runner** that each node starts once per job. A runner can be written in any language.
+
+A module ships as a **bundle** (`.mfb`): one immutable file per version, identified by its content digest. Installing
+a bundle enables nothing. You approve what its sandbox may reach, enable it, and can try a new version on a few
+nodes first:
+
+| Step | What happens |
+|---|---|
+| Install | The bundle is verified and stored. |
+| Approve | You approve its sandbox grants for that exact version: network hosts, host tools, the GPU, containers. |
+| Enable | The version becomes part of each platform's release, and nodes install it. |
+| Canary | Only the nodes you name run the new version, and they re-certify on it. |
+| Promote | The canary becomes current everywhere once every canary node is certified on it. |
+| Roll back | Abandons a canary or returns to the previous version. |
+
+The full lifecycle is in [Bundles and the module lifecycle](/oarbank/spec/bundles).
+
+## Campaigns and jobs
+
+A **campaign** is a named group of jobs owned by one module, with a priority, a fair-share weight and a state
+(running, paused or cancelled). What a campaign means, such as a sweep, a search or a benchmark series, is up to the
+module.
+
+Nodes ask for work when they have room. The coordinator grants a node only jobs that fit its free CPU and memory, whose
+module passed its doctor on that node and is certified there, and whose data is already on the node. The agent runs
+each job in its own process container, under the module sandbox, with a fixed environment. The runner writes a
+result, the agent uploads it with any output files, and the module's coordinator side judges it.
+
+When a job fails, the runner says whose fault it was: the job's, the node's, or nobody's (a transient problem). A
+transient failure is retried without counting against anyone; a node fault counts against the node. Every running
+job holds a lease that is renewed while the job makes progress. If a node goes silent, its leases expire and the jobs
+are handed out again.
+
+## Certification: doctors and golden jobs
+
+Oarbank does not trust a node's results until the node has proved it can produce the right ones.
+
+- **Doctor.** On every node, the agent runs each module's doctor in the sandbox. It reports `healthy`, `unhealthy`
+  (it should work here but something is broken) or `undetected` (this node cannot run the module). Only healthy
+  modules are offered work.
+- **Golden jobs.** For each kind of node, the module supplies golden jobs with known answers. The node runs them and
+  the module compares the results. A node is **certified** for a module once it passes.
+
+Certification is per node and per module version. A new module version re-certifies that module on the nodes that
+get it and nothing else; a node also re-certifies after its platform or OS version changes, and periodically. A
+golden mismatch revokes the module on that node and raises an alert. A node whose results disagree with the accepted
+result from other nodes is quarantined.
+
+## Sandboxing on every OS
+
+Every module process is confined, on the coordinator and on every node: the coordinator side, the runner, services,
+probes and the doctor. A module process can read its own bundle and write only its own data and work directories.
+Everything else, including network access, host tools, the GPU and containers, is a grant you approve per module
+version.
+
+| | Sandbox | Job container |
+|---|---|---|
+| macOS | Seatbelt | a process group |
+| Linux | Landlock and seccomp | a cgroup v2 leaf |
+| Windows | an AppContainer per module | a Job Object |
+
+Each node reports which sandbox capabilities it enforces, and work is placed only where every capability it needs is
+enforced. Granted network access normally goes through the agent's local proxy to an allowlist of hosts, and a
+module never runs a container itself: the agent's broker does, with images approved by digest. The contract and each platform's details
+are in [Module sandbox](/oarbank/spec/sandbox).
+
+## Host protection
+
+Nodes are computers people use. Host protection decides, every few seconds, how much fleet work a node may run
+without harming its owner's own work. You set it per node; a module can never declare or loosen it.
+
+On every OS:
+
+- **The memory guard** stops admitting jobs when free memory runs low and, if it keeps falling, evicts fleet jobs
+  one at a time until memory recovers.
+- **Per-node caps** limit what the fleet may use on a node, such as its memory (`oarbank node limits`). They are all
+  off by default.
+- **Only fleet processes are touched.** The agent pauses, slows or stops only processes it started itself. Your own
+  programs are never signalled.
+
+On macOS, the agent also applies the owner's rules: it can hold or yield fleet work while a named app or process is
+busy or while someone is using the computer, and it backs off for heat and battery.
+
+## Signing
+
+Everything the coordinator hands a node to run is signed by you, the owner, and nodes refuse what is not. A stolen
+console login or a compromised coordinator can still queue work, but cannot make nodes run code you did not sign,
+because the keys stay with you, not on the coordinator.
+
+- You make an owner key set: a primary key and a backup you keep offline.
+- Module releases, agent builds, coordinator builds and coordinator moves each carry a statement signed with your
+  key.
+- A node pins your keys the first time its coordinator advertises them. From then on it refuses unsigned work, work
+  signed by another key, and older signed statements replayed to roll it back.
+- Agent builds are also checked against the vendor's signed update metadata before a node installs them.
+
+## Moving the coordinator
+
+The coordinator is not tied to one machine. One operation moves it, with its database, stores, settings, keys and
+audit log, to another machine, including from macOS to Linux or back. Every node follows by itself: nobody logs in
+to the nodes.
+
+A move cannot be used to send the fleet somewhere else:
+
+- **Nodes trust a key, not an address.** They pinned the coordinator's identity key when they enrolled, and a new
+  address arrives only in a signed move statement.
+- **Both coordinators and the owner sign the move.** The current coordinator agrees, the target proves it holds its
+  own key, and in signing mode your owner key authorizes it.
+- **A time lock** gives you time to notice: by default, nodes wait 24 hours before they follow a move.
+- **The fleet's epoch only goes up.** Nodes refuse any coordinator at an older epoch, so a restored or forgotten old
+  machine is harmless.
+
+If the coordinator is lost, an owner-signed rescue move lets the nodes follow a new coordinator without the old
+one's signature.
+
+## Licence
+
+The core (the coordinator, the console, the agent and the launcher) is source-available: it is free for personal and
+noncommercial use, and a commercial licence is available from Codonic. The module SDK, including its specifications,
+schemas and the reference module, is open source under the Apache-2.0 licence.
