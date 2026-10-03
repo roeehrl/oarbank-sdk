@@ -4,7 +4,7 @@
       "additionalProperties": true,
       "properties": {
         "capabilities": {
-          "description": "[stable] Host features the module may rely on, e.g. host.datasets.query, placement.v1, nodes.platform, goldens.by_platform, coordinator.variants.",
+          "description": "[stable] Host features the module may rely on, e.g. host.datasets.query, placement.v1, nodes.platform, goldens.by_platform, coordinator.variants, jobs.stage.",
           "items": {
             "type": "string"
           },

@@ -158,7 +158,7 @@ def test_a_golden_for_a_stage_that_does_not_compare_is_caught(tmp_path):
     d = copy(tmp_path)
     m = (d / "oarbank-module.toml").read_text(encoding="utf-8").replace('core = ">=2.1,<3"', 'core = ">=2.3,<3"')
     m = m.replace('capabilities = ["ui.view.compute",', 'capabilities = ["result.merge", "ui.view.compute",')
-    m = m.replace("[results]", '[[stages]]\nname = "fetch"\ndeterminism = "none"\n\n[results]')
+    m = m.replace("[results]", '[[stages]]\nname = "fetch"\ndeterminism = "none"\n\n[results]').replace('name = "run"\n', 'name = "run"\ndefault = true\n')
     (d / "oarbank-module.toml").write_text(m, encoding="utf-8", newline="\n")
     code = (d / "toy_module.py").read_text(encoding="utf-8").replace('key_inputs={"n": GOLDEN_N}, stages=["run"]', 'key_inputs={"n": GOLDEN_N}, stages=["fetch"]')
     (d / "toy_module.py").write_text(code, encoding="utf-8", newline="\n")

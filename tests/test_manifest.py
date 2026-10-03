@@ -133,8 +133,26 @@ def test_a_module_needs_a_stage_that_compares():
     bad(none_everywhere, "no stage compares", name="toy")
     d = copy.deepcopy(doc("toy"))
     d["results"]["determinism"] = "none"
+    d["stages"][0]["default"] = True
     d["stages"].append({"name": "sum", "determinism": "exact"})
     d["requires"]["core"] = ">=2.3,<3"
     d["coordinator"]["capabilities"].append("result.merge")
     man = m.Manifest.model_validate(d)
     assert man.standalone_stages() == ["run", "sum"] and not man.compares("run") and man.compares("sum")
+
+
+def test_the_default_stage_is_explicit_when_several_stages_are_standalone():
+    def two(d, **run):
+        d["requires"]["core"] = ">=2.3,<3"
+        d["coordinator"]["capabilities"].append("result.merge")
+        d["stages"][0].update(run)
+        d["stages"].append({"name": "sync", "determinism": "none"})
+    bad(lambda d: two(d), "mark the one a job runs when it names no stage", name="toy")
+    bad(lambda d: two(d, default=True) or d["stages"][1].update(default=True), "at most one stage", name="toy")
+    bad(lambda d: d["requires"].update(core=">=2.3,<3") or d["stages"][2].update(default=True), "only a standalone stage")
+    bad(lambda d: d["stages"][0].update(default=True), r"stages\[\]\.default need requires.core >= 2.3")
+    d = copy.deepcopy(doc("toy"))
+    two(d, default=True)
+    man = m.Manifest.model_validate(d)
+    assert man.default_stage() == "run" and man.determinism_of(None) == "exact" and not man.compares("sync")
+    assert m.load(path("render")).default_stage() == "eval"                 # the only standalone stage, unmarked

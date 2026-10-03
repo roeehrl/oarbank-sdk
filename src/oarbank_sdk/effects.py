@@ -26,6 +26,7 @@ from .keys import canonical_json
 
 FILE_WRITE_MAX = 1 << 20
 CAMPAIGN_ID = re.compile(r"^[a-z][a-z0-9_]{3,40}$")
+STAGE = re.compile(r"[a-z][a-z0-9_]{0,63}")
 GROUP_MAX = 64
 ENQUEUE_MAX = 5000
 
@@ -92,20 +93,23 @@ def campaign_create(campaign_id: str, name: str, priority: int = 0, weight: floa
     return effect("campaigns.create", **args)
 
 
-def job(job_key: str, spec: dict, *, group: str | None = None, platforms: list[str] | None = None,
+def job(job_key: str, spec: dict, *, stage: str | None = None, group: str | None = None, platforms: list[str] | None = None,
         target_node: str | None = None, labels: dict | None = None, dataset_id: str | None = None,
         datasets: list[str] | None = None, mounts: dict | None = None, resources: dict | None = None,
         timeout_s: float | None = None, priority: int | None = None, subpriority: int | None = None,
         spec_version: int | None = None, name: str | None = None) -> dict:
-    """One jobs.enqueue item; unset fields are left out (the host's defaults apply). `group` (at most 64 characters)
-    and `platforms` (tokens or OSes) need the placement.v1 host capability."""
+    """One jobs.enqueue item; unset fields are left out (the host's defaults apply). `stage` runs exactly that standalone
+    stage, never the chain (host capability jobs.stage; key it with keys.job_key(..., stage)). `group` (at most 64
+    characters) and `platforms` (tokens or OSes) need the placement.v1 host capability."""
+    if stage is not None and not STAGE.fullmatch(stage):
+        raise ValueError(f"stage {stage!r}: a stage name ([a-z][a-z0-9_]*)")
     if group is not None and not (isinstance(group, str) and 0 < len(group) <= GROUP_MAX):
         raise ValueError(f"group {group!r}: 1-{GROUP_MAX} characters")
     bad = [p for p in platforms or [] if not pf.is_key(p)]
     if bad:
         raise ValueError(f"platforms {bad}: platform tokens or OS names")
     item: dict[str, Any] = {"job_key": job_key, "spec": spec}
-    opt = {"group": group, "platforms": list(platforms) if platforms else None, "target_node": target_node, "labels": labels,
+    opt = {"stage": stage, "group": group, "platforms": list(platforms) if platforms else None, "target_node": target_node, "labels": labels,
            "dataset_id": dataset_id, "datasets": datasets, "mounts": mounts, "resources": resources, "timeout_s": timeout_s,
            "priority": priority, "subpriority": subpriority, "spec_version": spec_version, "name": name}
     item.update({k: v for k, v in opt.items() if v is not None})

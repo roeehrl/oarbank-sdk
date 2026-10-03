@@ -1972,6 +1972,12 @@
           "description": "[stable] Stage whose output this stage consumes (its artifacts become inputs).",
           "title": "After"
         },
+        "default": {
+          "default": false,
+          "description": "[beta] The default stage: what a job runs when it names no stage (the single-stage form). Only a standalone stage sets it; exactly one does when several stages are standalone. Needs requires.core >= 2.3.",
+          "title": "Default",
+          "type": "boolean"
+        },
         "determinism": {
           "anyOf": [
             {

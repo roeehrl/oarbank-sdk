@@ -20,7 +20,7 @@ def test_old_messages_still_validate_and_new_fields_are_optional():
         mp.PlanItem(key_inputs={}, group="x" * 65)
     with pytest.raises(ValidationError):
         mp.PlanItem(key_inputs={}, platforms=["Linux"])
-    assert set(mp.HOST_CAPABILITIES) == {"placement.v1", "nodes.platform", "goldens.by_platform", "coordinator.variants"}
+    assert set(mp.HOST_CAPABILITIES) == {"placement.v1", "nodes.platform", "goldens.by_platform", "coordinator.variants", "jobs.stage"}
 
 
 def test_golden_resolution_per_platform():
@@ -109,3 +109,10 @@ def test_host_platform_capabilities_and_fleet_platforms(tmp_path):
         c.initialize()
         r = c.call("params.check", {"params": {}})["normalized_params"]
         assert r["platform"] == "windows-amd64" and r["placement"] is False
+
+
+def test_a_job_item_names_its_stage():
+    assert fx.job("k", {"n": 1}, stage="sync") == {"job_key": "k", "spec": {"n": 1}, "stage": "sync"}
+    assert "stage" not in fx.job("k", {})
+    with pytest.raises(ValueError, match="a stage name"):
+        fx.job("k", {}, stage="Sync")

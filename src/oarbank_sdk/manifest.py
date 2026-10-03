@@ -452,6 +452,9 @@ class Stage(Contract):
         "[beta] This stage's determinism (absent: results.determinism). `none`: its results depend on when it ran (an "
         "ingestion job pulling a moving feed), so the host never replicates, compares, caches or golden-tests them. Only a "
         "standalone stage sets it (a chain compares as results.determinism). Needs requires.core >= 2.3."))
+    default: bool = Field(False, description=(
+        "[beta] The default stage: what a job runs when it names no stage (the single-stage form). Only a standalone stage "
+        "sets it; exactly one does when several stages are standalone. Needs requires.core >= 2.3."))
     requires: StageRequires = Field(default_factory=StageRequires)
     timeout_s: Annotated[float, Field(gt=0, le=86400)] = Field(1800.0, description="[stable] Hard wall-clock limit per attempt.")
     retry: Retry = Field(default_factory=Retry)
@@ -648,6 +651,7 @@ class Manifest(Contract):
         out = [(k, PLATFORM_KEYS_CORE) for k, on in checks if on]
         sdk13 = [
             ("stages[].determinism", any(s.determinism for s in self.stages)),
+            ("stages[].default", any(s.default for s in self.stages)),
         ]
         return out + [(k, SDK13_KEYS_CORE) for k, on in sdk13 if on]
 
@@ -666,9 +670,11 @@ class Manifest(Contract):
         return [s.name for s in self.stages if s.name not in chain]
 
     def default_stage(self) -> str | None:
-        """The single-stage form: the stage a job runs when it names none (and the pipeline is not split)."""
+        """The single-stage form: the stage a job runs when it names none (and the pipeline is not split): the stage that
+        sets `default`, else the only standalone stage."""
+        marked = [s.name for s in self.stages if s.default]
         alone = self.standalone_stages()
-        return alone[0] if alone else None
+        return marked[0] if marked else (alone[0] if len(alone) == 1 else None)
 
     def determinism_of(self, stage: str | None) -> str:
         """A stage's effective determinism (None: the default stage)."""
@@ -745,6 +751,15 @@ class Manifest(Contract):
         if self.results.value and self.results.value.field not in field_names:
             raise ValueError(f"results.value.field {self.results.value.field!r} is not a declared result field")
         chain = self.chain_stages()
+        marked = [s.name for s in self.stages if s.default]
+        if len(marked) > 1:
+            raise ValueError(f"stages {marked} all set default; at most one stage is the default")
+        if marked and marked[0] in chain:
+            raise ValueError(f"stage {marked[0]!r}: only a standalone stage can be the default (not `after` another nor "
+                             "depended on)")
+        if len(self.standalone_stages()) > 1 and not marked:
+            raise ValueError(f"stages {self.standalone_stages()} are all standalone: mark the one a job runs when it names "
+                             "no stage with default = true")
         for s in self.stages:
             if s.determinism and s.name in chain:
                 raise ValueError(f"stage {s.name!r}: determinism applies to standalone stages; a chain compares as "

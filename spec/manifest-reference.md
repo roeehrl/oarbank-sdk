@@ -95,6 +95,7 @@ Cross-field rules are in [manifest.md](manifest.md).
 | `stages[].name` | str | required | [stable] Stage name; unique within the manifest. |
 | `stages[].after` | str (optional) |  | [stable] Stage whose output this stage consumes (its artifacts become inputs). |
 | `stages[].determinism` | `"exact"` \| `"within_tolerance"` \| `"none"` (optional) |  | [beta] This stage's determinism (absent: results.determinism). `none`: its results depend on when it ran (an ingestion job pulling a moving feed), so the host never replicates, compares, caches or golden-tests them. Only a standalone stage sets it (a chain compares as results.determinism). Needs requires.core >= 2.3. |
+| `stages[].default` | bool | `false` | [beta] The default stage: what a job runs when it names no stage (the single-stage form). Only a standalone stage sets it; exactly one does when several stages are standalone. Needs requires.core >= 2.3. |
 | `stages[].requires` | StageRequires | `"capabilities=[] pools={} needs_pools=[] platforms=[] resources=Resources(cpu=1.0, mem_gb=1.0)"` |  |
 | `stages[].requires.capabilities` | list of str | `[]` | [stable] Node capabilities that must be healthy (from probes/services). |
 | `stages[].requires.pools` | table str → int | `{}` | [stable] Countable pool tokens reserved for the job's lifetime. |

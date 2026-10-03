@@ -64,7 +64,8 @@ HOST_PLACEMENT = "placement.v1"                  # campaigns.create placement, j
 HOST_NODES_PLATFORM = "nodes.platform"           # host.nodes.query rows carry platform/os/arch/os_version; `platforms` filter
 HOST_GOLDENS_BY_PLATFORM = "goldens.by_platform"  # Golden.platforms and expected_by_platform are honoured
 HOST_COORDINATOR_VARIANTS = "coordinator.variants"  # coordinator.variants applied, OARBANK_PLATFORM and host.platform set
-HOST_CAPABILITIES = (HOST_PLACEMENT, HOST_NODES_PLATFORM, HOST_GOLDENS_BY_PLATFORM, HOST_COORDINATOR_VARIANTS)
+HOST_JOBS_STAGE = "jobs.stage"                   # jobs.enqueue items' `stage` is honoured (core 2.3)
+HOST_CAPABILITIES = (HOST_PLACEMENT, HOST_NODES_PLATFORM, HOST_GOLDENS_BY_PLATFORM, HOST_COORDINATOR_VARIANTS, HOST_JOBS_STAGE)
 
 
 class HostInfo(Contract):
@@ -72,7 +73,7 @@ class HostInfo(Contract):
     version: str
     capabilities: list[str] = Field(default_factory=list, description=(
         "[stable] Host features the module may rely on, e.g. host.datasets.query, placement.v1, nodes.platform, "
-        "goldens.by_platform, coordinator.variants."))
+        "goldens.by_platform, coordinator.variants, jobs.stage."))
     platform: str | None = Field(None, description=(
         "[beta] The coordinator host's platform token (also OARBANK_PLATFORM in the module's environment). Verbs keep "
         "job keys platform-independent: never put it in key_inputs."))
