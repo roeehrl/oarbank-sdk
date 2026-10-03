@@ -10,14 +10,15 @@ Suites:
 - **protocol**: the coordinator starts and completes `initialize`; it advertises every capability the
   manifest declares and every required verb; verbs are pure (the same input twice gives the same output);
   `golden.list` works for each node class (by default one per declared platform, with `platform` set), its goldens'
-  per-platform keys are declared platforms, and `spec.build` turns every golden into the stage it names;
+  per-platform keys are declared platforms, every golden's stage compares (never determinism `none`), and `spec.build`
+  turns every golden into the stage it names;
   `integrity.check` and the move verbs (when advertised) are pure, answer valid results and ask only for the
   effects `coordinator.move.effects` declares;
 - **runner**: for the first golden whose datasets are available, the real runner runs the golden's
   SpecEnvelope in a fresh workdir with a clean environment, **under the module sandbox** with the grants its
   manifest declares (spec/sandbox.md), and writes a valid ResultEnvelope, which
   `result.evaluate` accepts and the golden check passes; a second run with another locale gives the same
-  digest (`determinism = "exact"`); a control.json stop request, nudged as the agent nudges, ends a running job
+  digest (the golden's stage has determinism `exact`); a control.json stop request, nudged as the agent nudges, ends a running job
   within `STOP_REACTION_S` (`cancellable`);
   `doctor --json` is a valid DoctorOutput whose `attrs.platform`, when present, is OARBANK_PLATFORM. The runner runs
   with this host's runner variant (exec and env), the stage's variant (timeout, resources) and the golden's expected
@@ -314,6 +315,9 @@ def check_protocol(root: Path, man, fx: dict, r: Report):
                 good = st is not None and (want is not None or len(built) == 1) and (st.get("stage") in (None, *stages))
                 r.add("protocol", f"golden {g['name']}: spec.build pure and gives its stage ({label})", ok and good,
                       "" if good else f"asked {want!r}, got {[s.get('stage') for s in built]}")
+                if not man.compares(want):
+                    r.add("protocol", f"golden {g['name']}: its stage compares ({label})", False,
+                          f"stage {want or man.default_stage()!r} has determinism none: its results are never golden-tested")
                 exps = [gm.expected, *gm.expected_by_platform.values()]
                 if not (all(e.get("digest") for e in exps) or "golden.compare" in adv):
                     r.add("protocol", f"golden {g['name']}: comparable", False, "expected.digest missing and no golden.compare")
@@ -625,7 +629,7 @@ def _check_runner(root: Path, man, fx: dict, runs: list, r: Report, g: "Grants")
             else:
                 ok = bool(v.get("digest")) and v.get("digest") == expected.get("digest")
             r.add("runner", f"{label}: matches the golden", ok)
-            if man.results.determinism == "exact":
+            if man.determinism_of(st.get("stage")) == "exact":
                 res2, err2, _ = _run(root, man, env_doc, fx, locale="en_US.UTF-8")
                 v2 = cli.call("result.evaluate", {"spec": env_doc, "result": res2, "stage": st.get("stage")}) if res2 else {}
                 r.add("runner", f"{label}: deterministic across locales/workdirs", bool(res2) and v2.get("digest") == v.get("digest"),

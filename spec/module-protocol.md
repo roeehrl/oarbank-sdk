@@ -167,7 +167,13 @@ decision thaws the old coordinator and calls `move.cancelled`.
 - **What a job carries.** A `jobs.enqueue` item's `spec` is the module-owned payload. The envelope fields (`datasets`, `mounts`, `resources`, `timeout_s`) belong on the item. If they appear inside `spec`, the host lifts them out. `compat` and `expected` inside `spec` are host-side and never reach the runner.
 - **What the runner receives.** The agent always writes a `SpecEnvelope` ([envelopes.md](envelopes.md)) at grant: `schema = <name>/spec@<spec_version>`, the module's id and version, the job key, the stage, the datasets, mounts and stage inputs, the resources the stage reserves, and the payload.
 - **Stage chains.** A module whose manifest has a stage `B` with `after = "A"` can run a job as the chain A → B. The host creates the A job with key `<key>:A`, feeds A's artifacts to B as `inputs`, and asks `result.merge` for B's canonical result. Its single-stage form is the stage that is neither `after` another nor depended on.
-- **Goldens.** The host builds each golden's spec by calling `spec.build` with a `PlanItem` of the golden's `key_inputs`, `datasets` and `stages`. It runs the stage the golden names; with no stage named, the one stage the spec has. It then accepts the result when `golden.compare` says so, or, for a module without that capability, when the evaluated digest equals `expected.digest`.
+- **Replicas and comparisons.** The host re-runs a sample of finished jobs on another node and compares the digests (else
+  the values to 6 decimals); disagreement opens a dispute settled by a third node, and a node that disagrees with itself
+  is convicted. A job of a stage that does not **compare** (its effective determinism, `stages[].determinism` or else
+  `results.determinism`, is `none`) is exempt: it is never replicated, a late second result is recorded and never
+  compared, it neither takes nor serves a result-cache hit, and no golden runs it. It is otherwise an ordinary job:
+  fenced by generation, run only on nodes certified for the module, with its stage's retry and placement.
+- **Goldens.** The host builds each golden's spec by calling `spec.build` with a `PlanItem` of the golden's `key_inputs`, `datasets` and `stages`. It runs the stage the golden names; with no stage named, the one stage the spec has. It then accepts the result when `golden.compare` says so, or, for a module without that capability, when the evaluated digest equals `expected.digest`. A golden for a stage that does not compare is a module error: nothing is queued.
 
 ### Operations: plan and apply
 

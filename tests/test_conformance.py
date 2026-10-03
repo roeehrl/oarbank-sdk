@@ -138,3 +138,15 @@ def test_a_cancellable_runner_reacts_to_the_nudged_stop(tmp_path):
 def test_a_runner_deaf_to_control_fails_the_stop_check(tmp_path):
     c = _stop_check(conform(_slow_toy(tmp_path, listens=False)))
     assert c.status == "fail", c.detail
+
+
+def test_a_golden_for_a_stage_that_does_not_compare_is_caught(tmp_path):
+    """A stage with determinism none (an ingestion stage) is never golden-tested: its results depend on when it ran."""
+    d = copy(tmp_path)
+    m = (d / "oarbank-module.toml").read_text(encoding="utf-8").replace('core = ">=2.1,<3"', 'core = ">=2.3,<3"')
+    m = m.replace('capabilities = ["ui.view.compute",', 'capabilities = ["result.merge", "ui.view.compute",')
+    m = m.replace("[results]", '[[stages]]\nname = "fetch"\ndeterminism = "none"\n\n[results]')
+    (d / "oarbank-module.toml").write_text(m, encoding="utf-8", newline="\n")
+    code = (d / "toy_module.py").read_text(encoding="utf-8").replace('key_inputs={"n": GOLDEN_N}, stages=["run"]', 'key_inputs={"n": GOLDEN_N}, stages=["fetch"]')
+    (d / "toy_module.py").write_text(code, encoding="utf-8", newline="\n")
+    assert any(n.startswith("golden toy-golden: its stage compares") for n in failed(conform(d, runner=False)))

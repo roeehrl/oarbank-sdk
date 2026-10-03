@@ -108,3 +108,33 @@ def test_argv_is_a_list_never_a_shell_string():
 
 def test_unsupported_manifest_major():
     bad(lambda d: d.update(manifest=2), "manifest")
+
+
+def test_stage_determinism_is_for_standalone_stages_and_needs_core_2_3():
+    def on(name, value="none", core=">=2.3,<3"):
+        def f(d):
+            d["requires"]["core"] = core
+            next(s for s in d["stages"] if s["name"] == name)["determinism"] = value
+        return f
+    bad(on("score"), "determinism applies to standalone stages")          # a chain's tail
+    bad(on("render"), "determinism applies to standalone stages")         # the stage a tail is `after`
+    bad(on("eval", core=">=2.2,<3"), r"stages\[\]\.determinism need requires.core >= 2.3")
+    d = copy.deepcopy(doc())
+    on("eval")(d)
+    man = m.Manifest.model_validate(d)
+    assert (man.determinism_of("eval"), man.determinism_of(None), man.determinism_of("score")) == ("none", "none", "exact")
+    assert not man.compares("eval") and man.compares("render") and man.compares("score")
+    assert man.core_keys_used() == [("stages[].determinism", (2, 3))]
+
+
+def test_a_module_needs_a_stage_that_compares():
+    def none_everywhere(d):
+        d["results"]["determinism"] = "none"
+    bad(none_everywhere, "no stage compares", name="toy")
+    d = copy.deepcopy(doc("toy"))
+    d["results"]["determinism"] = "none"
+    d["stages"].append({"name": "sum", "determinism": "exact"})
+    d["requires"]["core"] = ">=2.3,<3"
+    d["coordinator"]["capabilities"].append("result.merge")
+    man = m.Manifest.model_validate(d)
+    assert man.standalone_stages() == ["run", "sum"] and not man.compares("run") and man.compares("sum")

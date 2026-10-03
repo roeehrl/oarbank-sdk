@@ -94,6 +94,7 @@ Cross-field rules are in [manifest.md](manifest.md).
 | `stages` | list of Stage | required |  |
 | `stages[].name` | str | required | [stable] Stage name; unique within the manifest. |
 | `stages[].after` | str (optional) |  | [stable] Stage whose output this stage consumes (its artifacts become inputs). |
+| `stages[].determinism` | `"exact"` \| `"within_tolerance"` \| `"none"` (optional) |  | [beta] This stage's determinism (absent: results.determinism). `none`: its results depend on when it ran (an ingestion job pulling a moving feed), so the host never replicates, compares, caches or golden-tests them. Only a standalone stage sets it (a chain compares as results.determinism). Needs requires.core >= 2.3. |
 | `stages[].requires` | StageRequires | `"capabilities=[] pools={} needs_pools=[] platforms=[] resources=Resources(cpu=1.0, mem_gb=1.0)"` |  |
 | `stages[].requires.capabilities` | list of str | `[]` | [stable] Node capabilities that must be healthy (from probes/services). |
 | `stages[].requires.pools` | table str → int | `{}` | [stable] Countable pool tokens reserved for the job's lifetime. |
@@ -143,7 +144,7 @@ Cross-field rules are in [manifest.md](manifest.md).
 | `results` | Results | required |  |
 | `results.schema` | str | required | [stable] JSON Schema (bundle path) for the result payload. |
 | `results.schema_version` | int | required |  |
-| `results.determinism` | `"exact"` \| `"within_tolerance"` \| `"none"` | required | [stable] exact: replicas must produce the same digest. |
+| `results.determinism` | `"exact"` \| `"within_tolerance"` \| `"none"` | required | [stable] exact: replicas must produce the same digest; `none`: results are not compared (see stages[].determinism). |
 | `results.determinism_scope` | str | `"global"` | [stable] Open set. `global`: replicas on any platform must agree; `platform`: replicas and tie-breaks compare only within one platform (libm, BLAS and GPU differ across operating systems); `os` and `arch` [beta]: within one OS or one arch (they need requires.core >= 2.2). An unknown scope compares within one platform. |
 | `results.digest` | Digest | required |  |
 | `results.digest.version` | int | required | [stable] Replica/golden comparisons happen only between equal digest versions. |

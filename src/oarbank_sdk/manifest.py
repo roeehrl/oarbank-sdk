@@ -27,9 +27,11 @@ BUNDLE_TOKEN = "{bundle}"
 
 # ---------------------------------------------------------------------------- per-platform declarations
 
-# Any of these needs requires.core >= 2.2: older cores would ignore them silently (lenient readers) and, for example,
-# mix platforms in a unit of work that must stay on one. Core 2.1 already refuses a module whose core range excludes it.
-PLATFORM_KEYS_CORE = (2, 2)
+# A key older cores would ignore silently (lenient readers) needs the core that understands it (spec/versioning.md,
+# "Additive changes within manifest 1"): ignoring it would, for example, mix platforms in a unit of work that must stay
+# on one, or dispute an ingestion stage's honest runs. Cores already refuse a module whose core range excludes them.
+PLATFORM_KEYS_CORE = (2, 2)       # the per-platform and placement keys (SDK 1.1)
+SDK13_KEYS_CORE = (2, 3)          # stage determinism and default, structured tick results, dataset update/delete (SDK 1.3)
 KNOWN_FEATURES = ("placement",)          # requires.features this SDK understands (must-understand)
 ENV_NAME = r"^[A-Z][A-Z0-9_]*$"
 # Variables the agent or the host sets itself (spec/runner-protocol.md, spec/platforms.md "Environment per OS"); a
@@ -440,9 +442,16 @@ class StagePlacement(Contract):
         "unknown value applies as `same-platform`). Combined with [placement].mix, the stricter one wins."))
 
 
+Determinism = Literal["exact", "within_tolerance", "none"]
+
+
 class Stage(Contract):
     name: Name = Field(description="[stable] Stage name; unique within the manifest.")
     after: Name | None = Field(None, description="[stable] Stage whose output this stage consumes (its artifacts become inputs).")
+    determinism: Determinism | None = Field(None, description=(
+        "[beta] This stage's determinism (absent: results.determinism). `none`: its results depend on when it ran (an "
+        "ingestion job pulling a moving feed), so the host never replicates, compares, caches or golden-tests them. Only a "
+        "standalone stage sets it (a chain compares as results.determinism). Needs requires.core >= 2.3."))
     requires: StageRequires = Field(default_factory=StageRequires)
     timeout_s: Annotated[float, Field(gt=0, le=86400)] = Field(1800.0, description="[stable] Hard wall-clock limit per attempt.")
     retry: Retry = Field(default_factory=Retry)
@@ -533,7 +542,8 @@ class Value(Contract):
 class Results(Contract):
     schema_: str = Field(alias="schema", description="[stable] JSON Schema (bundle path) for the result payload.")
     schema_version: Annotated[int, Field(ge=1)]
-    determinism: Literal["exact", "within_tolerance", "none"] = Field(description="[stable] exact: replicas must produce the same digest.")
+    determinism: Determinism = Field(description=(
+        "[stable] exact: replicas must produce the same digest; `none`: results are not compared (see stages[].determinism)."))
     determinism_scope: Annotated[str, Field(pattern=r"^[a-z][a-z0-9_]*$")] = Field("global", description=(
         "[stable] Open set. `global`: replicas on any platform must agree; `platform`: replicas and tie-breaks compare only "
         "within one platform (libm, BLAS and GPU differ across operating systems); `os` and `arch` [beta]: within one OS "
@@ -618,9 +628,9 @@ class Manifest(Contract):
         out += [s.exec for s in self.services] + [p.exec for p in self.probes] + ([self.cli.exec] if self.cli else [])
         return out
 
-    def platform_keys_used(self) -> list[str]:
-        """The per-platform and placement keys this manifest uses (each needs requires.core >= 2.2)."""
-        r, used = self.requires, []
+    def core_keys_used(self) -> list[tuple[str, tuple[int, int]]]:
+        """The keys this manifest uses that older cores would ignore, each with the lowest core that understands it."""
+        r = self.requires
         checks = [
             ("requires.coordinator_platforms", r.coordinator_platforms is not None),
             ("requires.unsupported", bool(r.unsupported.runner or r.unsupported.coordinator)),
@@ -635,7 +645,39 @@ class Manifest(Contract):
             ("bundle.platform_files", bool(self.bundle.platform_files)),
             ("datasets.platform_bound", bool(self.datasets.platform_bound)),
         ]
-        return [k for k, on in checks if on]
+        out = [(k, PLATFORM_KEYS_CORE) for k, on in checks if on]
+        sdk13 = [
+            ("stages[].determinism", any(s.determinism for s in self.stages)),
+        ]
+        return out + [(k, SDK13_KEYS_CORE) for k, on in sdk13 if on]
+
+    # ------------------------------------------------------------------------ stages
+
+    def stage(self, name: str) -> Stage | None:
+        return next((s for s in self.stages if s.name == name), None)
+
+    def chain_stages(self) -> set[str]:
+        """Stages that are part of a chain: `after` another, or the stage another is `after`."""
+        return {s.name for s in self.stages if s.after} | {s.after for s in self.stages if s.after}
+
+    def standalone_stages(self) -> list[str]:
+        """Stages that run a job in one go: neither `after` another nor depended on (declaration order)."""
+        chain = self.chain_stages()
+        return [s.name for s in self.stages if s.name not in chain]
+
+    def default_stage(self) -> str | None:
+        """The single-stage form: the stage a job runs when it names none (and the pipeline is not split)."""
+        alone = self.standalone_stages()
+        return alone[0] if alone else None
+
+    def determinism_of(self, stage: str | None) -> str:
+        """A stage's effective determinism (None: the default stage)."""
+        st = self.stage(stage or self.default_stage() or "")
+        return (st.determinism if st else None) or self.results.determinism
+
+    def compares(self, stage: str | None) -> bool:
+        """Whether the host compares this stage's results (replicas, disputes, the result cache, goldens)."""
+        return self.determinism_of(stage) != "none"
 
     def mix(self) -> str:
         """The placement mix the scheduler applies to the module's units (absent: `any`; unknown: `same-platform`)."""
@@ -702,6 +744,14 @@ class Manifest(Contract):
         field_names = {f.name for f in self.results.fields}
         if self.results.value and self.results.value.field not in field_names:
             raise ValueError(f"results.value.field {self.results.value.field!r} is not a declared result field")
+        chain = self.chain_stages()
+        for s in self.stages:
+            if s.determinism and s.name in chain:
+                raise ValueError(f"stage {s.name!r}: determinism applies to standalone stages; a chain compares as "
+                                 "results.determinism")
+        if not any(self.compares(s.name) for s in self.stages):
+            raise ValueError("no stage compares (every stage's determinism is none): goldens need one, and every module "
+                             "is certified on golden evidence")
         if len(self.stages) > 1 and "result.merge" not in self.coordinator.capabilities:
             raise ValueError("a multi-stage module must implement result.merge (coordinator.capabilities)")
         if self.goldens and self.goldens.compare == "verb" and "golden.compare" not in self.coordinator.capabilities:
@@ -726,10 +776,16 @@ class Manifest(Contract):
             raise ValueError("coordinator.move.effects requires move.preflight, move.postflight or move.cancelled")
         if self.operations and "op.apply" not in self.coordinator.capabilities:
             raise ValueError("[[operations]] require the op.apply capability")
+        low = core_lower_bound(self.requires.core)
+        short = [(k, f) for k, f in self.core_keys_used() if low is None or low < f]
+        if short:
+            floor = ".".join(map(str, max(f for _, f in short)))
+            raise ValueError(f"{', '.join(k for k, _ in short)} need requires.core >= {floor} (older cores ignore them); "
+                             f"core is {self.requires.core!r}")
         return self
 
     def _platform_rules(self, declared: set):
-        """The cross-field rules of the per-platform declarations (spec/manifest.md, rules 9-14)."""
+        """The cross-field rules of the per-platform declarations (spec/manifest.md, rules 9-11 and 13)."""
         r = self.requires
         cplats = r.coordinator_platforms
         for s in self.stages:
@@ -768,12 +824,6 @@ class Manifest(Contract):
                     for a in argv:
                         if a.startswith(BUNDLE_TOKEN + "/") and not self.bundle.receives(a[len(BUNDLE_TOKEN) + 1:], p):
                             raise ValueError(f"{p}: {what} runs {a!r}, which bundle.platform_files does not send to {p}")
-        used = self.platform_keys_used()
-        if used:
-            low = core_lower_bound(r.core)
-            if low is None or low < PLATFORM_KEYS_CORE:
-                floor = ".".join(map(str, PLATFORM_KEYS_CORE))
-                raise ValueError(f"{', '.join(used)} need requires.core >= {floor} (older cores ignore them); core is {r.core!r}")
 
 
 # ---------------------------------------------------------------------------- loading + strict check

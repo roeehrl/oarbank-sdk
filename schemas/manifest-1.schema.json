@@ -1430,7 +1430,7 @@
       "additionalProperties": true,
       "properties": {
         "determinism": {
-          "description": "[stable] exact: replicas must produce the same digest.",
+          "description": "[stable] exact: replicas must produce the same digest; `none`: results are not compared (see stages[].determinism).",
           "enum": [
             "exact",
             "within_tolerance",
@@ -1971,6 +1971,24 @@
           "default": null,
           "description": "[stable] Stage whose output this stage consumes (its artifacts become inputs).",
           "title": "After"
+        },
+        "determinism": {
+          "anyOf": [
+            {
+              "enum": [
+                "exact",
+                "within_tolerance",
+                "none"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "[beta] This stage's determinism (absent: results.determinism). `none`: its results depend on when it ran (an ingestion job pulling a moving feed), so the host never replicates, compares, caches or golden-tests them. Only a standalone stage sets it (a chain compares as results.determinism). Needs requires.core >= 2.3.",
+          "title": "Determinism"
         },
         "name": {
           "description": "[stable] Stage name; unique within the manifest.",

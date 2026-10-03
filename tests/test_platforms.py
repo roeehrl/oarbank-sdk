@@ -253,7 +253,7 @@ def test_old_modules_need_nothing_new():
     """Absent keys keep today's behaviour: any coordinator platform, mix `any`, no env, no file subsets."""
     m = mf.load(TOY / "oarbank-module.toml")
     assert m.requires.coordinator_platforms is None and m.placement is None and m.mix() == "any"
-    assert m.platform_keys_used() == [] and mf.lint(m) == []
+    assert m.core_keys_used() == [] and mf.lint(m) == []
     assert m.coordinator.for_platform("windows-amd64") is m.coordinator
     assert m.bundle.receives("toy_runner.py", "windows-arm64")
     assert pf.feasible(m) == ["*"]
