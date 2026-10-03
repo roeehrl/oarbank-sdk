@@ -1,5 +1,10 @@
+import os
 import shutil
+import subprocess
+import sys
 from pathlib import Path
+
+import pytest
 
 from oarbank_sdk.conformance import conform
 
@@ -163,3 +168,18 @@ def test_a_golden_for_a_stage_that_does_not_compare_is_caught(tmp_path):
     code = (d / "toy_module.py").read_text(encoding="utf-8").replace('key_inputs={"n": GOLDEN_N}, stages=["run"]', 'key_inputs={"n": GOLDEN_N}, stages=["fetch"]')
     (d / "toy_module.py").write_text(code, encoding="utf-8", newline="\n")
     assert any(n.startswith("golden toy-golden: its stage compares") for n in failed(conform(d, runner=False)))
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX process groups")
+def test_killing_a_runner_group_that_already_exited_is_not_an_error():
+    """The leader exited but is not reaped yet (macOS answers EPERM for such a group), then reaped (ESRCH)."""
+    from oarbank_sdk.conformance import _kill_tree
+    p = subprocess.Popen([sys.executable, "-c", "pass"], start_new_session=True)
+    import time
+    t = time.monotonic()
+    while not subprocess.run(["ps", "-o", "stat=", "-p", str(p.pid)], capture_output=True, text=True).stdout.startswith("Z"):
+        assert time.monotonic() - t < 30, "the child never exited"
+        time.sleep(0.01)                                          # until it is a zombie: exited, not reaped
+    _kill_tree(p)
+    p.wait()
+    _kill_tree(p)

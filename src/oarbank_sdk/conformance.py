@@ -520,22 +520,22 @@ def _run(root: Path, man, env_doc: dict, fx: dict, locale: str = "C", stop: bool
         text, params = S.render(g.policy(man, root, ws, data))
         argv = S.launch_argv(S.write_profile(text, data.parent / f"{data.name}.sb"), params, argv)
     seen = len(g.proxy.refused) if g.proxy else 0
-    out = {}
+    out, exited = {}, threading.Event()
     try:
         p = _spawn(nudge.argv(argv), ws, env, nudge.popen_kwargs())
-        reader = threading.Thread(target=lambda: out.update(err=p.communicate()[1]), daemon=True)
-        reader.start()                                   # drains the pipes while the kit watches the workdir
+
+        def reap():                                      # the one owner of the wait: drains the pipes, records the exit
+            out["err"] = p.communicate()[1]
+            exited.set()
+        reader = threading.Thread(target=reap, daemon=True)
+        reader.start()
         limit = float(env_doc.get("timeout_s") or 1800)
         o = Outcome("timeout", None, None, "", ws)
         if stop:
-            _stop(p, ws, nudge, run.stop_grace_s, limit, o)
-        else:
-            try:
-                p.wait(limit)
-            except subprocess.TimeoutExpired:
-                _kill_tree(p)
-                p.wait()
-                o.stop = "timeout"
+            _stop(p, ws, nudge, exited, run.stop_grace_s, limit, o)
+        elif not exited.wait(limit):
+            _kill_tree(p)
+            o.stop = "timeout"
         reader.join()
     finally:
         nudge.close()
@@ -554,32 +554,32 @@ def _acknowledged(ws: Path) -> bool:
     return (f is not None and f.get("fault") == "transient") or (ws / "result.json").exists()
 
 
-def _stop(p, ws: Path, nudge: "_Nudge", grace: float, limit: float, o: Outcome):
+def _stop(p, ws: Path, nudge: "_Nudge", exited: threading.Event, grace: float, limit: float, o: Outcome):
     """The agent's stop, timed on the runner's acknowledgement rather than on the OS tearing the process down: wait for
     the runner's first `phase` write (its sign that work is underway, so start-up is never timed), send the stop, then
-    watch for the acknowledgement and the exit until stop_grace_s has passed (the agent kills the container then)."""
+    watch for the acknowledgement and the exit until stop_grace_s has passed (the agent kills the container then).
+    `exited` is set by the thread that owns the process's wait; nothing here polls the process itself."""
     t0 = time.monotonic()
-    while p.poll() is None and not (ws / "phase").exists() and time.monotonic() - t0 < limit:
-        time.sleep(0.005)
+    while not exited.is_set() and not (ws / "phase").exists() and time.monotonic() - t0 < limit:
+        exited.wait(0.005)
     if not (ws / "phase").exists():
         o.stop = "no_phase"
-    elif p.poll() is not None or _acknowledged(ws):
+    elif exited.is_set() or _acknowledged(ws):
         o.stop = "finished_first"
     else:
         t = _request_stop(p, ws, nudge)                  # control.json stop and the nudge, nothing else
-        while p.poll() is None and time.monotonic() - t < grace:
+        while not exited.is_set() and time.monotonic() - t < grace:
             if o.ack_s is None and _acknowledged(ws):
                 o.ack_s = time.monotonic() - t
-            time.sleep(0.005)
-        if p.poll() is None:
+            exited.wait(0.005)
+        if not exited.is_set():
             o.stop = "ignored"
         else:
             o.stop, o.exit_s = "stopped", time.monotonic() - t
             if o.ack_s is None and _acknowledged(ws):
                 o.ack_s = o.exit_s                       # written just before it exited, between two looks
-    if p.poll() is None:
+    if not exited.is_set():
         _kill_tree(p)
-        p.wait()
 
 
 def job_env(man, ws: Path, data: Path, locale: str = "C.UTF-8") -> dict:
@@ -621,13 +621,26 @@ def _request_stop(p, ws: Path, nudge: _Nudge) -> float:
 
 
 def _kill_tree(p):
-    if os.name == "posix":
-        try:
-            os.killpg(p.pid, signal.SIGKILL)
-        except ProcessLookupError:
-            pass
-    else:
-        p.kill()
+    """Kill the runner's process group (its container here). A group whose processes all exited meanwhile is fine:
+    POSIX says ESRCH, macOS EPERM while the leader is an unreaped zombie, so EPERM passes only when no live member is
+    left."""
+    if os.name != "posix":
+        p.kill()                                         # Popen.kill tolerates a process that already exited
+        return
+    try:
+        os.killpg(p.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+    except PermissionError:
+        if _live_members(p.pid):
+            raise
+
+
+def _live_members(pgid: int) -> list[int]:
+    """The processes of a group that have not exited (zombies excluded)."""
+    ps = subprocess.run(["ps", "-A", "-o", "pid=,pgid=,stat="], capture_output=True, text=True, check=True).stdout
+    return [int(f[0]) for f in (line.split() for line in ps.splitlines())
+            if len(f) == 3 and int(f[1]) == pgid and not f[2].startswith("Z")]
 
 
 def _egress(r: Report, label: str, o: Outcome):
