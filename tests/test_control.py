@@ -230,3 +230,32 @@ def test_a_runner_process_reacts_to_the_agents_nudges(tmp_path):
     finally:
         p.kill()
         n.close()
+
+
+@POSIX
+def test_a_nudge_during_teardown_never_kills_a_finished_runner(tmp_path):
+    """Interpreter teardown resets a Python signal handler to the default disposition; Control puts SIGUSR1 back to
+    ignored at exit (as the agent starts a runner), so a nudge that arrives while a finished runner exits is harmless."""
+    (tmp_path / "control.json").write_text('{"seq": 0}', encoding="utf-8")
+    code = ("import atexit, os, signal, sys\n"
+            "def last():\n"
+            "    assert signal.getsignal(signal.SIGUSR1) == signal.SIG_IGN\n"
+            "    os.kill(os.getpid(), signal.SIGUSR1)\n"
+            "    print('survived', flush=True)\n"
+            "atexit.register(last)\n"                  # registered first, so it runs after Control's own exit hook
+            "from oarbank_sdk.control import Control\n"
+            f"Control({str(tmp_path)!r})\n")
+    p = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, timeout=60)
+    assert p.returncode == 0 and "survived" in p.stdout, p.stderr
+
+
+@pytest.mark.parametrize("reason", [None, "toy/halted"])
+def test_phase_and_acknowledge_stop_write_what_the_agent_reads(tmp_path, monkeypatch, reason):
+    monkeypatch.setenv("OARBANK_MODULE", "toy")
+    (tmp_path / "control.json").write_text('{"seq": 0}', encoding="utf-8")
+    ctl = Control(tmp_path)
+    ctl.phase("summing")
+    assert (tmp_path / "phase").read_text(encoding="utf-8") == "summing\n"
+    assert ctl.acknowledge_stop(reason) == 75
+    f = rp.Failure.model_validate_json((tmp_path / "failure.json").read_text(encoding="utf-8"))
+    assert (f.reason, f.fault) == (reason or "toy/stopped", "transient")

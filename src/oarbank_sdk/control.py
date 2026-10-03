@@ -71,6 +71,7 @@ if os.name == "nt":
                 raise RuntimeError(f"paused, and nothing can resume the job: {ENV_CONTROL_EVENT} is not set")
             _winapi.WaitForSingleObject(self._event, _winapi.INFINITE)
 else:
+    import atexit
     import select
     import signal
 
@@ -103,6 +104,9 @@ else:
                                        "agent's nudges reach (spec/runner-protocol.md, Control)") from None
                 if prev != -1:                   # someone else's: theirs stays, the handler alone writes the pipe
                     signal.set_wakeup_fd(prev)
+                # at exit, back to ignoring nudges, as the agent started the runner: interpreter teardown would otherwise
+                # reset the handler to the default, and a nudge arriving then would kill a runner that already finished
+                atexit.register(signal.signal, signal.SIGUSR1, signal.SIG_IGN)
                 _pipe = (r, w)
             self._r = _pipe[0]
 
