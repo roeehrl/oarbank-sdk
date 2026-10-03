@@ -513,7 +513,9 @@ VERBS: dict[str, tuple[type, type, bool, str | None]] = {
 # ---------------------------------------------------------------------------- host callbacks (module -> host)
 
 class DatasetsQueryParams(Contract):
-    kind: str | None = Field(None, description="[stable] Dataset kind (optional with `ids`).")
+    kind: str | None = Field(None, description=(
+        "[stable] The short dataset kind, as in [datasets].kinds (optional with `ids`): the module's own datasets of that "
+        "kind and the operator's unowned ones."))
     ids: list[str] = Field(default_factory=list, description="[beta] Exact dataset ids (at most 5000); `kind` and `limit` then do not apply.")
     attrs: dict[str, Any] = Field(default_factory=dict)
     limit: int = Field(100, ge=1, le=5000)

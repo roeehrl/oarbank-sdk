@@ -445,7 +445,7 @@
           "type": "array"
         },
         "kinds": {
-          "description": "[stable] Dataset kinds this module registers; stored namespaced as '<module-short>/<kind>'.",
+          "description": "[stable] Dataset kinds this module registers (datasets.create refuses others). Kinds are short names scoped by the dataset's owning module, so two modules' kinds never collide; host.datasets.query takes the same short kind.",
           "items": {
             "maxLength": 64,
             "pattern": "^[a-z][a-z0-9_]*$",

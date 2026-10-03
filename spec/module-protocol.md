@@ -71,7 +71,7 @@ A module can make requests back to the host while it is handling a verb, if the 
 
 | Method | Permission | Returns |
 |---|---|---|
-| `host.datasets.query {kind?, ids?, attrs, limit}` | `datasets:read` | Datasets matching the query (by kind and equality on attributes, or by id), each `{id, kind, attrs}`. |
+| `host.datasets.query {kind?, ids?, attrs, limit}` | `datasets:read` | Datasets matching the query (by kind and equality on attributes, or by id), each `{id, kind, attrs}`: the module's own datasets and the operator's unowned ones. `kind` is the short kind, as in `[datasets].kinds` and `datasets.create`: a dataset's owning module scopes its kind, so kinds are never namespaced. `attrs` are the dataset's `meta`. |
 | `host.blobs.stat {digest}` | `blobs:stat` | Whether the coordinator holds a blob, and its size. |
 | `host.settings.get {key}` | `settings:read:self` | A value from this module's own settings. |
 | `host.store.get {collection, key}` | `store:read:self` | One document from this module's store, or null. |
@@ -94,7 +94,9 @@ A module can make requests back to the host while it is handling a verb, if the 
 | `jobs.enqueue` | `campaign_id`, `jobs[]` of `{job_key, spec, stage, spec_version (default 1), labels (your grouping: shown in views and returned by `host.jobs.query`; part of the no-op check), dataset_id, datasets, mounts, resources (what the job reserves; default: the stage's manifest resources; it must fit a node), timeout_s, priority, subpriority, target_node, name, group, platforms}` (at most 5000; [beta] `stage`: run exactly this standalone stage, never the chain (host capability `jobs.stage`; 422 `bad_stage` for an unknown or chain stage); [beta] `group`: at most 64 characters, the unit of a `group` placement; `platforms`: tokens or OSes the job may run on, at least one of which its stage runs on) | Adds jobs. Without `stage`, a job runs the default stage, or the chain head → tail when the module's pipeline is split. With `stage`, it reserves that stage's resources and runs only where that stage may run. `spec` is the stage payload; see "Jobs on the wire" below. The same `(job_key, labels)` twice in a campaign is a no-op. An untargeted job whose key already has a canonical result of this module is done at once (result cache). A `done` campaign runs again. |
 | `jobs.cancel` | `job_ids[]` | Cancels the module's open jobs. |
 | `store.write` / `store.delete` | `collection`, `key`, `doc` (an object, at most 256 KiB) | Upserts or removes a module document. |
-| `datasets.create` | `dataset_id`, `kind`, `meta`, `files[]` of `{path, digest, size}`, [beta] `platform` (a token; required for kinds in `[datasets].platform_bound`) | Registers a dataset whose blobs the coordinator already holds. A dataset with a `platform` is used only by jobs on that platform. |
+| `datasets.create` | `dataset_id`, `kind` (a short kind from `[datasets].kinds`; 422 `undeclared_kind` otherwise), `meta`, `files[]` of `{path, digest, size}`, [beta] `platform` (a token; required for kinds in `[datasets].platform_bound`) | Registers a dataset whose blobs the coordinator already holds. A dataset with a `platform` is used only by jobs on that platform. An id that already exists: with the same kind, meta, files and platform, the effect is skipped (a repeat is harmless); with anything else it is an error (409 `dataset_exists`) and the whole operation fails; another owner's id is 409 `dataset_owned`. |
+| `datasets.update` | `dataset_id`, `meta` | Merges `meta` into one of the module's datasets key by key at the top level; a key set to `null` is removed. `kind`, `files` and `platform` never change (422 `dataset_immutable`): nodes stage a dataset's files by id, so new files need a new id. Another owner's dataset is 403 `not_owner`, an unknown id 404 `unknown_dataset`. Core 2.3. |
+| `datasets.delete` | `dataset_id` | Removes one of the module's datasets; an unknown id is a no-op. Refused while a pending or leased job names it (409 `dataset_in_use`) and for the host's artifact datasets (`art:…`, 422 `host_dataset`). Blobs stay. Another owner's dataset is 403 `not_owner`. Core 2.3. |
 | `files.write` | `path`, `content_b64` (at most 1 MiB decoded) | Stores a small file in the module's files. |
 | `files.put` | `path`, `digest` | Names a blob the coordinator already holds (a job artifact, a dataset file) as one of the module's files. |
 | `files.delete` | `path`, or `prefix` | Removes files (the blobs stay; other rows may name them). |
@@ -103,7 +105,8 @@ A module can make requests back to the host while it is handling a verb, if the 
 `oarbank_sdk.effects` builds them: `fx.campaign_create(cid, name, priority=0, weight=1, labels=None, placement=None)`,
 `fx.placement(mix, unit=None, pin=None, bind=None)`, `fx.jobs_enqueue(cid, jobs)` with
 `fx.job(job_key, spec, *, stage=None, group=None, platforms=None, target_node=None, ...)` items, and
-`fx.datasets_create(dataset_id, kind, files, meta=None, platform=None)`. Unset fields are left out.
+`fx.datasets_create(dataset_id, kind, files, meta=None, platform=None)`, `fx.datasets_update(dataset_id, meta)` and
+`fx.datasets_delete(dataset_id)`. Unset fields are left out.
 
 ## Host capabilities
 

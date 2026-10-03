@@ -127,3 +127,11 @@ def test_campaign_jobs_carry_structured_results_and_modules_advertise_features()
     assert Module("dev.x.y", "1.0.0", features=(mp.CAP_TICK_RESULTS,)).capabilities == ["campaign.tick.results"]
     with pytest.raises(ValueError, match="not module protocol features"):
         Module("dev.x.y", "1.0.0", features=("campaign.tick.everything",))
+
+
+def test_dataset_update_and_delete_builders():
+    assert fx.datasets_update("ds:1", {"summary": "x", "old": None}).model_dump() == {
+        "kind": "datasets.update", "args": {"dataset_id": "ds:1", "meta": {"summary": "x", "old": None}}}
+    assert fx.datasets_delete("ds:1").args == {"dataset_id": "ds:1"}
+    with pytest.raises(ValueError):
+        fx.datasets_update("ds:1", {})

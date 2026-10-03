@@ -125,14 +125,29 @@ def jobs_enqueue(campaign_id: str, jobs: list[dict]) -> mp.Effect:
 
 def datasets_create(dataset_id: str, kind: str, files: list[dict], meta: dict | None = None,
                     platform: str | None = None) -> mp.Effect:
-    """Registers a dataset whose blobs the coordinator holds. `platform` (a token) binds it to one platform; kinds in
-    [datasets].platform_bound must give it (host capability placement.v1)."""
+    """Registers a dataset whose blobs the coordinator holds. `kind` is a short kind from [datasets].kinds. Creating an id
+    that exists with the same kind, meta, files and platform is a no-op; anything else fails the whole operation (409
+    dataset_exists). `platform` (a token) binds it to one platform; kinds in [datasets].platform_bound must give it (host
+    capability placement.v1)."""
     if platform is not None and not portable.is_platform_token(platform):
         raise ValueError(f"dataset platform {platform!r}: a platform token")
     args: dict[str, Any] = {"dataset_id": dataset_id, "kind": kind, "meta": meta or {}, "files": files}
     if platform is not None:
         args["platform"] = platform
     return mp.Effect(kind="datasets.create", args=args)            # `kind` is also an argument name here
+
+
+def datasets_update(dataset_id: str, meta: dict) -> mp.Effect:
+    """Changes one of the module's datasets' meta (the attrs host.datasets.query returns): merged key by key at the top
+    level, a key set to None removed. Kind, files and platform never change; new files need a new dataset id."""
+    if not isinstance(meta, dict) or not meta:
+        raise ValueError("datasets_update needs a non-empty meta dict")
+    return effect("datasets.update", dataset_id=dataset_id, meta=meta)
+
+
+def datasets_delete(dataset_id: str) -> mp.Effect:
+    """Removes one of the module's datasets (a no-op if it does not exist); refused while an open job names it."""
+    return effect("datasets.delete", dataset_id=dataset_id)
 
 
 def check(name: str, ok: bool, detail: str = "", severity: str = "error") -> mp.CheckItem:

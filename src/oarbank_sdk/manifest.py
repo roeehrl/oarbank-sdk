@@ -569,7 +569,9 @@ class DatasetAttr(Contract):
 
 
 class Datasets(Contract):
-    kinds: list[Name] = Field(default_factory=list, description="[stable] Dataset kinds this module registers; stored namespaced as '<module-short>/<kind>'.")
+    kinds: list[Name] = Field(default_factory=list, description=(
+        "[stable] Dataset kinds this module registers (datasets.create refuses others). Kinds are short names scoped by the "
+        "dataset's owning module, so two modules' kinds never collide; host.datasets.query takes the same short kind."))
     attrs: list[DatasetAttr] = Field(default_factory=list)
     platform_bound: list[Name] = Field(default_factory=list, description=(
         "[beta] Kinds whose datasets only make sense on one platform (an index built by a native tool): datasets.create "
@@ -658,6 +660,8 @@ class Manifest(Contract):
             ("stages[].determinism", any(s.determinism for s in self.stages)),
             ("stages[].default", any(s.default for s in self.stages)),
             ("coordinator.capabilities campaign.tick.results", TICK_RESULTS in self.coordinator.capabilities),
+            ("the datasets.update and datasets.delete effects", bool({"datasets.update", "datasets.delete"} & set(
+                self.coordinator.campaign_effects + self.coordinator.move.effects + [k for o in self.operations for k in o.effects]))),
         ]
         return out + [(k, SDK13_KEYS_CORE) for k, on in sdk13 if on]
 

@@ -169,3 +169,22 @@ def test_tick_results_need_the_tick_and_core_2_3():
     d = copy.deepcopy(doc())
     caps("campaign.tick", "campaign.tick.results")(d)
     assert m.Manifest.model_validate(d).core_keys_used() == [("coordinator.capabilities campaign.tick.results", (2, 3))]
+
+
+@pytest.mark.parametrize("where", ["campaign_effects", "move", "operation"])
+def test_dataset_update_and_delete_effects_need_core_2_3(where):
+    def declare(core):
+        def f(d):
+            d["requires"]["core"] = core
+            if where == "campaign_effects":
+                d["coordinator"]["capabilities"].append("campaign.tick")
+                d["coordinator"]["campaign_effects"] = ["datasets.update"]
+            elif where == "move":
+                d["coordinator"]["move"]["effects"].append("datasets.delete")
+            else:
+                d["operations"][0]["effects"].append("datasets.update")
+        return f
+    bad(declare(">=2.2"), "datasets.update and datasets.delete effects need requires.core >= 2.3", name="toy")
+    d = copy.deepcopy(doc("toy"))
+    declare(">=2.3")(d)
+    m.Manifest.model_validate(d)

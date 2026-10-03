@@ -164,7 +164,7 @@ Cross-field rules are in [manifest.md](manifest.md).
 | `results.fields[].ui.format` | str (optional) |  | [stable] Restricted format spec: .Nf, .Ne, .N%, d, ,d or s. |
 | `results.fields[].ui.unit` | str (optional) |  |  |
 | `datasets` | Datasets | `"kinds=[] attrs=[] platform_bound=[]"` |  |
-| `datasets.kinds` | list of str | `[]` | [stable] Dataset kinds this module registers; stored namespaced as '<module-short>/<kind>'. |
+| `datasets.kinds` | list of str | `[]` | [stable] Dataset kinds this module registers (datasets.create refuses others). Kinds are short names scoped by the dataset's owning module, so two modules' kinds never collide; host.datasets.query takes the same short kind. |
 | `datasets.attrs` | list of DatasetAttr | `[]` |  |
 | `datasets.attrs[].name` | str | required |  |
 | `datasets.attrs[].type` | `"number"` \| `"integer"` \| `"string"` \| `"boolean"` | required |  |

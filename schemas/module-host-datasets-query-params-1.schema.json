@@ -26,7 +26,7 @@
         }
       ],
       "default": null,
-      "description": "[stable] Dataset kind (optional with `ids`).",
+      "description": "[stable] The short dataset kind, as in [datasets].kinds (optional with `ids`): the module's own datasets of that kind and the operator's unowned ones.",
       "title": "Kind"
     },
     "limit": {

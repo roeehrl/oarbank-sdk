@@ -69,7 +69,7 @@ array, never a shell string.
 | `[settings]` | The JSON Schema for the module's settings. The core stores settings but never interprets them. |
 | `[placement]` | Which unit of work stays on one platform class (`mix`, `unit`), how it binds (`bind`) and what happens when its class has no eligible node (`rebind`, `stranded_after_s`). |
 | `[results]` | The payload schema and its version, `determinism` and its `determinism_scope`, the digest (`version`, `over`), the objective `value`, the inline size limit, and declared `fields` (typed; `indexed` promotes a field to a sortable column; `ui` sets column, format and unit). |
-| `[datasets]` | The dataset `kinds` the module registers (namespaced by the core), their typed `attrs`, and the `platform_bound` kinds. |
+| `[datasets]` | The dataset `kinds` the module registers (short names, scoped by the owning module), their typed `attrs`, and the `platform_bound` kinds. |
 | `[bundle]` | `executables` globs (mode 755) and `platform_files` (glob → the platforms or OSes whose nodes receive the files). |
 | `[goldens]` | The fixtures glob and the comparison mode (`digest`, or `verb` to call `golden.compare`). |
 | `[ui]` | Declarative contributions only: a `digest_line` template, `study_columns`, `icon`. |
@@ -92,7 +92,7 @@ The models enforce these, beyond the per-field types:
 11. `env` names (runner, coordinator, their variants) match `^[A-Z][A-Z0-9_]*$` and are never reserved: `OARBANK_*`, `PATH`, `HOME`, `USERPROFILE`, `SYSTEMROOT`, `TEMP`, `TMP`, `TMPDIR`, `LOCALAPPDATA`, `APPDATA` and the other variables the host sets ([platforms.md](platforms.md#per-platform-declarations)). Stage variant resources keep the stage's bounds.
 12. A key older cores would ignore needs a `requires.core` range whose lower bound is at least the core that understands it ([versioning.md](versioning.md#additive-changes-within-manifest-1)):
     - **2.2:** the per-platform and placement keys (`requires.coordinator_platforms`, `requires.unsupported`, `requires.features`, `coordinator.env`, `coordinator.variants`, `runner.env` and runner variant `env`, `stages[].variants`, `stages[].placement`, `[placement]`, a `determinism_scope` other than `global` or `platform`, `bundle.platform_files`, `datasets.platform_bound`);
-    - **2.3:** `stages[].determinism`, `stages[].default`, the coordinator capability `campaign.tick.results`.
+    - **2.3:** `stages[].determinism`, `stages[].default`, the coordinator capability `campaign.tick.results`, and the effects `datasets.update` and `datasets.delete` in any effects list (`coordinator.campaign_effects`, `operations[].effects`, `coordinator.move.effects`).
 
     Every entry of `requires.features` is one this SDK knows.
 13. Every bundle path a node exec names (argv[0], or the script a `python` exec runs) reaches each platform that runs it under `bundle.platform_files`. `datasets.platform_bound` kinds are declared kinds.
