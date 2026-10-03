@@ -1,5 +1,5 @@
 (version 1)
-;; oarbank module sandbox, profile 2 (coordinator)
+;; oarbank module sandbox, profile 3 (coordinator)
 (deny default (with message (param "MODULE_ID")))
 
 ;; process
@@ -43,9 +43,9 @@
 (allow file-read-metadata (path-ancestors (param "RW_0")))
 (allow file-read* file-write* (subpath (param "RW_1")))
 (allow file-read-metadata (path-ancestors (param "RW_1")))
-(allow file-read-metadata (literal (param "LINK_0")))
-(allow file-read-metadata (literal (param "LINK_1")))
-(allow file-read-metadata (literal (param "LINK_2")))
+(allow file-read-metadata (literal (param "LINK_0")) (path-ancestors (param "LINK_0")))
+(allow file-read-metadata (literal (param "LINK_1")) (path-ancestors (param "LINK_1")))
+(allow file-read-metadata (literal (param "LINK_2")) (path-ancestors (param "LINK_2")))
 
 ;; hardening (last match wins: keep after every allow above)
 (deny mach-lookup (xpc-service-name-prefix ""))

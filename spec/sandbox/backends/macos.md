@@ -15,6 +15,7 @@ and normative for agent implementers.
 | Contract element | Seatbelt |
 |---|---|
 | read and execute the bundle, runtime and tools | `file-read* file-map-executable process-exec (subpath RO_i)`, plus metadata on the path ancestors |
+| symlinks on the way to a granted path or argv[0] (Homebrew's `bin/python3` and `opt/python@3.x`) | `file-read-metadata` (lstat, readlink) on each link `LINK_i` and its path ancestors, so `realpath` can walk the chain; never a read of the link's directory |
 | work, data and temporary directories | `file-read* file-write* (subpath RW_i)`; with `exec_writable`, also `file-map-executable process-exec` |
 | base system | `/System`, `/usr/lib`, `/usr/share`, `/bin`, `/usr/bin`, `/usr/libexec`, `/Library/Apple` (Rosetta), timezone, `/etc/hosts`, `/etc/resolv.conf`, `/etc/ssl`, `/dev/{null,zero,random,urandom,fd,dtracehelper}` |
 | no local IPC except the broker | no `network*` rule for unix sockets except `(remote unix-socket (path-literal BROKER_SOCKET))`; `(deny mach-lookup (xpc-service-name-prefix ""))` |

@@ -7,7 +7,8 @@ grants: declared in the manifest's `[sandbox]` section and approved by an operat
 
 `Policy` is the backend-neutral description of one process's grants. The macOS backend below renders it as a Seatbelt
 profile (spec/sandbox/backends/macos.md; golden shapes in spec/sandbox/golden/). Every path enters the profile as a parameter
-(`sandbox_init_with_parameters`), never as text, after `realpath`: the kernel matches resolved paths.
+(`sandbox_init_with_parameters`), never as text, after `realpath`: the kernel matches resolved paths. Each symlink met
+on the way gets metadata (lstat, readlink) on itself and the directories above it, which `realpath` walks.
 
     text, params = render(Policy(module="dev.example.toy", ro=[bundle, interpreter_home], rw=[data, work]))
     argv = launch_argv(profile_path, params, ["/abs/python", "-I", "runner.py", ...])
@@ -18,7 +19,7 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
-PROFILE_VERSION = 2
+PROFILE_VERSION = 3
 BACKEND = "seatbelt"
 LAUNCHER = Path(__file__).with_name("_sandbox_launch.py")
 
@@ -61,7 +62,7 @@ _RO = """(allow file-read* file-map-executable process-exec (subpath (param "RO_
 _RW = """(allow file-read* file-write* (subpath (param "RW_{i}")))
 (allow file-read-metadata (path-ancestors (param "RW_{i}")))
 """
-_LINK = """(allow file-read-metadata (literal (param "LINK_{i}")))
+_LINK = """(allow file-read-metadata (literal (param "LINK_{i}")) (path-ancestors (param "LINK_{i}")))
 """
 _EGRESS_ANY = """
 ;; grant: network egress-any (public addresses and DNS; never unix sockets, loopback or listening)
@@ -131,7 +132,7 @@ def _real(p) -> str:
 
 
 def links_of(p, _depth: int = 0) -> list[str]:
-    """Every symlink met while resolving a path, hop by hop (each needs a metadata rule on the link itself)."""
+    """Every symlink met while resolving a path, hop by hop (each needs a metadata rule on itself and its ancestors)."""
     if _depth > 32:
         raise SandboxError(f"symlink loop resolving {p}")
     out, cur = [], Path("/")

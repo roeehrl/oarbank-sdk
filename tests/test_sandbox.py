@@ -90,6 +90,32 @@ def test_a_sandboxed_process_reaches_only_its_own_directories(tmp_path):
 
 
 @darwin
+def test_an_interpreter_behind_symlink_hops_starts_and_reads_no_more(tmp_path):
+    """Homebrew's layout: bin/python3 and opt/python@X are symlinks into the Cellar. Its CPython realpath()s its own
+    location at startup, strictly (an lstat refused anywhere on the way ends it), so every link on argv[0]'s way and
+    the directories above it need metadata; their directories stay unlistable and a file beside a link unreadable."""
+    brew, mod, work = tmp_path / "brew", tmp_path / "mod", tmp_path / "work"
+    for d in (brew / "Cellar" / "python@9" / "9.0" / "bin", brew / "opt", brew / "bin", mod, work):
+        d.mkdir(parents=True)
+    (brew / "Cellar" / "python@9" / "9.0" / "bin" / "python3").symlink_to(os.path.realpath(sys.executable))
+    (brew / "opt" / "python@9").symlink_to("../Cellar/python@9/9.0")
+    (brew / "bin" / "python3").symlink_to("../opt/python@9/bin/python3")
+    (brew / "bin" / "secret").write_text("s", encoding="utf-8", newline="\n")
+    (mod / "probe.py").write_text(
+        "import json, os, sys\nB = os.environ['B']\nr = {'exe': os.path.realpath(sys.executable, strict=True)}\n"
+        "for n, f in (('list_bin', lambda: os.listdir(B + '/bin')), ('read_beside', lambda: open(B + '/bin/secret').read())):\n"
+        "    try: f(); r[n] = True\n    except OSError: r[n] = False\nprint(json.dumps(r))\n", encoding="utf-8", newline="\n")
+    py = str(brew / "bin" / "python3")
+    text, params = S.render(S.Policy(module="dev.test.probe", ro=[mod, *S.interpreter_roots()], rw=[work], exe=py))
+    prof = S.write_profile(text, tmp_path / "p.sb")
+    p = subprocess.run(S.launch_argv(prof, params, [py, "-I", str(mod / "probe.py")]), cwd=work, timeout=60,
+                       env={"PATH": "/usr/bin:/bin", "HOME": str(work), "B": str(brew)}, capture_output=True, text=True,
+                       encoding="utf-8")
+    assert p.returncode == 0, p.stderr[-500:]
+    assert json.loads(p.stdout) == {"exe": os.path.realpath(sys.executable), "list_bin": False, "read_beside": False}
+
+
+@darwin
 def test_egress_is_a_grant(tmp_path):
     r = _probe(tmp_path, {"sandbox": mf.SandboxSection(net={"mode": "egress-any"})}, PROBE)
     assert r["tcp"] and not r["list_ssh"] and not r["read_outside"]

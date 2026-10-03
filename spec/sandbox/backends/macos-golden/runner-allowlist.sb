@@ -1,5 +1,5 @@
 (version 1)
-;; oarbank module sandbox, profile 2 (runner)
+;; oarbank module sandbox, profile 3 (runner)
 (deny default (with message (param "MODULE_ID")))
 
 ;; process
@@ -41,7 +41,7 @@
 (allow file-read-metadata (path-ancestors (param "RW_0")))
 (allow file-read* file-write* (subpath (param "RW_1")))
 (allow file-read-metadata (path-ancestors (param "RW_1")))
-(allow file-read-metadata (literal (param "LINK_0")))
+(allow file-read-metadata (literal (param "LINK_0")) (path-ancestors (param "LINK_0")))
 
 ;; grant: network egress-allowlist (only the agent's local proxy, which enforces the allowed hosts)
 (allow system-socket)
