@@ -6,6 +6,8 @@
     oarbank-sdk bundle build <module-dir> [-o F]   build a digest-addressed bundle (.mfb)
     oarbank-sdk bundle verify <file.mfb>           verify a bundle's files, digest and manifest
     oarbank-sdk bundle wheels <module-dir>         download the wheels for the declared platforms into wheels/
+    oarbank-sdk deps compile <module-dir> <requirements.in> [-o FILE] [-- uv args]
+                                                   one marker-free, hash-pinned requirements file for every platform
     oarbank-sdk conform <module-dir>               the conformance kit (manifest, bundle, protocol, runner)
 """
 import argparse
@@ -98,6 +100,13 @@ def main(argv=None) -> int:
     bw = bs.add_parser("wheels", help="download the pinned wheels for every declared platform into wheels/")
     bw.add_argument("dir")
     bw.add_argument("--python-version", default="3.12")
+    dp = sub.add_parser("deps", help="a module's Python dependencies")
+    ds = dp.add_subparsers(dest="dcmd", required=True)
+    dc = ds.add_parser("compile", help="resolve a requirements.in for every platform that installs it into one file")
+    dc.add_argument("dir")
+    dc.add_argument("src")
+    dc.add_argument("-o", "--out", help="the requirements file (default: requirements.txt beside the input)")
+    dc.add_argument("uv_args", nargs=argparse.REMAINDER, help="after --: passed to uv pip compile (e.g. --index-url)")
     cf = sub.add_parser("conform", help="run the conformance kit against a module directory")
     cf.add_argument("dir")
     cf.add_argument("--fixtures", help="fixtures JSON (default: <dir>/conformance.json if present)")
@@ -111,6 +120,19 @@ def main(argv=None) -> int:
         rep = conform(a.dir, _json.loads(_P(a.fixtures).read_text(encoding="utf-8")) if a.fixtures else None, runner=not a.no_runner)
         print(_json.dumps(rep.as_dict(), indent=1) if a.json else rep.text())
         return 0 if rep.ok else 1
+    if a.cmd == "deps":
+        from pathlib import Path as _P
+        from . import deps, manifest as _mf
+        try:
+            rep = deps.compile(_P(a.dir), _mf.load(_P(a.dir) / "oarbank-module.toml"), _P(a.src), _P(a.out) if a.out else None,
+                               tuple(x for x in a.uv_args if x != "--"))
+        except deps.DepsError as e:
+            print(f"deps compile: {e}")
+            return 1
+        print(f"{rep['out']}: {rep['pins']} pins for {', '.join(rep['platforms'])}")
+        for name, plats in rep["partial"].items():
+            print(f"  {name}: needed on {', '.join(plats)} (installed everywhere)")
+        return 0
     if a.cmd == "bundle":
         from . import bundle as B
         try:

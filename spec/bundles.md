@@ -46,13 +46,26 @@ bundle** as wheels, pinned by hash:
 
 - **Requirements files.** The coordinator's is `requirements.txt` at the bundle root; the runner's is a
   `requirements.txt` beside the runner script (for example `node/requirements.txt`). Each lists **every**
-  distribution, transitive ones included, as `name==version --hash=sha256:<64 hex>`: the output of
-  `uv pip compile --generate-hashes`. Options (`--index-url`, `-e`, `-r`, …) and environment markers are refused.
-  `oarbank_sdk`, `pydantic` and their own dependencies come from the host and are never pinned.
-- **Wheels.** `wheels/` holds a wheel for every pinned distribution and every platform in `requires.platforms`
-  (a `py3-none-any` wheel covers all), for CPython 3.12. Source distributions are refused: building one runs
-  arbitrary code. `oarbank-sdk bundle wheels <dir>` downloads them; `bundle build` refuses a bundle whose wheels or
-  hashes are missing or wrong.
+  distribution, transitive ones included, as `name==version --hash=sha256:<64 hex>`. Options (`--index-url`, `-e`,
+  `-r`, …) and environment markers are refused: one file serves every platform, so every platform installs every line.
+  The host's environment provides the SDK and its whole dependency closure (pydantic, jsonschema, jinja2 and theirs,
+  computed from the installed SDK's metadata: `oarbank_sdk.deps.host_provided()`), which is never pinned: a module's
+  copy would shadow the host's.
+- **Which platforms a file serves.** The runner's file: every node platform whose runner (its variant for that
+  platform applied) runs the script beside it. The coordinator's file: `requires.coordinator_platforms`, or
+  `requires.platforms` when that is absent. A file that is both serves both.
+- **Compiling.** `oarbank-sdk deps compile <module-dir> <requirements.in> [-o FILE] [-- uv args]` writes that file
+  (default: `requirements.txt` beside the input). It resolves the input once per platform the file serves with uv
+  (`uv pip compile --python-platform … --python-version 3.12 --only-binary :all: --generate-hashes`, any extra uv
+  arguments such as `--index-url` passed through), leaving out what the host provides. It fails, naming every package
+  and its versions per platform, when the platforms resolve different versions (pin one version with wheels everywhere
+  in the input). A package only some platforms need (a Windows-only `colorama`) is pinned for all of them when its
+  version has a wheel on the others, which uv checks; otherwise the report names it and the platforms without one.
+  Hashes are the union over the platforms. Re-run it whenever you add a platform.
+- **Wheels.** `wheels/` holds a wheel for every pinned distribution and every platform its file serves (a
+  `py3-none-any` wheel covers all), for CPython 3.12. Source distributions are refused: building one runs arbitrary
+  code. `oarbank-sdk bundle wheels <dir>` downloads them; `bundle build` refuses a bundle whose wheels or hashes are
+  missing or wrong.
 - **Install on a host.** Into an overlay virtual environment that also sees the host's site packages, with
   `uv pip install --offline --no-index --find-links <bundle>/wheels --require-hashes --only-binary :all: --no-deps
   --no-cache -r <requirements>`, inside the module sandbox where the host has one: the bundle and the interpreter
