@@ -62,6 +62,8 @@ Then follow the tutorial, **[Build an Oarbank module in a day](docs/tutorial.md)
 by step: the manifest, the coordinator side, the runner, goldens, the conformance kit, a bundle and more than one
 platform. The reference module in [`examples/toy`](examples/toy) is the finished shape: a coordinator side
 (`toy_module.py`, on `oarbank_sdk.server`) and a runner (`toy_runner.py`, stdlib only).
+[`examples/taskbench`](examples/taskbench) shows a write-only secret delivered to one stage and container task images
+approved by their signing key ([Use secrets and signed container images](docs/secrets-and-images.md)).
 
 ## Developing the SDK
 

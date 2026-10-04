@@ -1,0 +1,75 @@
+# taskbench: an example of secrets and signed container image sets (core 2.5). Each task is a container image of the
+# set "tasks", signed with the module's cosign key: the "attempt" stage runs one task image through the agent's broker,
+# with the provider key it alone receives; "score" (the default stage, the one goldens test) scores a task's log.
+manifest = 1
+
+[module]
+id = "dev.codonic.oarbank.taskbench"
+version = "0.1.0"
+compat = "taskbench1"
+publisher = "oarbank"
+license = "Apache-2.0"
+codeowners = ["roeehrl"]
+stability = "experimental"
+description = "Runs signed task images with a provider key only the attempt stage receives"
+
+[requires]
+core = ">=2.5,<3"
+platforms = ["darwin-arm64", "linux-arm64", "linux-amd64", "windows-amd64"]
+module_protocol = [1]
+runner_protocol = [1]
+
+[coordinator]
+exec = ["python", "-I", "{bundle}/taskbench_module.py"]
+runtime = { kind = "python" }
+capabilities = ["result.merge", "op.plan", "op.apply"]
+
+[runner]
+exec = ["python", "-I", "{bundle}/taskbench_runner.py"]
+runtime = { kind = "python" }
+capabilities = ["deterministic_output"]
+
+[[stages]]
+name = "score"
+default = true
+timeout_s = 120
+requires.resources = { cpu = 1, mem_gb = 0.1 }
+
+[[stages]]
+name = "attempt"
+determinism = "none"
+secrets = ["provider_key"]
+timeout_s = 3600
+requires = { resources = { cpu = 2, mem_gb = 4 }, pools = { containers = 1 } }
+
+[[secrets]]
+name = "provider_key"
+description = "API key of the model provider the task harness calls"
+
+[sandbox]
+net = { mode = "egress-allowlist", allow = ["api.provider.example"] }
+
+[[sandbox.container_sets]]
+name = "tasks"
+registry = "ghcr.io"
+repository = "example/taskbench/"
+platform = "linux/amd64"
+key = "keys/tasks.pub"
+
+[results]
+schema = "schemas/result.schema.json"
+schema_version = 1
+determinism = "exact"
+digest = { version = 1, over = ["passed"] }
+fields = [{ name = "passed", type = "integer", ui = { column = "Passed", format = "d" } }]
+
+[goldens]
+fixtures = "goldens/*.json"
+
+[[operations]]
+verb = "run_tasks"
+title = "Run tasks"
+tier = "T1"
+target = "none"
+params_schema = "schemas/run_tasks.json"
+effects = ["campaigns.create", "jobs.enqueue"]

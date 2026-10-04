@@ -17,6 +17,14 @@ export const PAGES = [
     order: 1,
   },
   {
+    src: 'docs/secrets-and-images.md',
+    dest: 'build/secrets-and-images.md',
+    type: 'how-to',
+    description:
+      'Give one stage an API key that nothing else sees, approve hundreds of container task images by their signing key, and give containers the GPU.',
+    order: 2,
+  },
+  {
     src: 'spec/public-surface.md',
     dest: 'spec/public-surface.md',
     type: 'spec',

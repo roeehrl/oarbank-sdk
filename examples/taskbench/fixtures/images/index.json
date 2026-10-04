@@ -1,0 +1,37 @@
+{
+ "schemaVersion": 2,
+ "manifests": [
+  {
+   "mediaType": "application/vnd.oci.image.manifest.v1+json",
+   "digest": "sha256:2812c5bc89455c0438967cf1271db9270b671a9d172c5498eacb17a93bcd4bd3",
+   "size": 393,
+   "annotations": {
+    "org.opencontainers.image.ref.name": "ghcr.io/example/taskbench/task-0:latest"
+   }
+  },
+  {
+   "mediaType": "application/vnd.oci.image.manifest.v1+json",
+   "digest": "sha256:87f087e0d922a31e88f3e71f5c322d0220730754907d2c68529da9d5d77366c2",
+   "size": 393,
+   "annotations": {
+    "org.opencontainers.image.ref.name": "ghcr.io/example/taskbench/task-1:latest"
+   }
+  },
+  {
+   "mediaType": "application/vnd.oci.image.manifest.v1+json",
+   "digest": "sha256:b1c9bee43e4ea65f65d72a99491cbe70104f5f4f2ef5bc78ac0829e323befafd",
+   "size": 393,
+   "annotations": {
+    "org.opencontainers.image.ref.name": "ghcr.io/example/taskbench/task-2:latest"
+   }
+  },
+  {
+   "mediaType": "application/vnd.oci.image.manifest.v1+json",
+   "digest": "sha256:c4df3b8fff55c8d0829cefa9fb39b7e8c7ced7e8a392b90c6a743ef0cdd956e8",
+   "size": 556,
+   "annotations": {
+    "org.opencontainers.image.ref.name": "ghcr.io/example/taskbench/task-2:sha256-b1c9bee43e4ea65f65d72a99491cbe70104f5f4f2ef5bc78ac0829e323befafd.sig"
+   }
+  }
+ ]
+}
