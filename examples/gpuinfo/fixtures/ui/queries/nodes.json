@@ -1,0 +1,25 @@
+[
+ {
+  "node_id": "n_studio",
+  "hostname": "studio",
+  "platform": "darwin-arm64",
+  "gpu_apis_host": [
+   "metal",
+   "opencl"
+  ],
+  "gpu_apis_containers": [
+   "vulkan"
+  ],
+  "container_gpu": "Venus over virtio-gpu (krunkit)",
+  "module_state": "certified"
+ },
+ {
+  "node_id": "n_box",
+  "hostname": "box",
+  "platform": "linux-amd64",
+  "gpu_apis_host": [],
+  "gpu_apis_containers": [],
+  "container_gpu": null,
+  "module_state": "undetected"
+ }
+]

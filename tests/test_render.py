@@ -16,7 +16,8 @@ def host(rows=None, error=False, **kw):
             raise RuntimeError("down")
         return {"rows": rows if rows is not None else [{"n": 5, "sum": 10, "ok": True, "value": 3}]}
     return Host(resolve=resolve, operation=OPS.get, op_url=lambda o: f"/do/{o}", link_url=lambda l: "/x",
-                frame_url=lambda v: f"http://127.0.0.1:7402/f/toy/{v}/", module="toy", **kw)
+                frame=lambda v: {"src": f"http://127.0.0.1:7402/f/toy/{v}/", "bridge": ["read.view", "resize"],
+                                 "base": f"/m/toy/_bridge/{v}"}, module="toy", **kw)
 
 
 def render(body, **kw):

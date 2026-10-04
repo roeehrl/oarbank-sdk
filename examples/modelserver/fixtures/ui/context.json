@@ -1,0 +1,9 @@
+{
+ "node": {
+  "id": "n_studio",
+  "online": true
+ },
+ "user": {
+  "role": "operator"
+ }
+}

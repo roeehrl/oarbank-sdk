@@ -1,0 +1,10 @@
+{
+ "job": {
+  "id": 1,
+  "module": "reel",
+  "state": "leased"
+ },
+ "user": {
+  "role": "operator"
+ }
+}

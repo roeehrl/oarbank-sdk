@@ -1,0 +1,13 @@
+[
+ {
+  "job_id": 1,
+  "attempt_id": 4,
+  "node_id": "n_studio",
+  "generation": 1,
+  "seq": 3,
+  "files": 2,
+  "size": 51200,
+  "at": 1790007200,
+  "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+ }
+]
