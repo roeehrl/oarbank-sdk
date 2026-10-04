@@ -73,7 +73,7 @@ Cross-field rules are in [manifest.md](manifest.md).
 | `runner.checkpoint_grace_s` | float | `120.0` | [beta] Seconds between a checkpoint-then-stop request and forced termination of the process container. Needs requires.core >= 2.5. |
 | `runner.gpu` | GPUNeed | `"use='none' apis_any=[] min_vram_gb=None in_container=False"` |  |
 | `runner.gpu.use` | `"none"` \| `"shared"` \| `"exclusive"` | `"none"` | [beta] `shared`/`exclusive` jobs are not admitted while a protected process group uses that GPU. |
-| `runner.gpu.apis_any` | list of str | `[]` | [beta] Any of these GPU APIs (open set: metal, cuda, rocm, directml, vulkan). |
+| `runner.gpu.apis_any` | list of str | `[]` | [beta] Any of these GPU APIs; jobs run only on nodes providing one (open set; detected: cuda, directml, metal, opencl, rocm, vulkan). Needs `use` shared or exclusive and requires.core >= 2.5. |
 | `runner.gpu.min_vram_gb` | float (optional) |  | [beta] Minimum device memory where memory is not unified. |
 | `runner.gpu.in_container` | bool | `false` | [beta] The GPU is used from inside a broker-run container. |
 | `runner.bandwidth_class` | `"low"` \| `"medium"` \| `"high"` (optional) |  | [experimental] Measured memory-bandwidth appetite relative to the node's memory system (measured on Apple unified memory so far). |
@@ -88,7 +88,7 @@ Cross-field rules are in [manifest.md](manifest.md).
 | `runner.variants.stop_grace_s` | float (optional) |  |  |
 | `runner.variants.gpu` | GPUNeed (optional) |  |  |
 | `runner.variants.gpu.use` | `"none"` \| `"shared"` \| `"exclusive"` | `"none"` | [beta] `shared`/`exclusive` jobs are not admitted while a protected process group uses that GPU. |
-| `runner.variants.gpu.apis_any` | list of str | `[]` | [beta] Any of these GPU APIs (open set: metal, cuda, rocm, directml, vulkan). |
+| `runner.variants.gpu.apis_any` | list of str | `[]` | [beta] Any of these GPU APIs; jobs run only on nodes providing one (open set; detected: cuda, directml, metal, opencl, rocm, vulkan). Needs `use` shared or exclusive and requires.core >= 2.5. |
 | `runner.variants.gpu.min_vram_gb` | float (optional) |  | [beta] Minimum device memory where memory is not unified. |
 | `runner.variants.gpu.in_container` | bool | `false` | [beta] The GPU is used from inside a broker-run container. |
 | `runner.variants.env` | table str → str (optional) |  | [beta] Merged over [runner].env name by name. Needs requires.core >= 2.2. |
@@ -144,7 +144,7 @@ Cross-field rules are in [manifest.md](manifest.md).
 | `services[].endpoint` | bool | `false` | [beta] Jobs reach the service: each attempt whose stage reserves one of its pools gets OARBANK_SERVICE_<NAME>, and the agent hands the service every connection over its endpoint channel; the service never listens (spec/service-protocol.md, "Endpoints"). Provides at least one pool; lifecycle on_demand or always. Needs requires.core >= 2.5. |
 | `services[].gpu` | ServiceGPU | `"use='none' apis_any=[]"` | [beta] Needs requires.core >= 2.5 when `use` is not none. |
 | `services[].gpu.use` | `"none"` \| `"shared"` \| `"exclusive"` | `"none"` | [beta] A running service that is not `none` is GPU-resident fleet work: host protection stops it, when yieldable, while GPU work may not run, and a job reserving one of its pools is a GPU job. Needs sandbox.devices.gpu = 'compute' and requires.core >= 2.5. |
-| `services[].gpu.apis_any` | list of str | `[]` | [beta] Any of these GPU APIs (open set: metal, cuda, rocm, directml, vulkan). |
+| `services[].gpu.apis_any` | list of str | `[]` | [beta] Any of these GPU APIs; jobs run only on nodes providing one (open set; detected: cuda, directml, metal, opencl, rocm, vulkan). Needs `use` shared or exclusive and requires.core >= 2.5. |
 | `probes` | list of Probe | `[]` |  |
 | `probes[].name` | str | required |  |
 | `probes[].exec` | list of str | required |  |

@@ -15,6 +15,7 @@ from typing import Annotated, Literal
 
 from pydantic import AfterValidator, BaseModel, Field, field_validator, model_validator
 
+from . import gpu
 from . import platform as pf
 from . import portable
 from ._base import Contract, ModuleId, Name, SemVer, Sha256, Stability, VersionRange
@@ -444,7 +445,9 @@ class Coordinator(Contract):
 class GPUNeed(Contract):
     """The runner's GPU use. [beta]"""
     use: Literal["none", "shared", "exclusive"] = Field("none", description="[beta] `shared`/`exclusive` jobs are not admitted while a protected process group uses that GPU.")
-    apis_any: list[Annotated[str, Field(pattern=r"^[a-z][a-z0-9]*$")]] = Field(default_factory=list, description="[beta] Any of these GPU APIs (open set: metal, cuda, rocm, directml, vulkan).")
+    apis_any: list[Annotated[str, Field(pattern=r"^[a-z][a-z0-9]*$")]] = Field(default_factory=list, description=(
+        "[beta] Any of these GPU APIs; jobs run only on nodes providing one (open set; detected: cuda, directml, metal, "
+        "opencl, rocm, vulkan). Needs `use` shared or exclusive and requires.core >= 2.5."))
     min_vram_gb: Annotated[float, Field(ge=0)] | None = Field(None, description="[beta] Minimum device memory where memory is not unified.")
     in_container: bool = Field(False, description="[beta] The GPU is used from inside a broker-run container.")
 
@@ -590,7 +593,9 @@ class ServiceGPU(Contract):
         "[beta] A running service that is not `none` is GPU-resident fleet work: host protection stops it, when "
         "yieldable, while GPU work may not run, and a job reserving one of its pools is a GPU job. Needs "
         "sandbox.devices.gpu = 'compute' and requires.core >= 2.5."))
-    apis_any: list[Annotated[str, Field(pattern=r"^[a-z][a-z0-9]*$")]] = Field(default_factory=list, description="[beta] Any of these GPU APIs (open set: metal, cuda, rocm, directml, vulkan).")
+    apis_any: list[Annotated[str, Field(pattern=r"^[a-z][a-z0-9]*$")]] = Field(default_factory=list, description=(
+        "[beta] Any of these GPU APIs; jobs run only on nodes providing one (open set; detected: cuda, directml, metal, "
+        "opencl, rocm, vulkan). Needs `use` shared or exclusive and requires.core >= 2.5."))
 
 
 class Service(Contract):
@@ -841,6 +846,7 @@ class Manifest(Contract):
             ("a stage reserving the gpu pool", any("gpu" in s.requires.pools for s in self.stages)),
             ("services[].endpoint", any(s.endpoint for s in self.services)),
             ("services[].gpu", any(s.gpu.use != "none" or s.gpu.apis_any for s in self.services)),
+            ("runner.gpu.apis_any", any(r.gpu and r.gpu.apis_any for r in [self.runner, *self.runner.variants.values()])),
             ("sandbox.folders", bool(self.sandbox.folders)),
             ("stages[].checkpoint", any(s.checkpoint for s in self.stages)),
             ("runner.checkpoint_grace_s", "checkpoint_grace_s" in self.runner.model_fields_set),
@@ -1012,6 +1018,7 @@ class Manifest(Contract):
         self._bootstrap_rules(chain)
         self._trust_rules()
         self._checkpoint_rules()
+        self._gpu_api_rules()
         if len(self.stages) > 1 and "result.merge" not in self.coordinator.capabilities:
             raise ValueError("a multi-stage module must implement result.merge (coordinator.capabilities)")
         if self.goldens and self.goldens.compare == "verb" and "golden.compare" not in self.coordinator.capabilities:
@@ -1052,6 +1059,30 @@ class Manifest(Contract):
         st = self.stage(stage or self.default_stage() or "")
         pools = set(st.requires.pools) if st else set()
         return [s for s in self.services if s.endpoint and pools & set(s.provides.pools)]
+
+    def runner_gpu_need(self, platform: str) -> dict | None:
+        """The runner's GPU API group on `platform` (its variant applied), or None when it names no API: `where` is
+        `host`, a need of every stage, or `containers` (`in_container`), a need of stages reserving the `gpu` pool."""
+        g = self.runner.for_platform(platform).gpu
+        if g.use == "none" or not g.apis_any:
+            return None
+        return {"apis": sorted(set(g.apis_any)), "where": "containers" if g.in_container else "host", "source": "runner"}
+
+    def gpu_needs(self, stage: str | None, platform: str) -> list[dict]:
+        """The GPU APIs a job of `stage` (None: the default stage) needs on a node of `platform`, as "any of" groups
+        `{apis, where, source}` (spec/runner-protocol.md, "GPU use"): the runner's `gpu` for the platform (its variant
+        applied) when it uses a GPU and names APIs, checked against the node's host APIs, or with `in_container` its
+        containers' APIs and only for a stage reserving the agent's `gpu` pool; and each GPU service on the platform
+        that names APIs and provides a pool the stage reserves, checked against the host's. A node meets the need when
+        every group shares an API with its list for that place."""
+        st = self.stage(stage or self.default_stage() or "")
+        pools = set(st.requires.pools) if st else set()
+        run = self.runner_gpu_need(platform)
+        out = [run] if run and (run["where"] == "host" or "gpu" in pools) else []
+        for s in self.services:
+            if s.gpu.use != "none" and s.gpu.apis_any and pools & set(s.provides.pools) and pf.matches(platform, s.platforms):
+                out.append({"apis": sorted(set(s.gpu.apis_any)), "where": "host", "source": f"service {s.name}"})
+        return out
 
     def gpu_pools(self) -> set[str]:
         """Pools provided by services that use a GPU: a job reserving one is a GPU job."""
@@ -1151,6 +1182,15 @@ class Manifest(Contract):
             if not gpu.in_container or gpu.use == "none":
                 raise ValueError(f"stage {st.name!r} reserves the gpu pool: declare runner.gpu.in_container = true and "
                                  "runner.gpu.use = 'shared' or 'exclusive' (GPU admission applies to its jobs)")
+
+    def _gpu_api_rules(self):
+        """GPU APIs select nodes only for GPU work (spec/manifest.md, rule 21)."""
+        needs = [("runner.gpu", self.runner.gpu)] + [(f"runner.variants.{k}.gpu", v.gpu) for k, v in self.runner.variants.items() if v.gpu]
+        needs += [(f"services.{s.name}.gpu", s.gpu) for s in self.services]
+        for where, g in needs:
+            if g.apis_any and g.use == "none":
+                raise ValueError(f"{where}.apis_any needs use = 'shared' or 'exclusive': it places GPU work, and with "
+                                 "use = 'none' the work uses no GPU")
 
     def _checkpoint_rules(self):
         """Portable checkpoints (spec/manifest.md, rule 20)."""
@@ -1252,6 +1292,13 @@ def lint(man: Manifest) -> list[str]:
     if man.sandbox.net.mode == "egress-any" and any(s.secrets for s in man.stages):
         out.append("stages receive secrets while sandbox.net.mode is 'egress-any': a leaked key can reach any host; an "
                    "egress-allowlist naming only the service the key is for limits that")
+    gpus = [("runner.gpu", man.runner.gpu)] + [(f"runner.variants.{k}.gpu", v.gpu) for k, v in man.runner.variants.items() if v.gpu]
+    gpus += [(f"services.{s.name}.gpu", s.gpu) for s in man.services]
+    for where, g in gpus:
+        unknown = [a for a in g.apis_any if a not in gpu.KNOWN_APIS]
+        if unknown:
+            out.append(f"{where}.apis_any {unknown}: no core detects {'it' if len(unknown) == 1 else 'them'} yet, so a node "
+                       "is never found to provide " + ("it" if len(unknown) == 1 else "them"))
     # a Windows node's container runtime runs its own architecture only (spec/sandbox.md, "Containers")
     images = {c.platform for c in man.sandbox.containers} | {c.platform for c in man.sandbox.container_sets}
     for plat in man.requires.platforms:

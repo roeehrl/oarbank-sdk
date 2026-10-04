@@ -96,7 +96,8 @@ The models enforce these, beyond the per-field types:
     - **2.3:** `stages[].determinism`, `stages[].default`, the coordinator capability `campaign.tick.results`, and the effects `datasets.update` and `datasets.delete` in any effects list (`coordinator.campaign_effects`, `operations[].effects`, `coordinator.move.effects`).
     - **2.4:** `stages[].bootstrap` and `datasets.pinned`.
     - **2.5:** `[[secrets]]`, `stages[].secrets`, the permission `secrets:read:self`, `sandbox.container_sets`, a
-      stage reserving the agent's `gpu` pool, `services[].endpoint`, `services[].gpu`, `sandbox.folders`,
+      stage reserving the agent's `gpu` pool, `runner.gpu.apis_any` (or a runner variant's), `services[].endpoint`,
+      `services[].gpu`, `sandbox.folders`,
       `stages[].checkpoint`, `runner.checkpoint_grace_s`, the runner capability `checkpoint` and the view cell type
       `artifact_ref`.
 
@@ -116,7 +117,9 @@ The models enforce these, beyond the per-field types:
 19. `sandbox.folders` ids are unique, each with `access` `read` or `write` ([sandbox.md](sandbox.md#folders)).
 20. A stage with `checkpoint` needs the runner capability `checkpoint`, and the capability needs at least one such
     stage; a bootstrap stage never sets `checkpoint`.
-21. **Lint** (warnings, not errors): an unknown `mix`; a stage `placement` on a stage without `after`; an unknown `determinism_scope`; a placement mix coarser than `determinism_scope` while `results.value` is set (values in one campaign would come from classes whose results are not comparable); stages receiving secrets while the network mode is `egress-any`. `oarbank-sdk check` prints them; `oarbank_sdk.manifest.lint` returns them.
+21. `gpu.apis_any` (the runner's, a runner variant's, a service's) is set only with `gpu.use` `shared` or `exclusive`: it
+    places GPU work ([runner-protocol.md](runner-protocol.md#gpu-use)).
+22. **Lint** (warnings, not errors): an unknown `mix`; a stage `placement` on a stage without `after`; an unknown `determinism_scope`; a placement mix coarser than `determinism_scope` while `results.value` is set (values in one campaign would come from classes whose results are not comparable); stages receiving secrets while the network mode is `egress-any`; a `gpu.apis_any` entry no core detects yet (outside `cuda`, `directml`, `metal`, `opencl`, `rocm`, `vulkan`: such work is placed nowhere). `oarbank-sdk check` prints them; `oarbank_sdk.manifest.lint` returns them.
 
 A module may offer both forms of an evaluation. For example, render declares a single `eval` stage and a `render → score` chain; the operator's pipeline setting picks the form for jobs that name no stage. A module may also declare standalone utility stages (an ingestion `sync`, a `fetch` that provisions tools) and enqueue jobs that name them; it then marks its evaluation stage `default = true`.
 

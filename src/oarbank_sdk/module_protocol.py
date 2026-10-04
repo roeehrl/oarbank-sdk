@@ -108,12 +108,20 @@ class DatasetRef(Contract):
     files: list[dict[str, Any]] = Field(default_factory=list, description="[stable] {path, digest, size} per file, with [beta] `origins` when it has any.")
 
 
+class GPUAPIs(Contract):
+    """The GPU APIs a node provides, from its agent's doctor report (spec/runner-protocol.md, "GPU use"). [beta]"""
+    host: list[str] = Field(default_factory=list, description="[beta] On the node itself (metal, cuda, rocm, vulkan, opencl, directml).")
+    containers: list[str] = Field(default_factory=list, description="[beta] Inside containers the agent's broker runs with `gpus = \"all\"`.")
+
+
 class NodeClass(Contract):
     """What golden.list may know about a node: its platform class, capabilities and pools; never identity. [stable]"""
     platform: str | None = Field(None, description="[stable] Platform token, e.g. darwin-arm64.")
     os_version: str | None = Field(None, description="[stable] OS version (macOS 26.1, Windows build 10.0.26100, Linux distro release).")
     cpu: dict[str, Any] = Field(default_factory=dict, description="[beta] {vendor, model, logical, core_classes, features}.")
-    gpus: list[dict[str, Any]] = Field(default_factory=list, description="[beta] [{vendor, model, apis, vram_gb}].")
+    gpus: list[dict[str, Any]] = Field(default_factory=list, description="[beta] [{vendor, model, vram_gb, unified}].")
+    gpu_apis: GPUAPIs = Field(default_factory=GPUAPIs, description="[beta] The GPU APIs the node provides, so goldens can "
+                              "differ per API. Needs core 2.5 (older hosts send none).")
     capabilities: list[str] = Field(default_factory=list)
     pools: dict[str, int] = Field(default_factory=dict)
 

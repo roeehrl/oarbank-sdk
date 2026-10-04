@@ -23,7 +23,7 @@ and normative for agent implementers.
 | no local IPC except the broker | no `network*` rule for unix sockets except `(remote unix-socket (path-literal BROKER_SOCKET))`; `(deny mach-lookup (xpc-service-name-prefix ""))` |
 | `net = egress-allowlist` | only `(remote ip "localhost:<proxy port>")`: the agent's proxy enforces the hosts |
 | `net = egress-any` | `(remote ip "*:*")` and the mDNSResponder socket, then `(deny network-outbound (remote ip "localhost:*"))` |
-| `devices.gpu = compute` | IOKit AGX user clients and `com.apple.MTLCompilerService` |
+| `devices.gpu = compute` | opening any `IOAccelerator` service (the class matches subclasses: Apple silicon's AGX, the paravirtual GPU of a macOS virtual machine, Intel Macs' GPUs) through its device user client (`IOGPUDeviceUserClient`, `AppleParavirtDeviceUserClient`, `IOAccelerationUserClient`) and `IOSurfaceRootUserClient`, IOKit properties, and `com.apple.MTLCompilerService` |
 | children | the sandbox is inherited across fork and exec, and cannot be applied again |
 
 ## Enforcement report

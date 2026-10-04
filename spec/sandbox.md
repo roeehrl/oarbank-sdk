@@ -157,7 +157,7 @@ the only IPC its confinement allows. Requests are one JSON object per line, one 
 |---|---|---|
 | `container.run` | `image` (an approved reference), `platform`, `args[]`, `entrypoint?`, `mounts[] {src, dst, ro}`, `env{}`, `workdir?`, `network` (only with an egress grant), `timeout_s`, `cpus?`, `mem_gb?`, `gpus?` (`"none"` or `"all"`; core 2.5) | `{ok, exit_code, stdout_tail, stderr_tail, stdout_path, stderr_path, duration_s}`; the full output is written into the work directory |
 | `container.pull` | `image`, `platform` | `{ok}` once the image is present |
-| `status` | | `{ok, running, images[], gpus}`; `gpus` is `"all"` where the node passes GPUs through to containers, else `"none"` |
+| `status` | | `{ok, running, images[], gpus}`; `gpus` is `"all"` when this job may give its containers the GPU (it reserved the `gpu` pool and the node passes GPUs through), else `"none"` |
 | any refusal | | `{ok: false, error, detail}`: `image_not_approved`, `bad_mount`, `network_not_granted`, `gpu_not_granted`, `gpu_unavailable`, `registry_unavailable` (retryable), `runtime_unavailable`, `platform_unavailable` |
 
 **Mounts**
@@ -224,20 +224,19 @@ without cosign or a registry.
 (`pools = {containers = 1, gpu = 1}`), and the runner declares `gpu.in_container = true` with `gpu.use` `shared` or
 `exclusive`, so the job holds a container token and the GPU for its lifetime, and the host's GPU admission (the owner's
 `gpu_jobs` policy, protected processes using the GPU) applies to it. The broker refuses `gpus = "all"` with
-`gpu_not_granted` for a job that did not reserve the `gpu` pool.
+`gpu_not_granted` for a job that did not reserve the `gpu` pool. The runner's `gpu.apis_any` then names the APIs its
+containers need, checked against the APIs the node reports **in containers** ([runner-protocol.md](runner-protocol.md#gpu-use)).
 
 | Platform | Mechanism | The node |
 |---|---|---|
-| Linux | CDI: a CDI spec (`/etc/cdi`, `/var/run/cdi`) with an `all` device, such as `nvidia-ctk cdi generate` writes; the run gets `--device <kind>=all` (Podman 4.1+, Docker 25+ with CDI) | offers the `gpu` pool; facts `containers.gpu = "cdi:<kind>"` |
-| Windows | GPU-PV in the agent's WSLc session: its guest writes a CDI spec (`microsoft.com/wslc=gpu`: `/dev/dxg` and the host driver's libraries under `/usr/lib/wsl`, the same edits `nvidia-ctk cdi generate --mode=wsl` makes, for every vendor); the run gets `--gpus all` | offers the `gpu` pool when the session's VM has a GPU; facts `containers.gpu = "cdi:microsoft.com/wslc"` |
-| macOS | none: Colima and Apple `container` VMs have no Metal passthrough | `containers.gpu = "undetected"`, no `gpu` pool |
+| Linux | CDI: a CDI spec (`/etc/cdi`, `/var/run/cdi`) with an `all` device, such as `nvidia-ctk cdi generate` writes; the run gets `--device <kind>=all` (Podman 4.1+, Docker 25+ with CDI) | offers the `gpu` pool; facts `containers.gpu = "cdi:<kind>"`; container APIs from the spec: `cuda` (it mounts `libcuda.so`), `vulkan` (the NVIDIA Vulkan ICD, or a DRM render node for other kinds), `opencl` (`libnvidia-opencl`), `rocm` (`/dev/kfd`) |
+| Windows | GPU-PV in the agent's WSLc session: its guest writes a CDI spec (`microsoft.com/wslc=gpu`: `/dev/dxg` and the host driver's libraries under `/usr/lib/wsl`, the same edits `nvidia-ctk cdi generate --mode=wsl` makes, for every vendor); the run gets `--gpus all` | offers the `gpu` pool when the session's VM has a GPU; facts `containers.gpu = "cdi:microsoft.com/wslc"`; container APIs `directml` (WSL's D3D12 and DXCore, with any hardware GPU; the image brings `libdirectml.so`) and `cuda` (where the host's NVIDIA driver provides its WSL library). GPU containers need a glibc image: the guest's hook runs the image's `ldconfig` |
+| macOS (Apple silicon, macOS 14+) | a second agent-owned VM on krunkit (libkrun) whose virtio-gpu device carries Vulkan to the host's GPU: Mesa's Venus driver in the container, MoltenVK on the host; the run gets `--device /dev/dri`. Only jobs that reserved the `gpu` pool run there; other containers keep the Virtualization.framework VM with Rosetta. Metal itself never reaches a Linux container | with krunkit installed: offers the `gpu` pool; facts `containers.gpu = "virtio-gpu:venus"`; container APIs `vulkan` |
 
-**GPU APIs in containers.** The node's facts `containers.gpu_apis` list the GPU APIs a `gpus = "all"` container can use
-there, in `runner.gpu.apis_any` tokens: `cuda`, `rocm` and `levelzero` from a Linux CDI kind (`nvidia.com/gpu`,
-`amd.com/gpu`, `intel.com/gpu`); on Windows `directml` (D3D12 and DXCore come with WSL) and `cuda` where the host's
-NVIDIA driver provides its WSL library. Runtimes that come in the image (ROCm or Level Zero on WSL, Mesa's Vulkan) are
-not listed. Empty wherever `containers.gpu` is `undetected`. On Windows, GPU containers need a glibc image (the guest's
-hook runs the image's `ldconfig`).
+On every platform the image brings the API's user space where the mechanism does not: Mesa and the Vulkan loader. On
+macOS that Mesa is the libkrun build of the Venus driver (Fedora: `dnf copr enable slp/mesa-libkrun-vulkan`, then
+`mesa-vulkan-drivers`, pinned; stock Mesa fails `vkCreateInstance` under krunkit); on Linux, Mesa's AMD and Intel drivers. The broker's `status` answers `gpus:
+"all"` to a job that reserved the `gpu` pool on a node that passes GPUs through.
 
 ## Testing your module
 

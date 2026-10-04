@@ -118,6 +118,6 @@ requires = { pools = { containers = 1, gpu = 1 } }
 ```
 
 and asks for it per run with `broker.run(..., gpus="all")`. Linux nodes with a CDI spec for their GPU (`nvidia-ctk cdi
-generate`) and Windows nodes whose WSL containers session sees a GPU offer the pool; macOS nodes cannot pass a GPU into a
-container, so such jobs never go there. A node's facts list the GPU APIs its containers get (`containers.gpu_apis`:
-`cuda`, `directml`, ...). On Windows, use a glibc-based image for GPU containers.
+generate`), Windows nodes whose WSL containers session sees a GPU and Macs with krunkit offer the pool; the APIs a GPU
+container gets on each node are in its report, and `apis_any` picks among them ([GPU placement](gpu-placement.md)). On
+Windows, use a glibc-based image for GPU containers.

@@ -646,7 +646,7 @@
       "description": "The runner's GPU use. [beta]",
       "properties": {
         "apis_any": {
-          "description": "[beta] Any of these GPU APIs (open set: metal, cuda, rocm, directml, vulkan).",
+          "description": "[beta] Any of these GPU APIs; jobs run only on nodes providing one (open set; detected: cuda, directml, metal, opencl, rocm, vulkan). Needs `use` shared or exclusive and requires.core >= 2.5.",
           "items": {
             "pattern": "^[a-z][a-z0-9]*$",
             "type": "string"
@@ -2158,7 +2158,7 @@
       "description": "A service's GPU use, as `runner.gpu` without the runner-only keys. [beta]",
       "properties": {
         "apis_any": {
-          "description": "[beta] Any of these GPU APIs (open set: metal, cuda, rocm, directml, vulkan).",
+          "description": "[beta] Any of these GPU APIs; jobs run only on nodes providing one (open set; detected: cuda, directml, metal, opencl, rocm, vulkan). Needs `use` shared or exclusive and requires.core >= 2.5.",
           "items": {
             "pattern": "^[a-z][a-z0-9]*$",
             "type": "string"
