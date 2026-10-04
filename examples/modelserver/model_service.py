@@ -93,9 +93,11 @@ def main(op: str) -> int:
         if not UP.exists():
             UP.write_text("1", encoding="utf-8")
             READY.unlink(missing_ok=True)
+            # stdin stays the one `start` inherited from the agent: some Windows builds refuse an AppContainer the null
+            # device, so subprocess.DEVNULL fails there
             with LOG.open("ab") as log:
-                subprocess.Popen([sys.executable, "-I", os.path.abspath(__file__), "serve"], stdin=subprocess.DEVNULL,
-                                 stdout=log, stderr=log, **ep.inherit_channel())
+                subprocess.Popen([sys.executable, "-I", os.path.abspath(__file__), "serve"], stdout=log, stderr=log,
+                                 **ep.inherit_channel())
         return emit({"ok": True})
     if op == "stop":
         for p in (UP, READY):

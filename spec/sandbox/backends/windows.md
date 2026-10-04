@@ -32,4 +32,9 @@ authors and normative for agent implementers. It needs Windows 10 1809 or later.
 | `net.egress-allowlist` | enforced where the elevated helper runs; unavailable otherwise |
 | no link-local under `egress-any` | unavailable |
 | `exec_writable` deny | unavailable: any readable binary is executable without application control |
+
+Some Windows builds (seen on Windows Server 2025) refuse an AppContainer the null device: opening `NUL`
+(`os.devnull`, `subprocess.DEVNULL`) fails with access denied. The agent gives every module process standard handles
+it opened itself, so a module that starts a child passes those on (Python's `subprocess` does when `stdin`, `stdout` or
+`stderr` is left as it is) or a file in its own directories, never a new `NUL`.
 | containers | unavailable until the agent-owned WSL2 distribution ships |
