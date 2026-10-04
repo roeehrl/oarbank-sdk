@@ -134,8 +134,12 @@ Cross-field rules are in [manifest.md](manifest.md).
 | `services[].provides.capabilities` | list of str | `[]` |  |
 | `services[].provides.pools` | list of str | `[]` | [stable] Pools whose token counts the service's `fingerprint` reports. |
 | `services[].reserves_host_memory` | bool | `false` | [beta] The fingerprint's reserve.mem_gb is charged to the host while running. |
-| `services[].yieldable` | bool | `true` | [beta] The agent may stop it when idle under memory pressure. |
+| `services[].yieldable` | bool | `true` | [beta] The agent may stop it when idle under memory pressure, and host protection may stop it, releasing the jobs using it, when it evicts or while GPU work may not run (a GPU service). |
 | `services[].freeze_ok` | bool | `false` | [beta] The agent may freeze the service's process container (freezing returns no memory). |
+| `services[].endpoint` | bool | `false` | [beta] Jobs reach the service: each attempt whose stage reserves one of its pools gets OARBANK_SERVICE_<NAME>, and the agent hands the service every connection over its endpoint channel; the service never listens (spec/service-protocol.md, "Endpoints"). Provides at least one pool; lifecycle on_demand or always. Needs requires.core >= 2.5. |
+| `services[].gpu` | ServiceGPU | `"use='none' apis_any=[]"` | [beta] Needs requires.core >= 2.5 when `use` is not none. |
+| `services[].gpu.use` | `"none"` \| `"shared"` \| `"exclusive"` | `"none"` | [beta] A running service that is not `none` is GPU-resident fleet work: host protection stops it, when yieldable, while GPU work may not run, and a job reserving one of its pools is a GPU job. Needs sandbox.devices.gpu = 'compute' and requires.core >= 2.5. |
+| `services[].gpu.apis_any` | list of str | `[]` | [beta] Any of these GPU APIs (open set: metal, cuda, rocm, directml, vulkan). |
 | `probes` | list of Probe | `[]` |  |
 | `probes[].name` | str | required |  |
 | `probes[].exec` | list of str | required |  |
