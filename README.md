@@ -39,13 +39,15 @@ The Python package `oarbank_sdk` implements these contracts:
   fixtures list, as this host's platform would (sandboxed, through the egress proxy; a bootstrap stage's with the
   bootstrap grants, its artifacts checked against the module's pinned datasets; a stage that reserves an endpoint
   service's pool with that service up), and drives each endpoint service through its endpoint channel, failing one that
-  listens itself.
+  listens itself. Secrets reach only the stages that list them and must never appear in what a run or a verb returns;
+  container sets' members verify against their key, and images outside a set or unsigned are refused.
 - **Bundles** (`oarbank-sdk bundle build|verify|wheels`): digest-addressed `.mfb` files, with per-platform wheels and
   files. `oarbank-sdk deps compile` resolves a `requirements.in` into one hash-pinned, marker-free requirements file
   for every platform that installs it.
 - **A preview server** (`oarbank-sdk preview`) that renders a module's pages as the console will, from fixtures.
 - **Shared test vectors** in [`spec/vectors/`](spec/vectors/) (canonical JSON, job keys, portable paths, platform
-  tokens, variant resolution, placement classes) that every implementation reproduces exactly.
+  tokens, variant resolution, placement classes, container image signatures) that every implementation reproduces
+  exactly.
 
 The rules on versions, deprecation and what is public are in [spec/versioning.md](spec/versioning.md) and
 [spec/public-surface.md](spec/public-surface.md).
@@ -67,6 +69,8 @@ Then follow the tutorial, **[Build an Oarbank module in a day](docs/tutorial.md)
 by step: the manifest, the coordinator side, the runner, goldens, the conformance kit, a bundle and more than one
 platform. The reference module in [`examples/toy`](examples/toy) is the finished shape: a coordinator side
 (`toy_module.py`, on `oarbank_sdk.server`) and a runner (`toy_runner.py`, stdlib only).
+[`examples/taskbench`](examples/taskbench) shows a write-only secret delivered to one stage and container task images
+approved by their signing key ([Use secrets and signed container images](docs/secrets-and-images.md)).
 
 ## Developing the SDK
 

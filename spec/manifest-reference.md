@@ -44,7 +44,7 @@ Cross-field rules are in [manifest.md](manifest.md).
 | `coordinator.capabilities` | list of str | `[]` | [stable] Optional verbs/features implemented, e.g. result.merge, golden.compare, study.metrics, params.distance, result.upgrade, and campaign.tick.results [beta] (campaign.tick sees each done job's payload and artifacts; the host validates payloads against results.schema at acceptance; needs requires.core >= 2.3). |
 | `coordinator.concurrency` | int | `1` | [stable] Max in-flight requests the module accepts; 1 = serial. |
 | `coordinator.timeouts_s` | table str → float | `{"default": 10.0}` | [stable] Per-verb timeouts; key `default` applies to unlisted verbs. |
-| `coordinator.permissions` | list of `"datasets:read"` \| `"blobs:stat"` \| `"settings:read:self"` \| `"store:read:self"` \| `"nodes:read"` \| `"jobs:read:self"` \| `"files:read:self"` | `[]` | [stable] Host callbacks the module may call; everything else is denied. |
+| `coordinator.permissions` | list of `"datasets:read"` \| `"blobs:stat"` \| `"settings:read:self"` \| `"store:read:self"` \| `"nodes:read"` \| `"jobs:read:self"` \| `"files:read:self"` \| `"secrets:read:self"` | `[]` | [stable] Host callbacks the module may call; everything else is denied. |
 | `coordinator.campaign_effects` | list of `"jobs.enqueue"` \| `"jobs.cancel"` \| `"campaigns.create"` \| `"campaigns.update"` \| `"campaigns.cancel"` \| `"datasets.create"` \| `"datasets.update"` \| `"datasets.delete"` \| `"module_settings.update"` \| `"store.write"` \| `"store.delete"` \| `"files.write"` \| `"files.put"` \| `"files.delete"` \| `"external"` | `[]` | [beta] Effects campaign.tick may request (requires the campaign.tick capability). |
 | `coordinator.move` | MoveSection | `"rules=[] effects=[]"` |  |
 | `coordinator.move.rules` | list of MoveRule | `[]` | [beta] The first matching rule wins; unmatched state is carried. |
@@ -97,6 +97,7 @@ Cross-field rules are in [manifest.md](manifest.md).
 | `stages[].determinism` | `"exact"` \| `"within_tolerance"` \| `"none"` (optional) |  | [beta] This stage's determinism (absent: results.determinism). `none`: its results depend on when it ran (an ingestion job pulling a moving feed), so the host never replicates, compares, caches or golden-tests them. Only a standalone stage sets it (a chain compares as results.determinism). Needs requires.core >= 2.3. |
 | `stages[].default` | bool | `false` | [beta] The default stage: what a job runs when it names no stage (the single-stage form). Only a standalone stage sets it; exactly one does when several stages are standalone. Needs requires.core >= 2.3. |
 | `stages[].bootstrap` | bool | `false` | [beta] A bootstrap stage: its jobs run on nodes whose module doctor is healthy before the goldens pass, with only the module's egress allowlist (no tools, GPU, containers, module data or settings), and the host registers their output only when it is exactly datasets of [[datasets.pinned]]. A standalone stage, not the default one, with determinism none and no pools. Needs requires.core >= 2.4. |
+| `stages[].secrets` | list of str | `[]` | [beta] Declared [[secrets]] this stage's runner receives in OARBANK_SECRETS_FILE (no other stage, service, probe or doctor does). A job waits until each has a value for its node. Never on a bootstrap stage. Needs requires.core >= 2.5. |
 | `stages[].requires` | StageRequires | `"capabilities=[] pools={} needs_pools=[] platforms=[] resources=Resources(cpu=1.0, mem_gb=1.0)"` |  |
 | `stages[].requires.capabilities` | list of str | `[]` | [stable] Node capabilities that must be healthy (from probes/services). |
 | `stages[].requires.pools` | table str → int | `{}` | [stable] Countable pool tokens reserved for the job's lifetime. |
@@ -147,6 +148,9 @@ Cross-field rules are in [manifest.md](manifest.md).
 | `probes[].platforms` | list of str | `[]` | [beta] Only on these platforms (empty: every declared platform). |
 | `settings` | Settings | `"schema_=None"` |  |
 | `settings.schema` | str (optional) |  | [stable] JSON Schema (bundle path) for the module's settings; the core stores but never interprets them. |
+| `secrets` | list of Secret | `[]` | [beta] Write-only credentials. Needs requires.core >= 2.5. |
+| `secrets[].name` | str | required | [beta] The secret's name; unique. Stages list it in `secrets`. |
+| `secrets[].description` | str | `""` | [beta] What it is for, shown where the owner sets it. |
 | `results` | Results | required |  |
 | `results.schema` | str | required | [stable] JSON Schema (bundle path) for the result payload. |
 | `results.schema_version` | int | required |  |
@@ -234,7 +238,7 @@ Cross-field rules are in [manifest.md](manifest.md).
 | `operations[].preview` | bool | `false` | Implements op.plan (required when the effective tier is T2/T3). |
 | `cli` | CLI (optional) |  |  |
 | `cli.exec` | list of str | required | [beta] Module CLI; `oarbank cli <module> ...` runs it on the coordinator, sandboxed, with a token scoped to the module (OARBANKD_URL, OARBANK_TOKEN). |
-| `sandbox` | SandboxSection | `"contract=1 net=SandboxNet(mode='none', allow=[]) tools=[] devices=SandboxDevices(gpu='none') containers=[] exec_writable=False"` |  |
+| `sandbox` | SandboxSection | `"contract=1 net=SandboxNet(mode='none', allow=[]) tools=[] devices=SandboxDevices(gpu='none') containers=[] container_sets=[] exec_writable=False"` |  |
 | `sandbox.contract` | `1` | `1` | [beta] Sandbox contract version. |
 | `sandbox.net` | SandboxNet | `"mode='none' allow=[]"` |  |
 | `sandbox.net.mode` | str | `"none"` | [beta] Open set. `none`; `egress-allowlist`: only the `allow` hosts, through the agent's local proxy (the SDK sets HTTPS_PROXY/ALL_PROXY); `egress-any`: any public address, a separately approved full-trust grant. Never loopback or link-local, never listening. |
@@ -247,6 +251,13 @@ Cross-field rules are in [manifest.md](manifest.md).
 | `sandbox.containers` | list of ContainerImage | `[]` | [beta] Images the agent's container broker may run for the module's jobs (a stage that uses them reserves the `containers` pool). |
 | `sandbox.containers[].image` | str | required | [beta] A digest-pinned reference, e.g. `docker.io/org/tool:1.2@sha256:<64 hex>`. |
 | `sandbox.containers[].platform` | str | `"linux/arm64"` | [beta] OCI platform (open set), e.g. linux/arm64 or linux/amd64 (emulated where the node's arch differs). |
+| `sandbox.container_sets` | list of ContainerSet | `[]` | [beta] Image sets approved by signature (registry and repository prefix, a pinned cosign key, optionally a signed index). A job runs a set's images only if it lists them (jobs.enqueue `images`). Needs requires.core >= 2.5. |
+| `sandbox.container_sets[].name` | str | required | [beta] The set's name; unique; shown at approval and in the audit. |
+| `sandbox.container_sets[].registry` | str | required | [beta] The registry host[:port], lowercase (`docker.io` for Docker Hub). |
+| `sandbox.container_sets[].repository` | str | required | [beta] A repository path; ending with `/` it is a prefix (every repository below it), else exactly that repository. |
+| `sandbox.container_sets[].platform` | str | `"linux/arm64"` | [beta] OCI platform of the set's images. |
+| `sandbox.container_sets[].key` | str | required | [beta] Bundle path of the cosign public key: one ECDSA P-256 key, PEM `PUBLIC KEY` (SPKI), as `cosign generate-key-pair` writes `cosign.pub`. |
+| `sandbox.container_sets[].index` | str (optional) |  | [beta] A tagged reference of a signed image index (artifact type application/vnd.oarbank.image-set.v1+json): only the digests it lists are members. Absent: every image signed by the key is. |
 | `sandbox.exec_writable` | bool | `false` | [beta] Runners may execute files they wrote into the data or work directory (downloaded tools). Not enforceable as `false` on Windows without application control; nodes report it. |
 | `bundle` | BundleSection | `"executables=[] platform_files={}"` |  |
 | `bundle.executables` | list of str | `[]` | [stable] Globs (bundle paths) of files that get mode 755; every other file is 644. The argv[0] of every native exec is executable too. Modes never come from the build host's filesystem. |

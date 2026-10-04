@@ -60,6 +60,13 @@ tools = [{ id = "renderer4", trust = "code-exec" }]
 devices = { gpu = "compute" }
 containers = [{ image = "docker.io/org/tool:1.2@sha256:<64 hex>", platform = "linux/amd64" }]
 exec_writable = false
+
+[[sandbox.container_sets]]          # images approved by signature (core 2.5): see "Image sets"
+name = "tasks"
+registry = "ghcr.io"
+repository = "example/swe-tasks/"
+platform = "linux/amd64"
+key = "keys/tasks.pub"
 ```
 
 | Grant | What the process gets |
@@ -70,6 +77,7 @@ exec_writable = false
 | `tools` | Read and execute the host paths that the operator's **tool registry** maps the id to, per OS (e.g. `renderer4` → the renderer's install directory), resolved to canonical paths; the process finds them in `OARBANK_TOOLS_FILE`. `trust = "code-exec"` flags tools that run arbitrary code (a JVM, an interpreter, a shell) in the approval UI. On Windows, any readable binary is executable. |
 | `devices.gpu = "compute"` | GPU compute through the platform's APIs, with no display server. Flagged at approval: it widens the kernel surface. |
 | `containers` | The job's broker endpoint, for these digest-pinned images only. A stage that runs containers reserves the agent-provided `containers` pool. |
+| `container_sets` | The job's broker endpoint, for digest-pinned images under a registry and repository prefix that carry a cosign signature by a pinned key (or that a signed index lists), when the job lists them ([Image sets](#image-sets)). |
 | `exec_writable = true` | Runners may execute files they wrote into the data or work directory, such as downloaded tools. Windows cannot enforce `false` without application control, so nodes report it as `unavailable` there. |
 
 **Network rules, whatever the mode:**
@@ -99,7 +107,8 @@ before the module's goldens pass there, so it gets less than any other job of it
 | data directory | none: `OARBANK_MODULE_DATA` is not set, and nothing it fetched stays on the node |
 | network | the module's `egress-allowlist`, through the agent's proxy; none when the module's mode is `none` (a module with a bootstrap stage never requests `egress-any`) |
 | host tools, GPU, the container broker, executing written files | none (`OARBANK_TOOLS_FILE` lists no tools) |
-| module settings | an empty object in `OARBANK_SETTINGS_FILE` (operators keep credentials in settings) |
+| module settings | an empty object in `OARBANK_SETTINGS_FILE` |
+| secrets | none (a bootstrap stage lists none; no `OARBANK_SECRETS_FILE`) |
 
 `SandboxSection.for_bootstrap()` returns these grants. The agent takes the bootstrap flag from the module's entry in
 the signed release, never from the grant. A node whose agent applies them reports `grants.bootstrap` as `enforced`;
@@ -122,10 +131,10 @@ the only IPC its confinement allows. Requests are one JSON object per line, one 
 
 | Request | Fields | Answer |
 |---|---|---|
-| `container.run` | `image` (an approved reference), `platform`, `args[]`, `entrypoint?`, `mounts[] {src, dst, ro}`, `env{}`, `workdir?`, `network` (only with an egress grant), `timeout_s`, `cpus?`, `mem_gb?` | `{ok, exit_code, stdout_tail, stderr_tail, stdout_path, stderr_path, duration_s}`; the full output is written into the work directory |
+| `container.run` | `image` (an approved reference), `platform`, `args[]`, `entrypoint?`, `mounts[] {src, dst, ro}`, `env{}`, `workdir?`, `network` (only with an egress grant), `timeout_s`, `cpus?`, `mem_gb?`, `gpus?` (`"none"` or `"all"`; core 2.5) | `{ok, exit_code, stdout_tail, stderr_tail, stdout_path, stderr_path, duration_s}`; the full output is written into the work directory |
 | `container.pull` | `image`, `platform` | `{ok}` once the image is present |
-| `status` | | `{ok, running, images[]}` |
-| any refusal | | `{ok: false, error, detail}`: `image_not_approved`, `bad_mount`, `network_not_granted`, `runtime_unavailable`, `platform_unavailable` |
+| `status` | | `{ok, running, images[], gpus}`; `gpus` is `"all"` where the node passes GPUs through to containers, else `"none"` |
+| any refusal | | `{ok: false, error, detail}`: `image_not_approved`, `bad_mount`, `network_not_granted`, `gpu_not_granted`, `gpu_unavailable`, `registry_unavailable` (retryable), `runtime_unavailable`, `platform_unavailable` |
 
 **Mounts**
 - Mount sources are PortablePaths inside the work directory, or `data:<path>` inside the data directory.
@@ -140,6 +149,60 @@ the only IPC its confinement allows. Requests are one JSON object per line, one 
 - Files a container writes belong to the job's identity: rootless mode, or a user namespace, on Linux.
 - Exec bits and case sensitivity follow the host filesystem.
 - Containers die with their job.
+
+## Image sets
+
+Suites with one image per task (agent attempts, test suites, benchmark tasks) cannot list every digest. A
+`[[sandbox.container_sets]]` entry approves images by **who signed them** instead:
+
+| Key | Meaning |
+|---|---|
+| `name` | The set's name, unique; shown at approval and in the audit. |
+| `registry` | The registry, `host[:port]`, lowercase (`docker.io` for Docker Hub). |
+| `repository` | A repository path. Ending with `/` it is a prefix: every repository below it; otherwise exactly that repository. |
+| `platform` | The images' OCI platform. |
+| `key` | Bundle path of the cosign public key: one ECDSA P-256 key, PEM `PUBLIC KEY` (`cosign generate-key-pair` writes `cosign.pub`). |
+| `index` | Optional: a tagged reference of a signed image index; only the digests it lists are members. |
+
+**Membership.** A reference `<registry>/<repository>[:tag]@sha256:<hex>` (normalized as Docker does: `docker.io`,
+`library/`) belongs to a set when its registry and platform equal the set's and its repository is under the prefix, and:
+- **without `index`:** its digest carries a cosign signature by the key, in either format cosign writes: a Sigstore bundle
+  attached as an OCI referrer (cosign 3, and 2.4+ with `--new-bundle-format`: a DSSE envelope over an in-toto statement
+  with predicate `https://sigstore.dev/cosign/sign/v1` naming the digest), or the simple-signing manifest at tag
+  `sha256-<hex>.sig` (cosign 2). The key alone verifies it: no transparency log is consulted;
+- **with `index`:** the set's index lists the digest. The index is an OCI artifact at the `index` reference (artifact
+  type `application/vnd.oarbank.image-set.v1+json`, one layer of that type holding `{"type": "oarbank.image-set/v1",
+  "registry", "repository", "seq", "images": ["sha256:…"]}`) whose own digest carries a signature by the key. A node
+  refuses an index whose `seq` is lower than one it already accepted for the set. `oarbank_sdk.images.index_document()`
+  writes the layer; `oras push` and `cosign sign --key` publish it.
+
+**Digest pinning stays mandatory.** `container.run`, `container.pull` and `jobs.enqueue` name images by digest. A job
+runs a set's images only if it lists them (`jobs.enqueue` items' `images`, core 2.5); the coordinator refuses an image
+outside every approved list and set with 422 `image_not_approved`, and the broker refuses a set image the job did not
+list. The agent verifies membership **before pulling** (the runtime then pulls by digest), audits each digest's first
+run, and refuses anything else with `image_not_approved` and the reason in `detail`.
+
+**Approval** shows the prefix and the key's SHA-256 fingerprint, never a list of digests: new images in an approved set
+need no new module version. A new key, prefix or index needs one.
+
+`oarbank_sdk.images` is the reference policy (stdlib only, ECDSA included); the agent's Rust implementation agrees with
+it on `spec/vectors/image-signatures.json`. `oarbank_sdk.imagetest` builds signed test images in an OCI image layout,
+without cosign or a registry.
+
+## GPU passthrough
+
+`container.run` `gpus = "all"` gives the container every GPU of the node; a count comes in a later minor (an integer is
+`bad_request` today). A stage that runs GPU containers reserves the agent's **`gpu` pool** besides `containers`
+(`pools = {containers = 1, gpu = 1}`), and the runner declares `gpu.in_container = true` with `gpu.use` `shared` or
+`exclusive`, so the job holds a container token and the GPU for its lifetime, and the host's GPU admission (the owner's
+`gpu_jobs` policy, protected processes using the GPU) applies to it. The broker refuses `gpus = "all"` with
+`gpu_not_granted` for a job that did not reserve the `gpu` pool.
+
+| Platform | Mechanism | The node |
+|---|---|---|
+| Linux | CDI: a CDI spec (`/etc/cdi`, `/var/run/cdi`) with an `all` device, such as `nvidia-ctk cdi generate` writes; the run gets `--device <kind>=all` (Podman 4.1+, Docker 25+ with CDI) | offers the `gpu` pool; facts `containers.gpu = "cdi:<kind>"` |
+| Windows | the WSL2 GPU-PV path (`nvidia-ctk cdi generate --mode=wsl` in the agent's distribution, then CDI) | no agent container runtime yet: `containers.gpu = "undetected"` |
+| macOS | none: Colima and Apple `container` VMs have no Metal passthrough | `containers.gpu = "undetected"`, no `gpu` pool |
 
 ## Testing your module
 

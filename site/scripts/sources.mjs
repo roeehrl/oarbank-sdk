@@ -17,13 +17,21 @@ export const PAGES = [
     order: 1,
   },
   {
+    src: 'docs/secrets-and-images.md',
+    dest: 'build/secrets-and-images.md',
+    type: 'how-to',
+    description:
+      'Give one stage an API key that nothing else sees, approve hundreds of container task images by their signing key, and give containers the GPU.',
+    order: 2,
+  },
+  {
     src: 'docs/service-endpoints.md',
     dest: 'build/service-endpoints.md',
     type: 'how-to',
     title: 'Serve jobs from a warm service',
     description:
       'Load a model once per node in an endpoint service and let every job on the node send it work, without anything listening: the manifest, the service, the job and the conformance kit.',
-    order: 2,
+    order: 3,
   },
   {
     src: 'spec/public-surface.md',

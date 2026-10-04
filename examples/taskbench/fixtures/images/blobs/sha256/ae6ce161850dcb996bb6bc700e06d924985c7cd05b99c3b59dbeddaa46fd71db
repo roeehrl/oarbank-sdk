@@ -1,0 +1,1 @@
+{"critical":{"identity":{"docker-reference":"ghcr.io/example/taskbench/task-2@sha256:b1c9bee43e4ea65f65d72a99491cbe70104f5f4f2ef5bc78ac0829e323befafd"},"image":{"docker-manifest-digest":"sha256:b1c9bee43e4ea65f65d72a99491cbe70104f5f4f2ef5bc78ac0829e323befafd"},"type":"cosign container image signature"},"optional":null}

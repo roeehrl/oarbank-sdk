@@ -186,6 +186,69 @@
       "title": "ContainerImage",
       "type": "object"
     },
+    "ContainerSet": {
+      "additionalProperties": true,
+      "description": "Container images approved by signature instead of by digest (spec/sandbox.md, \"Image sets\"): every digest-pinned\nimage under a registry and repository prefix that carries a cosign signature by the pinned key, or that a signed image\nindex lists. Approval covers the prefix and the key, so new images need no new module version. [beta]",
+      "properties": {
+        "index": {
+          "anyOf": [
+            {
+              "maxLength": 300,
+              "pattern": "^[a-z0-9][a-z0-9._/:-]*:[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "[beta] A tagged reference of a signed image index (artifact type application/vnd.oarbank.image-set.v1+json): only the digests it lists are members. Absent: every image signed by the key is.",
+          "title": "Index"
+        },
+        "key": {
+          "description": "[beta] Bundle path of the cosign public key: one ECDSA P-256 key, PEM `PUBLIC KEY` (SPKI), as `cosign generate-key-pair` writes `cosign.pub`.",
+          "maxLength": 200,
+          "title": "Key",
+          "type": "string"
+        },
+        "name": {
+          "description": "[beta] The set's name; unique; shown at approval and in the audit.",
+          "maxLength": 64,
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "title": "Name",
+          "type": "string"
+        },
+        "platform": {
+          "default": "linux/arm64",
+          "description": "[beta] OCI platform of the set's images.",
+          "pattern": "^[a-z0-9]+/[a-z0-9_]+$",
+          "title": "Platform",
+          "type": "string"
+        },
+        "registry": {
+          "description": "[beta] The registry host[:port], lowercase (`docker.io` for Docker Hub).",
+          "maxLength": 253,
+          "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*(:[0-9]{1,5})?$",
+          "title": "Registry",
+          "type": "string"
+        },
+        "repository": {
+          "description": "[beta] A repository path; ending with `/` it is a prefix (every repository below it), else exactly that repository.",
+          "maxLength": 255,
+          "pattern": "^[a-z0-9]+([._-][a-z0-9]+)*(/[a-z0-9]+([._-][a-z0-9]+)*)*/?$",
+          "title": "Repository",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "registry",
+        "repository",
+        "key"
+      ],
+      "title": "ContainerSet",
+      "type": "object"
+    },
     "Coordinator": {
       "additionalProperties": true,
       "description": "The out-of-process coordinator side (module protocol over stdio). [stable]",
@@ -269,7 +332,8 @@
               "store:read:self",
               "nodes:read",
               "jobs:read:self",
-              "files:read:self"
+              "files:read:self",
+              "secrets:read:self"
             ],
             "type": "string"
           },
@@ -1873,6 +1937,14 @@
       "additionalProperties": true,
       "description": "What the module's node-side processes (runner, services, probes) need beyond their bundle, runtime, data and work\ndirectories (spec/sandbox.md). Every request is shown to an operator, who approves it for each module version before\nthat version can run. The coordinator side never gets these grants. [beta]",
       "properties": {
+        "container_sets": {
+          "description": "[beta] Image sets approved by signature (registry and repository prefix, a pinned cosign key, optionally a signed index). A job runs a set's images only if it lists them (jobs.enqueue `images`). Needs requires.core >= 2.5.",
+          "items": {
+            "$ref": "#/$defs/ContainerSet"
+          },
+          "title": "Container Sets",
+          "type": "array"
+        },
         "containers": {
           "description": "[beta] Images the agent's container broker may run for the module's jobs (a stage that uses them reserves the `containers` pool).",
           "items": {
@@ -1910,6 +1982,31 @@
         }
       },
       "title": "SandboxSection",
+      "type": "object"
+    },
+    "Secret": {
+      "additionalProperties": true,
+      "description": "A credential the owner sets through the core, write-only (spec/manifest.md, \"Secrets\"): stored encrypted on the\ncoordinator, never shown, delivered only to the runners of stages that list it and, with `secrets:read:self`, to\ncoordinator verbs. [beta]",
+      "properties": {
+        "description": {
+          "default": "",
+          "description": "[beta] What it is for, shown where the owner sets it.",
+          "maxLength": 500,
+          "title": "Description",
+          "type": "string"
+        },
+        "name": {
+          "description": "[beta] The secret's name; unique. Stages list it in `secrets`.",
+          "maxLength": 64,
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "Secret",
       "type": "object"
     },
     "Service": {
@@ -2158,6 +2255,16 @@
         },
         "retry": {
           "$ref": "#/$defs/Retry"
+        },
+        "secrets": {
+          "description": "[beta] Declared [[secrets]] this stage's runner receives in OARBANK_SECRETS_FILE (no other stage, service, probe or doctor does). A job waits until each has a value for its node. Never on a bootstrap stage. Needs requires.core >= 2.5.",
+          "items": {
+            "maxLength": 64,
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "type": "string"
+          },
+          "title": "Secrets",
+          "type": "array"
         },
         "timeout_s": {
           "default": 1800.0,
@@ -2648,6 +2755,14 @@
     },
     "sandbox": {
       "$ref": "#/$defs/SandboxSection"
+    },
+    "secrets": {
+      "description": "[beta] Write-only credentials. Needs requires.core >= 2.5.",
+      "items": {
+        "$ref": "#/$defs/Secret"
+      },
+      "title": "Secrets",
+      "type": "array"
     },
     "services": {
       "items": {

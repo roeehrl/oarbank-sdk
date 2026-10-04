@@ -1,0 +1,14 @@
+{
+ "name": "taskbench-golden",
+ "key_inputs": {
+  "log": "test_a PASSED\ntest_b PASSED\ntest_c FAILED\n"
+ },
+ "expected": {
+  "digest": "d4735e3a265e16eee03f59718b9b5d03019c07d8b6c51f90da3a666eec13ab35",
+  "digest_version": 1
+ },
+ "stages": [
+  "score"
+ ],
+ "datasets": []
+}

@@ -6,7 +6,8 @@ without a fleet.
 - Module views are computed by the module itself (`ui.view.compute`) from `<bundle>/fixtures/ui/inputs.json`.
 - Operations are *not* executed: the preview shows the plan (op.plan) and the effects op.apply would ask
   the host to make.
-- Sandboxed frames are served from a second origin (port + 1) with the console's frame CSP and bridge.
+- Sandboxed frames are served from a second origin (port + 1, or any free port when port is 0) with the console's
+  frame CSP and bridge.
 Standard library HTTP server only; it binds 127.0.0.1.
 """
 import html
@@ -53,7 +54,7 @@ class Preview:
         self.root = self.path.parent
         self.man = mf.load(self.path)
         self.name = self.man.module.id.rsplit(".", 1)[-1]
-        self.port, self.frame_port = port, port + 1
+        self.port, self.frame_port = port, port + 1 if port else 0
         self.fix = self.root / "fixtures" / "ui"
         self.settings = self._json(self.fix / "settings.json", {})
         argv = mf.resolve_exec(self.man.coordinator.exec, self.root, python)
@@ -210,6 +211,7 @@ class Preview:
 
         self.console = ThreadingHTTPServer(("127.0.0.1", self.port), Console)
         self.frames = ThreadingHTTPServer(("127.0.0.1", self.frame_port), Frames)
+        self.port, self.frame_port = self.console.server_address[1], self.frames.server_address[1]
         threading.Thread(target=self.frames.serve_forever, daemon=True).start()
         return self.console
 
