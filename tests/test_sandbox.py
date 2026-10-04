@@ -89,6 +89,28 @@ def test_a_sandboxed_process_reaches_only_its_own_directories(tmp_path):
     assert not escaped, escaped
 
 
+@pytest.mark.skipif(os.name == "nt", reason="Seatbelt profiles take POSIX paths")
+def test_interpreter_roots_keep_the_names_an_interpreter_uses_through_links(tmp_path):
+    """A Homebrew CPython names its prefix, library and executable by its opt/ link whichever way it was started (and
+    a venv on it names its base the same way): the roots keep those spellings, so the profile gives their hops metadata,
+    while everything they grant to read is the resolved keg."""
+    keg = tmp_path / "Cellar" / "py" / "1"
+    (keg / "lib" / "python3").mkdir(parents=True)
+    (keg / "bin").mkdir()
+    (keg / "bin" / "python3").write_text("", encoding="utf-8")
+    (tmp_path / "opt").mkdir()
+    (tmp_path / "opt" / "py").symlink_to("../Cellar/py/1")
+    opt = tmp_path / "opt" / "py"
+    lay = {"base_prefix": str(opt), "prefix": str(opt), "executable": str(keg / "bin" / "python3"),
+           "paths": [str(opt / "lib" / "python3")], "names": [str(opt / "bin" / "python3")]}
+    roots = S.interpreter_roots(layout=lay)
+    real = os.path.realpath(keg)
+    assert roots[0] == real and str(opt) in roots and str(opt / "bin" / "python3") in roots
+    _, params = S.render(S.Policy(module="m", ro=roots))
+    assert str(opt) in {v for k, v in params if k.startswith("LINK_")}
+    assert all(v == real or v.startswith(real + "/") for k, v in params if k.startswith("RO_"))
+
+
 @darwin
 def test_an_interpreter_behind_symlink_hops_starts_and_reads_no_more(tmp_path):
     """Homebrew's layout: bin/python3 and opt/python@X are symlinks into the Cellar. Its CPython realpath()s its own

@@ -200,12 +200,13 @@ def render(policy: Policy) -> tuple[str, list[tuple[str, str]]]:
 SHARED_PREFIXES = ("/", "/usr", "/usr/local", "/opt/homebrew", "/opt/local", "/home/linuxbrew/.linuxbrew")
 _LAYOUT = ("import json, sys, sysconfig, os; p = sysconfig.get_paths(); print(json.dumps({'base_prefix': sys.base_prefix, "
            "'prefix': sys.prefix, 'executable': os.path.realpath(sys.executable), 'paths': [p[k] for k in "
-           "('stdlib', 'platstdlib', 'purelib', 'platlib')]}))")
+           "('stdlib', 'platstdlib', 'purelib', 'platlib')], 'names': [sys.executable, sys._base_executable]}))")
 
 
 def interpreter_layout(python: str | None = None) -> dict:
     """Where an interpreter lives, as it reports itself: {base_prefix, prefix, executable (resolved), paths (stdlib,
-    platstdlib, purelib, platlib)}, plus `extra`: this process's other import roots (editable installs included)."""
+    platstdlib, purelib, platlib), names (its executable and its base's, as it calls them)}, plus `extra`: this
+    process's other import roots (editable installs included)."""
     import json
     import subprocess
     import sysconfig
@@ -213,6 +214,7 @@ def interpreter_layout(python: str | None = None) -> dict:
         paths = sysconfig.get_paths()
         return {"base_prefix": sys.base_prefix, "prefix": sys.prefix, "executable": os.path.realpath(sys.executable),
                 "paths": [paths[k] for k in ("stdlib", "platstdlib", "purelib", "platlib")],
+                "names": [sys.executable, sys._base_executable],
                 "extra": [p for p in sys.path if p and os.path.isdir(p)]}
     out = subprocess.run([python, "-I", "-c", _LAYOUT], capture_output=True, text=True, timeout=60, check=True)
     return {**json.loads(out.stdout), "extra": []}
@@ -221,7 +223,12 @@ def interpreter_layout(python: str | None = None) -> dict:
 def interpreter_roots(python: str | None = None, layout: dict | None = None) -> list[str]:
     """What a Python process needs to read to start and import: its own prefix (a venv's, and the base interpreter's)
     unless that is a shared one such as /usr or /opt/homebrew, its library directories, its resolved executable, and
-    (for this process) every import root. Never a shared parent of the interpreter."""
+    (for this process) every import root. Never a shared parent of the interpreter.
+
+    Also each of those paths, and the interpreter's own names for its executable, as the interpreter spells them when
+    that goes through a symlink and lands inside a root above: the profile resolves them to that root, and their hops
+    get the metadata rules realpath needs. A Homebrew CPython calls itself and its prefix by its opt/python@3.x path
+    whichever way it was started, so those links must resolve inside the sandbox."""
     lay = layout or interpreter_layout(python)
     shared = {os.path.realpath(x) for x in SHARED_PREFIXES}
     roots = [x for x in (lay["base_prefix"], lay["prefix"]) if os.path.realpath(x) not in shared]
@@ -233,7 +240,10 @@ def interpreter_roots(python: str | None = None, layout: dict | None = None) -> 
             continue
         if not any(rr == o or rr.startswith(o.rstrip(os.sep) + os.sep) for o in out):
             out = [o for o in out if not o.startswith(rr.rstrip(os.sep) + os.sep)] + [rr]
-    return out
+    inside = lambda p: any(p == o or p.startswith(o.rstrip(os.sep) + os.sep) for o in out)
+    linked = [n for n in (*roots, *lay.get("names", [])) if n and os.path.realpath(n) != os.path.abspath(n)
+              and inside(os.path.realpath(n))]
+    return out + [n for n in dict.fromkeys(linked) if n not in out]
 
 
 def node_policy(module: str, bundle, work, data, python: str | None = None, sandbox=None, broker_socket: str | None = None,
