@@ -17,7 +17,7 @@ from pydantic import AfterValidator, BaseModel, Field, field_validator, model_va
 
 from . import platform as pf
 from . import portable
-from ._base import Contract, ModuleId, Name, SemVer, Stability, VersionRange
+from ._base import Contract, ModuleId, Name, SemVer, Sha256, Stability, VersionRange
 from .module_protocol import CAP_TICK_RESULTS
 from .ui import OperationDecl, UISection
 
@@ -33,6 +33,7 @@ BUNDLE_TOKEN = "{bundle}"
 # on one, or dispute an ingestion stage's honest runs. Cores already refuse a module whose core range excludes them.
 PLATFORM_KEYS_CORE = (2, 2)       # the per-platform and placement keys (SDK 1.1)
 SDK13_KEYS_CORE = (2, 3)          # stage determinism and default, structured tick results, dataset update/delete (SDK 1.3)
+BOOTSTRAP_KEYS_CORE = (2, 4)      # bootstrap stages and the pinned dataset table (SDK 1.4)
 KNOWN_FEATURES = ("placement",)          # requires.features this SDK understands (must-understand)
 ENV_NAME = r"^[A-Z][A-Z0-9_]*$"
 # Variables the agent or the host sets itself (spec/runner-protocol.md, spec/platforms.md "Environment per OS"); a
@@ -284,6 +285,12 @@ class SandboxSection(Contract):
         return bool(self.net.mode != "none" or self.tools or self.devices.gpu != "none" or self.containers
                     or self.exec_writable)
 
+    def for_bootstrap(self) -> "SandboxSection":
+        """The grants a bootstrap stage's jobs get (spec/sandbox.md, "Bootstrap jobs"): the network as approved (none or the
+        egress allowlist; a module with a bootstrap stage never asks for egress-any) and nothing else: no host tools, GPU,
+        containers or execution of written files. The host also withholds the module data directory and settings."""
+        return SandboxSection(contract=self.contract, net=self.net)
+
 
 class BundleSection(Contract):
     """How the bundle is built (spec/bundles.md). [stable]"""
@@ -460,6 +467,11 @@ class Stage(Contract):
     default: bool = Field(False, description=(
         "[beta] The default stage: what a job runs when it names no stage (the single-stage form). Only a standalone stage "
         "sets it; exactly one does when several stages are standalone. Needs requires.core >= 2.3."))
+    bootstrap: bool = Field(False, description=(
+        "[beta] A bootstrap stage: its jobs run on nodes whose module doctor is healthy before the goldens pass, with only "
+        "the module's egress allowlist (no tools, GPU, containers, module data or settings), and the host registers their "
+        "output only when it is exactly datasets of [[datasets.pinned]]. A standalone stage, not the default one, with "
+        "determinism none and no pools. Needs requires.core >= 2.4."))
     requires: StageRequires = Field(default_factory=StageRequires)
     timeout_s: Annotated[float, Field(gt=0, le=86400)] = Field(1800.0, description="[stable] Hard wall-clock limit per attempt.")
     retry: Retry = Field(default_factory=Retry)
@@ -568,6 +580,35 @@ class DatasetAttr(Contract):
     indexed: bool = False
 
 
+DATASET_ID = r"^[A-Za-z0-9][A-Za-z0-9_.:+-]{0,127}$"
+
+
+class PinnedFile(Contract):
+    """One file of a pinned dataset. [beta]"""
+    path: Annotated[str, AfterValidator(portable.check_portable_path)] = Field(description=(
+        "[beta] PortablePath inside the dataset (what a job sees under the dataset's mount)."))
+    sha256: Sha256 = Field(description="[beta] The file's sha256, 64 lowercase hex digits.")
+    size: Annotated[int, Field(ge=0)] = Field(description="[beta] The file's size in bytes.")
+
+
+class PinnedDataset(Contract):
+    """A dataset a bootstrap stage may provide, file by file (spec/manifest.md, "Pinned datasets"). [beta]"""
+    dataset_id: Annotated[str, Field(pattern=DATASET_ID)] = Field(description="[beta] The dataset id the host registers.")
+    kind: Name = Field(description="[beta] One of [datasets].kinds.")
+    meta: dict = Field(default_factory=dict, description="[beta] The registered dataset's meta (its attrs).")
+    platform: PlatformToken | None = Field(None, description=(
+        "[beta] Set exactly when `kind` is platform-bound: one of requires.platforms."))
+    files: list[PinnedFile] = Field(min_length=1, description="[beta] Every file, with unique paths.")
+
+    def contents(self) -> frozenset:
+        """The pinned files as (path, sha256, size), the form an artifact is matched by."""
+        return frozenset((f.path, f.sha256, f.size) for f in self.files)
+
+    def dataset_files(self) -> list[dict]:
+        """The files as a dataset row holds them ({path, digest, size}), sorted by path."""
+        return [{"path": f.path, "digest": f.sha256, "size": f.size} for f in sorted(self.files, key=lambda f: f.path)]
+
+
 class Datasets(Contract):
     kinds: list[Name] = Field(default_factory=list, description=(
         "[stable] Dataset kinds this module registers (datasets.create refuses others). Kinds are short names scoped by the "
@@ -576,6 +617,13 @@ class Datasets(Contract):
     platform_bound: list[Name] = Field(default_factory=list, description=(
         "[beta] Kinds whose datasets only make sense on one platform (an index built by a native tool): datasets.create "
         "must give their `platform`, and jobs using them run only there. Needs requires.core >= 2.2."))
+    pinned: list[PinnedDataset] = Field(default_factory=list, description=(
+        "[beta] The datasets the module's bootstrap stages may provide, each file with its sha256 and size. The host "
+        "registers a bootstrap job's artifact only when its files are exactly one entry's, and datasets.create of a pinned "
+        "id only with the pinned contents. Needs a bootstrap stage and requires.core >= 2.4."))
+
+    def pin(self, dataset_id: str) -> PinnedDataset | None:
+        return next((p for p in self.pinned if p.dataset_id == dataset_id), None)
 
 
 class Goldens(Contract):
@@ -663,7 +711,11 @@ class Manifest(Contract):
             ("the datasets.update and datasets.delete effects", bool({"datasets.update", "datasets.delete"} & set(
                 self.coordinator.campaign_effects + self.coordinator.move.effects + [k for o in self.operations for k in o.effects]))),
         ]
-        return out + [(k, SDK13_KEYS_CORE) for k, on in sdk13 if on]
+        sdk14 = [
+            ("stages[].bootstrap", any(s.bootstrap for s in self.stages)),
+            ("datasets.pinned", bool(self.datasets.pinned)),
+        ]
+        return out + [(k, SDK13_KEYS_CORE) for k, on in sdk13 if on] + [(k, BOOTSTRAP_KEYS_CORE) for k, on in sdk14 if on]
 
     # ------------------------------------------------------------------------ stages
 
@@ -694,6 +746,43 @@ class Manifest(Contract):
     def compares(self, stage: str | None) -> bool:
         """Whether the host compares this stage's results (replicas, disputes, the result cache, goldens)."""
         return self.determinism_of(stage) != "none"
+
+    def is_bootstrap(self, stage: str | None) -> bool:
+        """Whether jobs of this stage are bootstrap jobs (None: the default stage, which never is)."""
+        st = self.stage(stage) if stage else None
+        return bool(st and st.bootstrap)
+
+    def bootstrap_problem(self, payload, artifacts: list) -> str | None:
+        """Why a bootstrap job's result is not exactly pinned datasets (None: it is): its payload must be empty, and each
+        of its artifacts (at least one; files as {path, digest, size}) must hold exactly one pin's files."""
+        if payload:
+            return "a bootstrap result carries no payload"
+        if not artifacts:
+            return "a bootstrap result carries at least one artifact (a pinned dataset)"
+        for a in artifacts:
+            if self.pin_of(a.get("files") or []):
+                continue
+            paths = {f.get("path") for f in a.get("files") or []}
+            near = max(self.datasets.pinned, key=lambda p: len(paths & {f.path for f in p.files}), default=None)
+            name = a.get("name")
+            if near is None or not paths & {f.path for f in near.files}:
+                return f"artifact {name!r}: its files {sorted(paths)[:3]} are no pinned dataset's"
+            want = {f.path: (f.sha256, f.size) for f in near.files}
+            have = {f.get("path"): (f.get("digest"), f.get("size")) for f in a.get("files") or []}
+            for path in sorted(set(want) | set(have)):
+                if path not in have:
+                    return f"artifact {name!r}: pinned dataset {near.dataset_id} has {path}, which the artifact lacks"
+                if path not in want:
+                    return f"artifact {name!r}: {path} is not a file of pinned dataset {near.dataset_id}"
+                if have[path] != want[path]:
+                    return (f"artifact {name!r}: {path} is sha256 {have[path][0]} ({have[path][1]} bytes); pinned dataset "
+                            f"{near.dataset_id} pins {want[path][0]} ({want[path][1]} bytes)")
+        return None
+
+    def pin_of(self, files: list) -> PinnedDataset | None:
+        """The pinned dataset whose files are exactly these ({path, digest, size})."""
+        got = frozenset((f.get("path"), f.get("digest"), f.get("size")) for f in files)
+        return next((p for p in self.datasets.pinned if p.contents() == got), None)
 
     def mix(self) -> str:
         """The placement mix the scheduler applies to the module's units (absent: `any`; unknown: `same-platform`)."""
@@ -777,6 +866,7 @@ class Manifest(Contract):
         if not any(self.compares(s.name) for s in self.stages):
             raise ValueError("no stage compares (every stage's determinism is none): goldens need one, and every module "
                              "is certified on golden evidence")
+        self._bootstrap_rules(chain)
         if len(self.stages) > 1 and "result.merge" not in self.coordinator.capabilities:
             raise ValueError("a multi-stage module must implement result.merge (coordinator.capabilities)")
         if self.goldens and self.goldens.compare == "verb" and "golden.compare" not in self.coordinator.capabilities:
@@ -810,6 +900,52 @@ class Manifest(Contract):
             raise ValueError(f"{', '.join(k for k, _ in short)} need requires.core >= {floor} (older cores ignore them); "
                              f"core is {self.requires.core!r}")
         return self
+
+    def _bootstrap_rules(self, chain: set):
+        """Bootstrap stages and the pinned dataset table (spec/manifest.md, rule 15)."""
+        boot = [s for s in self.stages if s.bootstrap]
+        for s in boot:
+            if s.name in chain:
+                raise ValueError(f"stage {s.name!r}: a bootstrap stage is standalone (neither `after` another nor depended on)")
+            if s.name == self.default_stage():
+                raise ValueError(f"stage {s.name!r}: a bootstrap stage is never the default stage (a job runs it only by "
+                                 "naming it)")
+            if self.determinism_of(s.name) != "none":
+                raise ValueError(f"stage {s.name!r}: a bootstrap stage has determinism none (its results are never compared, "
+                                 "cached or golden-tested)")
+            if s.requires.pools or s.requires.needs_pools:
+                raise ValueError(f"stage {s.name!r}: a bootstrap stage reserves and needs no pools (its jobs get no container "
+                                 "broker, GPU or module services)")
+        pins = self.datasets.pinned
+        if boot and not pins:
+            raise ValueError(f"bootstrap stages {[s.name for s in boot]} need [[datasets.pinned]]: the host registers a "
+                             "bootstrap job's output only when it is exactly a pinned dataset")
+        if pins and not boot:
+            raise ValueError("[[datasets.pinned]] needs a bootstrap stage (pins say what bootstrap jobs may provide)")
+        if boot and self.sandbox.net.mode == "egress-any":
+            raise ValueError("a module with a bootstrap stage cannot request sandbox.net.mode = 'egress-any': bootstrap jobs "
+                             "get the egress allowlist or no network")
+        ids = [p.dataset_id for p in pins]
+        dup = sorted({i for i in ids if ids.count(i) > 1})
+        if dup:
+            raise ValueError(f"[[datasets.pinned]] lists {dup} more than once")
+        seen = {}
+        for p in pins:
+            where = f"pinned dataset {p.dataset_id!r}"
+            if p.kind not in self.datasets.kinds:
+                raise ValueError(f"{where}: kind {p.kind!r} is not in datasets.kinds")
+            if p.kind in self.datasets.platform_bound and p.platform is None:
+                raise ValueError(f"{where}: kind {p.kind!r} is platform-bound, so the pin sets `platform`")
+            if p.platform is not None and p.kind not in self.datasets.platform_bound:
+                raise ValueError(f"{where}: `platform` is only for platform-bound kinds (datasets.platform_bound)")
+            if p.platform is not None and p.platform not in self.requires.platforms:
+                raise ValueError(f"{where}: platform {p.platform!r} is not in requires.platforms")
+            paths = [f.path for f in p.files]
+            if len(set(paths)) != len(paths):
+                raise ValueError(f"{where}: file paths must be unique")
+            if p.contents() in seen:
+                raise ValueError(f"{where} holds the same files as {seen[p.contents()]!r}: an artifact names its pin by its files")
+            seen[p.contents()] = p.dataset_id
 
     def _platform_rules(self, declared: set):
         """The cross-field rules of the per-platform declarations (spec/manifest.md, rules 9-11 and 13)."""

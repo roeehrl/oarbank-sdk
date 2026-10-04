@@ -454,6 +454,14 @@
           "title": "Kinds",
           "type": "array"
         },
+        "pinned": {
+          "description": "[beta] The datasets the module's bootstrap stages may provide, each file with its sha256 and size. The host registers a bootstrap job's artifact only when its files are exactly one entry's, and datasets.create of a pinned id only with the pinned contents. Needs a bootstrap stage and requires.core >= 2.4.",
+          "items": {
+            "$ref": "#/$defs/PinnedDataset"
+          },
+          "title": "Pinned",
+          "type": "array"
+        },
         "platform_bound": {
           "description": "[beta] Kinds whose datasets only make sense on one platform (an index built by a native tool): datasets.create must give their `platform`, and jobs using them run only there. Needs requires.core >= 2.2.",
           "items": {
@@ -1051,6 +1059,92 @@
         "file"
       ],
       "title": "PageDecl",
+      "type": "object"
+    },
+    "PinnedDataset": {
+      "additionalProperties": false,
+      "description": "A dataset a bootstrap stage may provide, file by file (spec/manifest.md, \"Pinned datasets\"). [beta]",
+      "properties": {
+        "dataset_id": {
+          "description": "[beta] The dataset id the host registers.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:+-]{0,127}$",
+          "title": "Dataset Id",
+          "type": "string"
+        },
+        "files": {
+          "description": "[beta] Every file, with unique paths.",
+          "items": {
+            "$ref": "#/$defs/PinnedFile"
+          },
+          "minItems": 1,
+          "title": "Files",
+          "type": "array"
+        },
+        "kind": {
+          "description": "[beta] One of [datasets].kinds.",
+          "maxLength": 64,
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "title": "Kind",
+          "type": "string"
+        },
+        "meta": {
+          "additionalProperties": false,
+          "description": "[beta] The registered dataset's meta (its attrs).",
+          "title": "Meta",
+          "type": "object"
+        },
+        "platform": {
+          "anyOf": [
+            {
+              "maxLength": 40,
+              "pattern": "^[a-z][a-z0-9]*-[a-z0-9_]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "[beta] Set exactly when `kind` is platform-bound: one of requires.platforms.",
+          "title": "Platform"
+        }
+      },
+      "required": [
+        "dataset_id",
+        "kind",
+        "files"
+      ],
+      "title": "PinnedDataset",
+      "type": "object"
+    },
+    "PinnedFile": {
+      "additionalProperties": false,
+      "description": "One file of a pinned dataset. [beta]",
+      "properties": {
+        "path": {
+          "description": "[beta] PortablePath inside the dataset (what a job sees under the dataset's mount).",
+          "title": "Path",
+          "type": "string"
+        },
+        "sha256": {
+          "description": "[beta] The file's sha256, 64 lowercase hex digits.",
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "size": {
+          "description": "[beta] The file's size in bytes.",
+          "minimum": 0,
+          "title": "Size",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "path",
+        "sha256",
+        "size"
+      ],
+      "title": "PinnedFile",
       "type": "object"
     },
     "Placement": {
@@ -1971,6 +2065,12 @@
           "default": null,
           "description": "[stable] Stage whose output this stage consumes (its artifacts become inputs).",
           "title": "After"
+        },
+        "bootstrap": {
+          "default": false,
+          "description": "[beta] A bootstrap stage: its jobs run on nodes whose module doctor is healthy before the goldens pass, with only the module's egress allowlist (no tools, GPU, containers, module data or settings), and the host registers their output only when it is exactly datasets of [[datasets.pinned]]. A standalone stage, not the default one, with determinism none and no pools. Needs requires.core >= 2.4.",
+          "title": "Bootstrap",
+          "type": "boolean"
         },
         "default": {
           "default": false,

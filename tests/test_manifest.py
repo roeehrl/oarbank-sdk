@@ -188,3 +188,103 @@ def test_dataset_update_and_delete_effects_need_core_2_3(where):
     d = copy.deepcopy(doc("toy"))
     declare(">=2.3")(d)
     m.Manifest.model_validate(d)
+
+
+SHA = "ab" * 32
+
+
+def bootstrapped(d, **stage):
+    """toy with a bootstrap `fetch` stage beside its default `run`, and one pinned tool dataset."""
+    d["requires"]["core"] = ">=2.4,<3"
+    d["coordinator"]["capabilities"].append("result.merge")
+    d["stages"][0]["default"] = True
+    d["stages"].append({"name": "fetch", "bootstrap": True, "determinism": "none", **stage})
+    d["datasets"] = {"kinds": ["tool"], "pinned": [
+        {"dataset_id": "tool:sum-1", "kind": "tool", "meta": {"version": "1"},
+         "files": [{"path": "bin/sum.py", "sha256": SHA, "size": 12}]}]}
+    return d
+
+
+def test_a_bootstrap_stage_is_standalone_never_default_never_compared_and_reserves_no_pools():
+    man = m.Manifest.model_validate(bootstrapped(copy.deepcopy(doc("toy"))))
+    assert man.is_bootstrap("fetch") and not man.is_bootstrap("run") and not man.is_bootstrap(None)
+    assert man.core_keys_used()[-2:] == [("stages[].bootstrap", (2, 4)), ("datasets.pinned", (2, 4))]
+    bad(lambda d: bootstrapped(d, determinism="exact"), "a bootstrap stage has determinism none", name="toy")
+    bad(lambda d: bootstrapped(d).update(results={**d["results"], "determinism": "exact"}) or d["stages"][1].pop("determinism"),
+        "a bootstrap stage has determinism none", name="toy")
+    bad(lambda d: bootstrapped(d, requires={"needs_pools": ["containers"]}).update(
+        sandbox={"containers": [{"image": "docker.io/x/y@sha256:" + SHA}]}), "reserves and needs no pools", name="toy")
+
+    def default(d):
+        bootstrapped(d)
+        d["stages"][0]["default"] = False
+        d["stages"][1]["default"] = True
+        d["stages"][0]["determinism"] = "exact"
+    bad(default, "never the default stage", name="toy")
+
+    def chained(d):
+        d.update(requires={**d["requires"], "core": ">=2.4,<3"})
+        d["stages"][1]["bootstrap"] = True                     # render, which score runs after
+    bad(chained, "a bootstrap stage is standalone")
+
+
+def test_bootstrap_stages_and_pins_need_each_other_and_core_2_4():
+    bad(lambda d: bootstrapped(d)["datasets"].update(pinned=[]), r"need \[\[datasets.pinned\]\]", name="toy")
+    bad(lambda d: bootstrapped(d)["stages"][1].update(bootstrap=False), r"\[\[datasets.pinned\]\] needs a bootstrap stage",
+        name="toy")
+    bad(lambda d: bootstrapped(d)["requires"].update(core=">=2.3,<3"),
+        r"stages\[\]\.bootstrap, datasets.pinned need requires.core >= 2.4", name="toy")
+    bad(lambda d: bootstrapped(d).update(sandbox={"net": {"mode": "egress-any"}}), "cannot request sandbox.net.mode = 'egress-any'",
+        name="toy")
+    d = bootstrapped(copy.deepcopy(doc("toy")))
+    d["sandbox"] = {"net": {"mode": "egress-allowlist", "allow": ["example.org"]}}
+    m.Manifest.model_validate(d)
+
+
+def test_pinned_datasets_are_well_formed():
+    def pin(**kw):
+        def f(d):
+            bootstrapped(d)
+            d["datasets"]["pinned"][0].update(kw)
+        return f
+    bad(pin(kind="scene"), "kind 'scene' is not in datasets.kinds", name="toy")
+    bad(pin(dataset_id="bad id"), "dataset_id", name="toy")
+    bad(pin(files=[]), "files", name="toy")
+    bad(pin(files=[{"path": "/abs", "sha256": SHA, "size": 1}]), "relative", name="toy")
+    bad(pin(files=[{"path": "a", "sha256": "AB" * 32, "size": 1}]), "sha256", name="toy")
+    bad(pin(files=[{"path": "a", "sha256": SHA, "size": -1}]), "size", name="toy")
+    bad(pin(files=[{"path": "a", "sha256": SHA, "size": 1}, {"path": "a", "sha256": SHA, "size": 1}]), "paths must be unique",
+        name="toy")
+    bad(pin(platform="linux-amd64"), "only for platform-bound kinds", name="toy")
+    bad(lambda d: pin()(d) or d["datasets"].update(platform_bound=["tool"]), "is platform-bound, so the pin sets `platform`",
+        name="toy")
+    bad(lambda d: pin(platform="plan9-arm64")(d) or d["datasets"].update(platform_bound=["tool"]), "not in requires.platforms",
+        name="toy")
+    bad(lambda d: pin()(d) or d["datasets"]["pinned"].append(dict(d["datasets"]["pinned"][0])), "more than once", name="toy")
+    bad(lambda d: pin()(d) or d["datasets"]["pinned"].append({**d["datasets"]["pinned"][0], "dataset_id": "tool:sum-2"}),
+        "holds the same files as 'tool:sum-1'", name="toy")
+
+
+def test_a_bootstrap_result_is_exactly_pinned_datasets():
+    man = m.Manifest.model_validate(bootstrapped(copy.deepcopy(doc("toy"))))
+    good = [{"name": "tool", "files": [{"path": "bin/sum.py", "digest": SHA, "size": 12}]}]
+    assert man.bootstrap_problem({}, good) is None and man.pin_of(good[0]["files"]).dataset_id == "tool:sum-1"
+    assert man.datasets.pin("tool:sum-1").dataset_files() == [{"path": "bin/sum.py", "digest": SHA, "size": 12}]
+    assert "no payload" in man.bootstrap_problem({"n": 1}, good)
+    assert "at least one artifact" in man.bootstrap_problem({}, [])
+    changed = [{"name": "tool", "files": [{"path": "bin/sum.py", "digest": "cd" * 32, "size": 12}]}]
+    assert man.bootstrap_problem({}, changed) == (f"artifact 'tool': bin/sum.py is sha256 {'cd' * 32} (12 bytes); pinned dataset "
+                                                  f"tool:sum-1 pins {SHA} (12 bytes)")
+    extra = [{"name": "tool", "files": good[0]["files"] + [{"path": "README", "digest": SHA, "size": 1}]}]
+    assert "README is not a file of pinned dataset tool:sum-1" in man.bootstrap_problem({}, extra)
+    assert "no pinned dataset's" in man.bootstrap_problem({}, good + [{"name": "other", "files": [{"path": "x", "digest": SHA,
+                                                                                                    "size": 1}]}])
+    assert man.pin_of(changed[0]["files"]) is None
+
+
+def test_bootstrap_jobs_get_the_network_and_nothing_else():
+    sb = m.SandboxSection.model_validate({"net": {"mode": "egress-allowlist", "allow": ["example.org"]},
+                                          "tools": [{"id": "java17", "trust": "code-exec"}], "devices": {"gpu": "compute"},
+                                          "containers": [{"image": "docker.io/x/y@sha256:" + SHA}], "exec_writable": True})
+    b = sb.for_bootstrap()
+    assert (b.net, b.tools, b.devices.gpu, b.containers, b.exec_writable) == (sb.net, [], "none", [], False)

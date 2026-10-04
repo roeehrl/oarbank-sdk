@@ -48,6 +48,9 @@ then the manifest's `[runner].env` with the platform variant's `env` merged over
 A module gets host tools through `[sandbox].tools` and finds them in `OARBANK_TOOLS_FILE`; there are no tool-specific
 variables such as `JAVA_HOME`.
 
+A job of a bootstrap stage gets less ([sandbox.md](sandbox.md#bootstrap-jobs)): no `OARBANK_MODULE_DATA`, no
+`OARBANK_BROKER`, an `OARBANK_TOOLS_FILE` that lists no tools and an `OARBANK_SETTINGS_FILE` holding `{}`.
+
 All of this runs under the module sandbox ([sandbox.md](sandbox.md)).
 
 ## Workdir
@@ -70,6 +73,14 @@ Writers replace atomically. A replace that fails because the other side has the 
 to 2 s. `oarbank_sdk` helpers do this. Output artifacts are listed in `result.json` as
 `artifacts[].files[] = {path, local}`, with `local` relative to the workdir. The agent uploads each file by content
 digest and replaces `local` with `digest` and `size`. Artifacts carry no file modes.
+
+### Bootstrap results
+
+A bootstrap stage's runner writes a result whose `payload` is `{}` and whose artifacts are the datasets it fetched, one
+artifact per dataset, each holding exactly the files of one `[[datasets.pinned]]` entry (the same paths; the agent's
+digests and sizes must be the pinned ones). The host checks that instead of calling `result.evaluate`, registers each
+dataset, and stores nothing else of the result (`effective` and `provenance` are dropped). A result that is not exactly
+pinned datasets fails with `pin_mismatch`, a job fault that never counts against the node.
 
 ## Exit codes
 

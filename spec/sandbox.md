@@ -83,6 +83,24 @@ exec_writable = false
 `unavailable`. A module runs only where all of its grants, and the always-on rules above, are enforced. A node that
 cannot enforce them advertises `SANDBOX_BACKEND_MISSING` or `CAPABILITY_NOT_ENFORCED` for that module.
 
+## Bootstrap jobs
+
+A job of a bootstrap stage ([manifest.md](manifest.md#pinned-datasets), `stages[].bootstrap`) may run on a node
+before the module's goldens pass there, so it gets less than any other job of its module:
+
+| Area | A bootstrap job |
+|---|---|
+| its bundle and runtime | read, execute |
+| work directory (and the private temporary directory inside it) | read, write |
+| data directory | none: `OARBANK_MODULE_DATA` is not set, and nothing it fetched stays on the node |
+| network | the module's `egress-allowlist`, through the agent's proxy; none when the module's mode is `none` (a module with a bootstrap stage never requests `egress-any`) |
+| host tools, GPU, the container broker, executing written files | none (`OARBANK_TOOLS_FILE` lists no tools) |
+| module settings | an empty object in `OARBANK_SETTINGS_FILE` (operators keep credentials in settings) |
+
+`SandboxSection.for_bootstrap()` returns these grants. The agent takes the bootstrap flag from the module's entry in
+the signed release, never from the grant. A node whose agent applies them reports `grants.bootstrap` as `enforced`;
+bootstrap jobs run only there (`CAPABILITY_NOT_ENFORCED` elsewhere).
+
 ## Containers: the agent's broker
 
 A runner never talks to Docker or Podman itself. The agent owns a container runtime that mounts only its own work and
@@ -121,6 +139,6 @@ the only IPC its confinement allows. Requests are one JSON object per line, one 
 
 ## Testing your module
 
-`oarbank-sdk conform` runs the runner suite under this host's backend with the grants the manifest declares, plus a
-portability lint for every declared platform. A module that writes outside its directories, reads homes, or expects a
+`oarbank-sdk conform` runs the runner suite under this host's backend with the grants the manifest declares (a bootstrap
+stage's runner specs with the bootstrap grants), plus a portability lint for every declared platform. A module that writes outside its directories, reads homes, or expects a
 tool it didn't request fails there first.

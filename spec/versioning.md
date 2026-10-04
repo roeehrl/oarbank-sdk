@@ -25,8 +25,9 @@ The **`oarbank-sdk` package** follows SemVer. Its major equals the highest modul
 A new manifest key that older cores would silently ignore (their readers are lenient) is gated by the core version
 instead of a manifest major: the SDK refuses such a key unless the lower bound of `requires.core` admits only cores that
 understand it, and older cores already refuse a module whose `requires.core` excludes them. The per-platform and
-placement keys of SDK 1.1 need `requires.core >= 2.2`, and the stage, tick-result and dataset keys of SDK 1.3 need
-`requires.core >= 2.3` ([manifest.md](manifest.md#cross-field-rules), rule 12). For
+placement keys of SDK 1.1 need `requires.core >= 2.2`, the stage, tick-result and dataset keys of SDK 1.3 need
+`requires.core >= 2.3`, and the bootstrap stages and pinned datasets of SDK 1.4 need `requires.core >= 2.4`
+([manifest.md](manifest.md#cross-field-rules), rule 12). For
 later features, `requires.features` is a must-understand list: a reader refuses a manifest that lists a feature it
 does not know. Module protocol additions are optional fields plus host capability names
 ([module-protocol.md](module-protocol.md#host-capabilities)); a module checks a capability before relying on it at run

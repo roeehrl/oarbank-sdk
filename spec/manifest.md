@@ -93,13 +93,48 @@ The models enforce these, beyond the per-field types:
 12. A key older cores would ignore needs a `requires.core` range whose lower bound is at least the core that understands it ([versioning.md](versioning.md#additive-changes-within-manifest-1)):
     - **2.2:** the per-platform and placement keys (`requires.coordinator_platforms`, `requires.unsupported`, `requires.features`, `coordinator.env`, `coordinator.variants`, `runner.env` and runner variant `env`, `stages[].variants`, `stages[].placement`, `[placement]`, a `determinism_scope` other than `global` or `platform`, `bundle.platform_files`, `datasets.platform_bound`);
     - **2.3:** `stages[].determinism`, `stages[].default`, the coordinator capability `campaign.tick.results`, and the effects `datasets.update` and `datasets.delete` in any effects list (`coordinator.campaign_effects`, `operations[].effects`, `coordinator.move.effects`).
+    - **2.4:** `stages[].bootstrap` and `datasets.pinned`.
 
     Every entry of `requires.features` is one this SDK knows.
 13. Every bundle path a node exec names (argv[0], or the script a `python` exec runs) reaches each platform that runs it under `bundle.platform_files`. `datasets.platform_bound` kinds are declared kinds.
 14. `stages[].default` is set on at most one stage, a standalone one; when several stages are standalone, exactly one sets it. `stages[].determinism` is set only on standalone stages (neither `after` another nor depended on): a chain is one evaluation and compares as `results.determinism`. At least one stage compares (its effective determinism is `exact` or `within_tolerance`): goldens run only on such stages, and every module is certified on golden evidence.
-15. **Lint** (warnings, not errors): an unknown `mix`; a stage `placement` on a stage without `after`; an unknown `determinism_scope`; a placement mix coarser than `determinism_scope` while `results.value` is set (values in one campaign would come from classes whose results are not comparable). `oarbank-sdk check` prints them; `oarbank_sdk.manifest.lint` returns them.
+15. `stages[].bootstrap` is set only on a standalone stage that is not the default stage, whose effective determinism is `none` and which reserves and needs no pools. A module with a bootstrap stage pins at least one dataset (`[[datasets.pinned]]`), pins need a bootstrap stage, and its `sandbox.net.mode` is `none` or `egress-allowlist`. Pinned dataset ids are unique; each pin's `kind` is a declared kind, its `platform` is set exactly when the kind is platform-bound and is a declared platform, its file paths are unique, and no two pins hold the same files ([Pinned datasets](#pinned-datasets)).
+16. **Lint** (warnings, not errors): an unknown `mix`; a stage `placement` on a stage without `after`; an unknown `determinism_scope`; a placement mix coarser than `determinism_scope` while `results.value` is set (values in one campaign would come from classes whose results are not comparable). `oarbank-sdk check` prints them; `oarbank_sdk.manifest.lint` returns them.
 
 A module may offer both forms of an evaluation. For example, render declares a single `eval` stage and a `render → score` chain; the operator's pipeline setting picks the form for jobs that name no stage. A module may also declare standalone utility stages (an ingestion `sync`, a `fetch` that provisions tools) and enqueue jobs that name them; it then marks its evaluation stage `default = true`.
+
+## Pinned datasets
+
+A module that provisions its own tools or reference data (downloads from public origins) does it with a **bootstrap
+stage**: on a fresh fleet its goldens mount those datasets, so the jobs that fetch them must run before any node is
+certified.
+
+```toml
+[[stages]]
+name = "fetch"
+bootstrap = true            # runs on nodes whose doctor is healthy, before the goldens pass
+determinism = "none"        # never compared, cached or golden-tested
+timeout_s = 3600
+requires = { resources = { cpu = 1, mem_gb = 1.0 } }
+
+[[datasets.pinned]]
+dataset_id = "tool:gatk-4.5.0.0"
+kind = "tool"
+meta = { version = "4.5.0.0" }        # optional: the registered dataset's meta
+files = [{ path = "gatk-package-4.5.0.0-local.jar", sha256 = "<64 hex>", size = 1234567 }]
+```
+
+- A bootstrap job runs with the bootstrap grants ([sandbox.md](sandbox.md#bootstrap-jobs)): the module's egress
+  allowlist, its work directory and nothing else.
+- Its result has an empty `payload` and one artifact per dataset it fetched, each holding exactly one pin's files
+  ([runner-protocol.md](runner-protocol.md#bootstrap-results)). The host registers each such dataset itself (the
+  pin's id, kind, meta, platform and files, owned by the module) and calls no module verb on the result. Anything
+  else is refused with `pin_mismatch`, counted against the job and never against the node, and nothing is registered.
+- `datasets.create` of a pinned id succeeds only with the pinned contents, so the module's own code may register a
+  pinned dataset too.
+- The pins are part of the manifest, so the bundle digest an operator installs and approves covers them.
+- A job runs a bootstrap stage only when it names it (`jobs.enqueue` `stage`); its results never count toward
+  certification.
 
 ## Declarative UI: formats and templates
 

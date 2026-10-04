@@ -96,6 +96,7 @@ Cross-field rules are in [manifest.md](manifest.md).
 | `stages[].after` | str (optional) |  | [stable] Stage whose output this stage consumes (its artifacts become inputs). |
 | `stages[].determinism` | `"exact"` \| `"within_tolerance"` \| `"none"` (optional) |  | [beta] This stage's determinism (absent: results.determinism). `none`: its results depend on when it ran (an ingestion job pulling a moving feed), so the host never replicates, compares, caches or golden-tests them. Only a standalone stage sets it (a chain compares as results.determinism). Needs requires.core >= 2.3. |
 | `stages[].default` | bool | `false` | [beta] The default stage: what a job runs when it names no stage (the single-stage form). Only a standalone stage sets it; exactly one does when several stages are standalone. Needs requires.core >= 2.3. |
+| `stages[].bootstrap` | bool | `false` | [beta] A bootstrap stage: its jobs run on nodes whose module doctor is healthy before the goldens pass, with only the module's egress allowlist (no tools, GPU, containers, module data or settings), and the host registers their output only when it is exactly datasets of [[datasets.pinned]]. A standalone stage, not the default one, with determinism none and no pools. Needs requires.core >= 2.4. |
 | `stages[].requires` | StageRequires | `"capabilities=[] pools={} needs_pools=[] platforms=[] resources=Resources(cpu=1.0, mem_gb=1.0)"` |  |
 | `stages[].requires.capabilities` | list of str | `[]` | [stable] Node capabilities that must be healthy (from probes/services). |
 | `stages[].requires.pools` | table str → int | `{}` | [stable] Countable pool tokens reserved for the job's lifetime. |
@@ -163,13 +164,22 @@ Cross-field rules are in [manifest.md](manifest.md).
 | `results.fields[].ui.column` | str (optional) |  | [stable] Column header in result tables; absent = not shown. |
 | `results.fields[].ui.format` | str (optional) |  | [stable] Restricted format spec: .Nf, .Ne, .N%, d, ,d or s. |
 | `results.fields[].ui.unit` | str (optional) |  |  |
-| `datasets` | Datasets | `"kinds=[] attrs=[] platform_bound=[]"` |  |
+| `datasets` | Datasets | `"kinds=[] attrs=[] platform_bound=[] pinned=[]"` |  |
 | `datasets.kinds` | list of str | `[]` | [stable] Dataset kinds this module registers (datasets.create refuses others). Kinds are short names scoped by the dataset's owning module, so two modules' kinds never collide; host.datasets.query takes the same short kind. |
 | `datasets.attrs` | list of DatasetAttr | `[]` |  |
 | `datasets.attrs[].name` | str | required |  |
 | `datasets.attrs[].type` | `"number"` \| `"integer"` \| `"string"` \| `"boolean"` | required |  |
 | `datasets.attrs[].indexed` | bool | `false` |  |
 | `datasets.platform_bound` | list of str | `[]` | [beta] Kinds whose datasets only make sense on one platform (an index built by a native tool): datasets.create must give their `platform`, and jobs using them run only there. Needs requires.core >= 2.2. |
+| `datasets.pinned` | list of PinnedDataset | `[]` | [beta] The datasets the module's bootstrap stages may provide, each file with its sha256 and size. The host registers a bootstrap job's artifact only when its files are exactly one entry's, and datasets.create of a pinned id only with the pinned contents. Needs a bootstrap stage and requires.core >= 2.4. |
+| `datasets.pinned[].dataset_id` | str | required | [beta] The dataset id the host registers. |
+| `datasets.pinned[].kind` | str | required | [beta] One of [datasets].kinds. |
+| `datasets.pinned[].meta` | dict | `{}` | [beta] The registered dataset's meta (its attrs). |
+| `datasets.pinned[].platform` | str (optional) |  | [beta] Set exactly when `kind` is platform-bound: one of requires.platforms. |
+| `datasets.pinned[].files` | list of PinnedFile | required | [beta] Every file, with unique paths. |
+| `datasets.pinned[].files[].path` | str | required | [beta] PortablePath inside the dataset (what a job sees under the dataset's mount). |
+| `datasets.pinned[].files[].sha256` | str | required | [beta] The file's sha256, 64 lowercase hex digits. |
+| `datasets.pinned[].files[].size` | int | required | [beta] The file's size in bytes. |
 | `goldens` | Goldens (optional) |  |  |
 | `goldens.fixtures` | str | required | [stable] Glob (bundle path) of golden fixtures: inputs plus the expected digest, optionally per platform (`Golden.platforms`, `Golden.expected_by_platform`; oarbank_sdk.goldens.load reads them). |
 | `goldens.compare` | `"digest"` \| `"verb"` | `"digest"` | [stable] `verb` calls golden.compare instead of digest equality. |
