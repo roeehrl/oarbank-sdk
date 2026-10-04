@@ -66,7 +66,8 @@ array, never a shell string.
 | `[[stages]]` | At least one. Each has `name`, optional `after`, and `requires` (node capabilities, reserved `pools`, `needs_pools` that must merely exist, and `resources` cpu/mem_gb), plus `timeout_s` and `retry`, per-platform `variants`, a `placement` constraint with its `after` stage, and, for a standalone stage, `default` (the stage a job runs when it names none) and its own `determinism` (`none` for work whose results depend on when it ran, such as ingesting a moving feed: the host never replicates, compares, caches or golden-tests it). |
 | `[[services]]` | Node helpers the agent manages through the [service protocol](service-protocol.md): lifecycle, timeouts, restart policy, which pools and capabilities they `provide`, and the memory, yield and pause flags. |
 | `[[probes]]` | Read-only capability checks (`fingerprint` only), each run every `period_s`. |
-| `[settings]` | The JSON Schema for the module's settings. The core stores settings but never interprets them. |
+| `[settings]` | The JSON Schema for the module's settings. The core stores settings but never interprets them. Settings are visible to the owner: never put a credential in them. |
+| `[[secrets]]` | Write-only credentials the owner sets through the core: `name`, `description` ([Secrets](#secrets)). |
 | `[placement]` | Which unit of work stays on one platform class (`mix`, `unit`), how it binds (`bind`) and what happens when its class has no eligible node (`rebind`, `stranded_after_s`). |
 | `[results]` | The payload schema and its version, `determinism` and its `determinism_scope`, the digest (`version`, `over`), the objective `value`, the inline size limit, and declared `fields` (typed; `indexed` promotes a field to a sortable column; `ui` sets column, format and unit). |
 | `[datasets]` | The dataset `kinds` the module registers (short names, scoped by the owning module), their typed `attrs`, and the `platform_bound` kinds. |
@@ -94,12 +95,20 @@ The models enforce these, beyond the per-field types:
     - **2.2:** the per-platform and placement keys (`requires.coordinator_platforms`, `requires.unsupported`, `requires.features`, `coordinator.env`, `coordinator.variants`, `runner.env` and runner variant `env`, `stages[].variants`, `stages[].placement`, `[placement]`, a `determinism_scope` other than `global` or `platform`, `bundle.platform_files`, `datasets.platform_bound`);
     - **2.3:** `stages[].determinism`, `stages[].default`, the coordinator capability `campaign.tick.results`, and the effects `datasets.update` and `datasets.delete` in any effects list (`coordinator.campaign_effects`, `operations[].effects`, `coordinator.move.effects`).
     - **2.4:** `stages[].bootstrap` and `datasets.pinned`.
+    - **2.5:** `[[secrets]]`, `stages[].secrets`, the permission `secrets:read:self`, `sandbox.container_sets`, and a
+      stage reserving the agent's `gpu` pool.
 
     Every entry of `requires.features` is one this SDK knows.
 13. Every bundle path a node exec names (argv[0], or the script a `python` exec runs) reaches each platform that runs it under `bundle.platform_files`. `datasets.platform_bound` kinds are declared kinds.
 14. `stages[].default` is set on at most one stage, a standalone one; when several stages are standalone, exactly one sets it. `stages[].determinism` is set only on standalone stages (neither `after` another nor depended on): a chain is one evaluation and compares as `results.determinism`. At least one stage compares (its effective determinism is `exact` or `within_tolerance`): goldens run only on such stages, and every module is certified on golden evidence.
 15. `stages[].bootstrap` is set only on a standalone stage that is not the default stage, whose effective determinism is `none` and which reserves and needs no pools. A module with a bootstrap stage pins at least one dataset (`[[datasets.pinned]]`), pins need a bootstrap stage, and its `sandbox.net.mode` is `none` or `egress-allowlist`. Pinned dataset ids are unique; each pin's `kind` is a declared kind, its `platform` is set exactly when the kind is platform-bound and is a declared platform, its file paths are unique, and no two pins hold the same files ([Pinned datasets](#pinned-datasets)).
-16. **Lint** (warnings, not errors): an unknown `mix`; a stage `placement` on a stage without `after`; an unknown `determinism_scope`; a placement mix coarser than `determinism_scope` while `results.value` is set (values in one campaign would come from classes whose results are not comparable). `oarbank-sdk check` prints them; `oarbank_sdk.manifest.lint` returns them.
+16. Secrets: names are unique; a stage lists only declared secrets, each once, and a bootstrap stage lists none; every
+    declared secret reaches something (a stage lists it, or the coordinator has `secrets:read:self`).
+17. Container sets: names are unique; each `key` is a bundle file holding one ECDSA P-256 public key (checked by
+    `oarbank-sdk check` and bundle verification). A stage that reserves the `gpu` pool also reserves `containers`, and
+    the runner declares `gpu.in_container = true` with `gpu.use` `shared` or `exclusive`
+    ([sandbox.md](sandbox.md#gpu-passthrough)).
+18. **Lint** (warnings, not errors): an unknown `mix`; a stage `placement` on a stage without `after`; an unknown `determinism_scope`; a placement mix coarser than `determinism_scope` while `results.value` is set (values in one campaign would come from classes whose results are not comparable); stages receiving secrets while the network mode is `egress-any`. `oarbank-sdk check` prints them; `oarbank_sdk.manifest.lint` returns them.
 
 A module may offer both forms of an evaluation. For example, render declares a single `eval` stage and a `render → score` chain; the operator's pipeline setting picks the form for jobs that name no stage. A module may also declare standalone utility stages (an ingestion `sync`, a `fetch` that provisions tools) and enqueue jobs that name them; it then marks its evaluation stage `default = true`.
 
@@ -136,6 +145,36 @@ files = [{ path = "gatk-package-4.5.0.0-local.jar", sha256 = "<64 hex>", size = 
 - A job runs a bootstrap stage only when it names it (`jobs.enqueue` `stage`); its results never count toward
   certification.
 
+## Secrets
+
+A credential (an API key for a model provider, a token for a private package registry, a licence key) is a secret,
+never a setting:
+
+```toml
+[[secrets]]
+name = "llm_api_key"
+description = "API key for the model provider the agent harness calls"
+
+[[stages]]
+name = "attempt"
+secrets = ["llm_api_key"]            # only this stage's runner receives it
+```
+
+- **The owner sets it** through the core (`oarbank secret set <module> <name> [--node N]`, or the module's Settings
+  page), for the module or for one node; a node's own value wins. The core stores it encrypted, and no page, API read,
+  plan, audit row, export or error message ever shows it: only whether it is set, a fingerprint and when it changed.
+- **Delivery.** Only the runners of stages that list it get it, in `OARBANK_SECRETS_FILE`: an owner-only file inside the
+  job's work directory, deleted with it ([runner-protocol.md](runner-protocol.md#environment);
+  `oarbank_sdk.secrets.get`). Other stages, services, probes, doctor and bootstrap jobs never do. A job waits
+  (`SECRETS_NOT_SET`) on a node with no value for a secret its stage lists.
+- **The coordinator side** reads the module's value with `host.secrets.get` only when `coordinator.permissions` lists
+  `secrets:read:self` ([module-protocol.md](module-protocol.md#host-callbacks-module--host)). Few modules need it; a
+  value a verb puts in a spec reaches every stage, which the conformance kit refuses.
+- **Redaction** of exact values in captured logs is a safety net, not a guarantee: never log a value, write it into
+  results or artifacts, or pass it on a command line.
+- **Pair it with an egress allowlist** naming only the service the key is for, so a leaked key can reach only that host.
+- Coordinator moves carry secrets re-encrypted for the new coordinator; the move preview lists them by name.
+
 ## Declarative UI: formats and templates
 
 Module UI is data. Core templates render it and escape it, and no module HTML or JS is ever executed.
@@ -159,4 +198,4 @@ Module UI is data. Core templates render it and escape it, and no module HTML or
 ## What a manifest cannot declare
 
 - **Host protection:** exemptions, priority over the owner's protected processes, or node selection by identity. Protection is owner-set only (see the public-surface statement).
-- **Secrets.** Settings are visible to the owner in the console.
+- **Secret values.** A manifest declares secrets by name; only the owner sets their values.

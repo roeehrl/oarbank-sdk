@@ -543,6 +543,15 @@ class SettingsGetResult(Contract):
     value: Any | None = None
 
 
+class SecretsGetParams(Contract):
+    name: str = Field(description="[beta] A secret the manifest declares in [[secrets]].")
+
+
+class SecretsGetResult(Contract):
+    set: bool = Field(description="[beta] Whether the owner set a value for the module (node values never reach the coordinator side).")
+    value: str | None = Field(None, description="[beta] The value; never log it, return it or put it in a spec.")
+
+
 class StoreGetParams(Contract):
     collection: str
     key: str
@@ -639,6 +648,7 @@ HOST_CALLBACKS: dict[str, tuple[type, type, str]] = {
     "host.datasets.query": (DatasetsQueryParams, DatasetsQueryResult, "datasets:read"),
     "host.blobs.stat": (BlobStatParams, BlobStatResult, "blobs:stat"),
     "host.settings.get": (SettingsGetParams, SettingsGetResult, "settings:read:self"),
+    "host.secrets.get": (SecretsGetParams, SecretsGetResult, "secrets:read:self"),
     "host.store.get": (StoreGetParams, StoreGetResult, "store:read:self"),
     "host.store.query": (StoreQueryParams, StoreQueryResult, "store:read:self"),
     "host.nodes.query": (NodesQueryParams, NodesQueryResult, "nodes:read"),

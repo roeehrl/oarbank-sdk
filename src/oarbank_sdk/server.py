@@ -53,6 +53,11 @@ class Host:
     def settings_get(self, key: str) -> Any:
         return self._call("host.settings.get", mp.SettingsGetParams(key=key), mp.SettingsGetResult).value
 
+    def secret(self, name: str) -> str | None:
+        """The module's value of a declared secret (None: not set). Needs `secrets:read:self`; never log or return it."""
+        r = self._call("host.secrets.get", mp.SecretsGetParams(name=name), mp.SecretsGetResult)
+        return r.value if r.set else None
+
     def store_get(self, collection: str, key: str) -> dict | None:
         return self._call("host.store.get", mp.StoreGetParams(collection=collection, key=key), mp.StoreGetResult).doc
 

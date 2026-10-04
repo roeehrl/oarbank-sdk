@@ -10,7 +10,10 @@ own container runtime (a VM that mounts only oarbank's job and module-data direc
     if r.exit_code != 0: ...
 
 Mount sources are paths relative to the job's work directory, or `data:<path>` for the module's data directory.
-The container gets no network unless the module was approved for egress and asks for it.
+The container gets no network unless the module was approved for egress and asks for it, and no GPU unless the job's
+stage reserves the agent's `gpu` pool and asks for `gpus="all"` (CDI on Linux; macOS runtimes cannot pass one through).
+Images are digest-pinned: one of the module's `containers`, or an image of one of its `container_sets` that the job
+listed (jobs.enqueue `images`), whose cosign signature the agent verifies before pulling.
 """
 import json
 import os
@@ -100,12 +103,13 @@ def _call(req: dict, timeout: float) -> dict:
 
 def run(image: str, args: list[str], mounts: list[Mount] | None = None, platform: str = "linux/arm64",
         entrypoint: str | None = None, env: dict | None = None, workdir: str | None = None, network: bool = False,
-        timeout_s: float = 3600, cpus: float | None = None, mem_gb: float | None = None) -> Result:
+        timeout_s: float = 3600, cpus: float | None = None, mem_gb: float | None = None, gpus: str = "none") -> Result:
     """Run one container to completion through the agent (`docker run --rm`, validated). Raises BrokerError when
-    the agent refuses the request; a container that runs and fails returns its exit code."""
+    the agent refuses the request; a container that runs and fails returns its exit code. `gpus`: "none" or "all"."""
     req = {"op": "container.run", "image": image, "args": list(args), "platform": platform, "entrypoint": entrypoint,
            "mounts": [{"src": m.src, "dst": m.dst, "ro": m.ro} for m in (mounts or [])], "env": dict(env or {}),
-           "workdir": workdir, "network": network, "timeout_s": timeout_s, "cpus": cpus, "mem_gb": mem_gb}
+           "workdir": workdir, "network": network, "timeout_s": timeout_s, "cpus": cpus, "mem_gb": mem_gb,
+           "gpus": gpus}
     r = _call(req, timeout_s + 120)
     known = {"exit_code", "stdout_tail", "stderr_tail", "stdout_path", "stderr_path", "duration_s"}
     return Result(**{k: r[k] for k in known if k in r}, extra={k: v for k, v in r.items() if k not in known | {"ok"}})
@@ -117,5 +121,6 @@ def pull(image: str, platform: str = "linux/arm64", timeout_s: float = 1800) -> 
 
 
 def status(timeout_s: float = 30) -> dict:
-    """The runtime's state: {running, images[]} (for doctor checks)."""
+    """The runtime's state: {running, images[], gpus}; `gpus` is "all" where this node's runtime passes GPUs through to
+    containers, else "none"."""
     return _call({"op": "status"}, timeout_s)

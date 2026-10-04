@@ -39,6 +39,7 @@ then the manifest's `[runner].env` with the platform variant's `env` merged over
 | `OARBANK_POOL_<NAME>_TOKENS` | stable | For each pool the node offers: its token count (upper-case name). |
 | `OARBANK_DISABLED_SERVICES` | beta | Comma-separated names of this module's services the owner disabled on the node. |
 | `OARBANK_SETTINGS_FILE` | stable | A UTF-8 JSON file with the module's settings for this node. It is a file because environment size limits differ per OS. |
+| `OARBANK_SECRETS_FILE` | beta | Set only when the job's stage lists secrets (`stages[].secrets`, core 2.5): a UTF-8 JSON file `{"<name>": "<value>"}` with those secrets' values for this node, owner-only, inside the work directory and deleted with it. `oarbank_sdk.secrets.get(name)` reads it. Never log a value or write it into the result or artifacts. |
 | `OARBANK_BROKER` | beta | The job's container broker endpoint, `unix:/path` or `npipe://./pipe/<name>` ([sandbox.md](sandbox.md#containers-the-agents-broker)). Set only for a module approved for containers. |
 | `OARBANK_TOOLS_FILE` | stable | A UTF-8 JSON file `{"<tool id>": ["<canonical path>", ...]}` for the module's approved `[sandbox].tools` on this node: exactly the paths the sandbox grants (resolved; conventional symlinks such as `/opt/homebrew/opt/...` are not readable inside the sandbox). `oarbank_sdk.tools.path(id)` reads it. |
 | `HTTPS_PROXY`, `HTTP_PROXY`, `ALL_PROXY` | stable | Set for `egress-allowlist`: the agent's local proxy, the only network route ([sandbox.md](sandbox.md#sandbox-grants)). |
@@ -49,7 +50,7 @@ A module gets host tools through `[sandbox].tools` and finds them in `OARBANK_TO
 variables such as `JAVA_HOME`.
 
 A job of a bootstrap stage gets less ([sandbox.md](sandbox.md#bootstrap-jobs)): no `OARBANK_MODULE_DATA`, no
-`OARBANK_BROKER`, an `OARBANK_TOOLS_FILE` that lists no tools and an `OARBANK_SETTINGS_FILE` holding `{}`.
+`OARBANK_BROKER`, an `OARBANK_TOOLS_FILE` that lists no tools and an `OARBANK_SETTINGS_FILE` holding `{}`, and no `OARBANK_SECRETS_FILE`.
 
 All of this runs under the module sandbox ([sandbox.md](sandbox.md)).
 
@@ -64,6 +65,7 @@ names is a PortablePath, `/`-separated ([platforms.md](platforms.md#portable-pat
 | `<mount>/...` | agent | Each dataset in `spec.datasets`, under `spec.mounts[id]`, as **read-only regular files** (never symlinks). How they are placed (clone, hardlink or copy) is the agent's business. Modifying one is a fault, and the agent may verify. |
 | `inputs/<name>/...` | agent | Artifacts of the upstream stage (`spec.inputs`). |
 | `control.json` | agent | The control document, always present ([Control](#control)). |
+| `.grants/` | agent | The files the environment names (tools, settings, and for a stage that lists secrets `secrets.json`, mode 0600). Not output. |
 | `result.json` | runner | The result envelope, written atomically (a temporary file, then rename) before exiting 0. |
 | `failure.json` | runner | `{reason, detail, fault?, retryable?}`, written atomically before a non-zero exit. `reason` is one of the agent's end reasons (`bad_input`, `mode_mismatch`, `oom`, `doctor`, `no_metrics`), which the coordinator maps to its reason codes, or the module's own `<module-short>/<code>`, which ends the attempt as `exit_nonzero` with the code in its detail. |
 | `events.ndjson` | runner | One UTF-8 event per line (LF; CR tolerated): log, progress, metric, checkpoint or phase. |

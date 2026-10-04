@@ -34,6 +34,7 @@ BUNDLE_TOKEN = "{bundle}"
 PLATFORM_KEYS_CORE = (2, 2)       # the per-platform and placement keys (SDK 1.1)
 SDK13_KEYS_CORE = (2, 3)          # stage determinism and default, structured tick results, dataset update/delete (SDK 1.3)
 BOOTSTRAP_KEYS_CORE = (2, 4)      # bootstrap stages and the pinned dataset table (SDK 1.4)
+TRUST_KEYS_CORE = (2, 5)          # secrets, signed container image sets and the container GPU pool (SDK 1.5)
 KNOWN_FEATURES = ("placement",)          # requires.features this SDK understands (must-understand)
 ENV_NAME = r"^[A-Z][A-Z0-9_]*$"
 # Variables the agent or the host sets itself (spec/runner-protocol.md, spec/platforms.md "Environment per OS"); a
@@ -184,7 +185,7 @@ class Requires(Contract):
 
 
 Permission = Literal["datasets:read", "blobs:stat", "settings:read:self", "store:read:self", "nodes:read", "jobs:read:self",
-                     "files:read:self"]
+                     "files:read:self", "secrets:read:self"]
 EffectKind = Literal["jobs.enqueue", "jobs.cancel", "campaigns.create", "campaigns.update", "campaigns.cancel",
                      "datasets.create", "datasets.update", "datasets.delete", "module_settings.update",
                      "store.write", "store.delete", "files.write", "files.put", "files.delete", "external"]
@@ -227,6 +228,43 @@ class ContainerImage(Contract):
         description="[beta] A digest-pinned reference, e.g. `docker.io/org/tool:1.2@sha256:<64 hex>`.")
     platform: Annotated[str, Field(pattern=r"^[a-z0-9]+/[a-z0-9_]+$")] = Field(
         "linux/arm64", description="[beta] OCI platform (open set), e.g. linux/arm64 or linux/amd64 (emulated where the node's arch differs).")
+
+
+REGISTRY_HOST = r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*(:[0-9]{1,5})?$"
+REPOSITORY_PREFIX = r"^[a-z0-9]+([._-][a-z0-9]+)*(/[a-z0-9]+([._-][a-z0-9]+)*)*/?$"
+TAGGED_REF = r"^[a-z0-9][a-z0-9._/:-]*:[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$"
+
+
+class ContainerSet(Contract):
+    """Container images approved by signature instead of by digest (spec/sandbox.md, "Image sets"): every digest-pinned
+    image under a registry and repository prefix that carries a cosign signature by the pinned key, or that a signed image
+    index lists. Approval covers the prefix and the key, so new images need no new module version. [beta]"""
+    name: Name = Field(description="[beta] The set's name; unique; shown at approval and in the audit.")
+    registry: Annotated[str, Field(max_length=253, pattern=REGISTRY_HOST)] = Field(description=(
+        "[beta] The registry host[:port], lowercase (`docker.io` for Docker Hub)."))
+    repository: Annotated[str, Field(max_length=255, pattern=REPOSITORY_PREFIX)] = Field(description=(
+        "[beta] A repository path; ending with `/` it is a prefix (every repository below it), else exactly that repository."))
+    platform: Annotated[str, Field(pattern=r"^[a-z0-9]+/[a-z0-9_]+$")] = Field(
+        "linux/arm64", description="[beta] OCI platform of the set's images.")
+    key: Annotated[str, Field(max_length=200)] = Field(description=(
+        "[beta] Bundle path of the cosign public key: one ECDSA P-256 key, PEM `PUBLIC KEY` (SPKI), as "
+        "`cosign generate-key-pair` writes `cosign.pub`."))
+    index: Annotated[str, Field(max_length=300, pattern=TAGGED_REF)] | None = Field(None, description=(
+        "[beta] A tagged reference of a signed image index (artifact type application/vnd.oarbank.image-set.v1+json): "
+        "only the digests it lists are members. Absent: every image signed by the key is."))
+
+    @field_validator("key")
+    @classmethod
+    def _key_path(cls, v):
+        portable.check_portable_path(v)
+        return v
+
+    def covers(self, repository: str) -> bool:
+        """Whether a normalized repository (`<registry>/<path>`) lies in this set."""
+        reg, _, path = repository.partition("/")
+        if reg != self.registry:
+            return False
+        return path.startswith(self.repository) if self.repository.endswith("/") else path == self.repository
 
 
 class SandboxNet(Contract):
@@ -277,13 +315,19 @@ class SandboxSection(Contract):
     containers: list[ContainerImage] = Field(default_factory=list, description=(
         "[beta] Images the agent's container broker may run for the module's jobs (a stage that uses them reserves the "
         "`containers` pool)."))
+    container_sets: list[ContainerSet] = Field(default_factory=list, description=(
+        "[beta] Image sets approved by signature (registry and repository prefix, a pinned cosign key, optionally a signed "
+        "index). A job runs a set's images only if it lists them (jobs.enqueue `images`). Needs requires.core >= 2.5."))
     exec_writable: bool = Field(False, description=(
         "[beta] Runners may execute files they wrote into the data or work directory (downloaded tools). Not enforceable "
         "as `false` on Windows without application control; nodes report it."))
 
     def requests(self) -> bool:
         return bool(self.net.mode != "none" or self.tools or self.devices.gpu != "none" or self.containers
-                    or self.exec_writable)
+                    or self.container_sets or self.exec_writable)
+
+    def runs_containers(self) -> bool:
+        return bool(self.containers or self.container_sets)
 
     def for_bootstrap(self) -> "SandboxSection":
         """The grants a bootstrap stage's jobs get (spec/sandbox.md, "Bootstrap jobs"): the network as approved (none or the
@@ -472,6 +516,9 @@ class Stage(Contract):
         "the module's egress allowlist (no tools, GPU, containers, module data or settings), and the host registers their "
         "output only when it is exactly datasets of [[datasets.pinned]]. A standalone stage, not the default one, with "
         "determinism none and no pools. Needs requires.core >= 2.4."))
+    secrets: list[Name] = Field(default_factory=list, description=(
+        "[beta] Declared [[secrets]] this stage's runner receives in OARBANK_SECRETS_FILE (no other stage, service, probe or "
+        "doctor does). A job waits until each has a value for its node. Never on a bootstrap stage. Needs requires.core >= 2.5."))
     requires: StageRequires = Field(default_factory=StageRequires)
     timeout_s: Annotated[float, Field(gt=0, le=86400)] = Field(1800.0, description="[stable] Hard wall-clock limit per attempt.")
     retry: Retry = Field(default_factory=Retry)
@@ -518,6 +565,14 @@ class Probe(Contract):
     exec: Exec
     period_s: Annotated[float, Field(ge=10)] = 3600.0
     platforms: list[PlatformToken] = Field(default_factory=list, description="[beta] Only on these platforms (empty: every declared platform).")
+
+
+class Secret(Contract):
+    """A credential the owner sets through the core, write-only (spec/manifest.md, "Secrets"): stored encrypted on the
+    coordinator, never shown, delivered only to the runners of stages that list it and, with `secrets:read:self`, to
+    coordinator verbs. [beta]"""
+    name: Name = Field(description="[beta] The secret's name; unique. Stages list it in `secrets`.")
+    description: Annotated[str, Field(max_length=500)] = Field("", description="[beta] What it is for, shown where the owner sets it.")
 
 
 class Settings(Contract):
@@ -670,6 +725,7 @@ class Manifest(Contract):
     services: list[Service] = Field(default_factory=list)
     probes: list[Probe] = Field(default_factory=list)
     settings: Settings = Field(default_factory=Settings)
+    secrets: list[Secret] = Field(default_factory=list, description="[beta] Write-only credentials. Needs requires.core >= 2.5.")
     results: Results
     datasets: Datasets = Field(default_factory=Datasets)
     goldens: Goldens | None = None
@@ -715,7 +771,15 @@ class Manifest(Contract):
             ("stages[].bootstrap", any(s.bootstrap for s in self.stages)),
             ("datasets.pinned", bool(self.datasets.pinned)),
         ]
-        return out + [(k, SDK13_KEYS_CORE) for k, on in sdk13 if on] + [(k, BOOTSTRAP_KEYS_CORE) for k, on in sdk14 if on]
+        sdk15 = [
+            ("secrets", bool(self.secrets)),
+            ("stages[].secrets", any(s.secrets for s in self.stages)),
+            ("the secrets:read:self permission", "secrets:read:self" in self.coordinator.permissions),
+            ("sandbox.container_sets", bool(self.sandbox.container_sets)),
+            ("a stage reserving the gpu pool", any("gpu" in s.requires.pools for s in self.stages)),
+        ]
+        return (out + [(k, SDK13_KEYS_CORE) for k, on in sdk13 if on] + [(k, BOOTSTRAP_KEYS_CORE) for k, on in sdk14 if on]
+                + [(k, TRUST_KEYS_CORE) for k, on in sdk15 if on])
 
     # ------------------------------------------------------------------------ stages
 
@@ -746,6 +810,15 @@ class Manifest(Contract):
     def compares(self, stage: str | None) -> bool:
         """Whether the host compares this stage's results (replicas, disputes, the result cache, goldens)."""
         return self.determinism_of(stage) != "none"
+
+    def secrets_of(self, stage: str | None) -> list[str]:
+        """The secrets a stage's runner receives (None: the default stage)."""
+        st = self.stage(stage or self.default_stage() or "")
+        return list(st.secrets) if st else []
+
+    def container_set(self, repository: str, platform: str) -> ContainerSet | None:
+        """The image set a normalized repository (`<registry>/<path>`) and platform belong to."""
+        return next((c for c in self.sandbox.container_sets if c.platform == platform and c.covers(repository)), None)
 
     def is_bootstrap(self, stage: str | None) -> bool:
         """Whether jobs of this stage are bootstrap jobs (None: the default stage, which never is)."""
@@ -834,7 +907,7 @@ class Manifest(Contract):
         clash = provided_pools & set(CORE_POOLS)
         if clash:
             raise ValueError(f"pools {sorted(clash)} are provided by the agent itself; a service cannot provide them")
-        if self.sandbox.containers:
+        if self.sandbox.runs_containers():
             provided_pools |= set(CORE_POOLS)
         provided_caps = {c for svc in self.services for c in svc.provides.capabilities} | {p.name for p in self.probes}
         for s in self.stages:
@@ -867,6 +940,7 @@ class Manifest(Contract):
             raise ValueError("no stage compares (every stage's determinism is none): goldens need one, and every module "
                              "is certified on golden evidence")
         self._bootstrap_rules(chain)
+        self._trust_rules()
         if len(self.stages) > 1 and "result.merge" not in self.coordinator.capabilities:
             raise ValueError("a multi-stage module must implement result.merge (coordinator.capabilities)")
         if self.goldens and self.goldens.compare == "verb" and "golden.compare" not in self.coordinator.capabilities:
@@ -947,6 +1021,43 @@ class Manifest(Contract):
                 raise ValueError(f"{where} holds the same files as {seen[p.contents()]!r}: an artifact names its pin by its files")
             seen[p.contents()] = p.dataset_id
 
+    def _trust_rules(self):
+        """Secrets (spec/manifest.md, rule 16), and container image sets and the container GPU pool (rule 17)."""
+        names = [s.name for s in self.secrets]
+        dup = sorted({n for n in names if names.count(n) > 1})
+        if dup:
+            raise ValueError(f"[[secrets]] lists {dup} more than once")
+        used = set()
+        for st in self.stages:
+            if len(set(st.secrets)) != len(st.secrets):
+                raise ValueError(f"stage {st.name!r}: secrets lists a name more than once")
+            unknown = [n for n in st.secrets if n not in names]
+            if unknown:
+                raise ValueError(f"stage {st.name!r}: secrets {unknown} are not declared in [[secrets]]")
+            if st.secrets and st.bootstrap:
+                raise ValueError(f"stage {st.name!r}: a bootstrap stage receives no secrets (bootstrap jobs get only the "
+                                 "egress allowlist)")
+            used |= set(st.secrets)
+        if "secrets:read:self" not in self.coordinator.permissions:
+            unused = [n for n in names if n not in used]
+            if unused:
+                raise ValueError(f"secrets {unused} reach nothing: list them in a stage's `secrets`, or give the "
+                                 "coordinator the secrets:read:self permission")
+        sets = [c.name for c in self.sandbox.container_sets]
+        dup = sorted({n for n in sets if sets.count(n) > 1})
+        if dup:
+            raise ValueError(f"[[sandbox.container_sets]] lists {dup} more than once")
+        for st in self.stages:
+            if "gpu" not in st.requires.pools:
+                continue
+            gpu = self.runner.gpu
+            if "containers" not in st.requires.pools:
+                raise ValueError(f"stage {st.name!r}: the gpu pool is GPU passthrough to containers, so the stage also "
+                                 "reserves the containers pool")
+            if not gpu.in_container or gpu.use == "none":
+                raise ValueError(f"stage {st.name!r} reserves the gpu pool: declare runner.gpu.in_container = true and "
+                                 "runner.gpu.use = 'shared' or 'exclusive' (GPU admission applies to its jobs)")
+
     def _platform_rules(self, declared: set):
         """The cross-field rules of the per-platform declarations (spec/manifest.md, rules 9-11 and 13)."""
         r = self.requires
@@ -1026,6 +1137,9 @@ def lint(man: Manifest) -> list[str]:
         for c in runner.capabilities or []:
             if c not in RUNNER_CAPABILITIES:
                 out.append(f"{where}.capabilities {c!r} is not known to this SDK; the agent ignores it")
+    if man.sandbox.net.mode == "egress-any" and any(s.secrets for s in man.stages):
+        out.append("stages receive secrets while sandbox.net.mode is 'egress-any': a leaked key can reach any host; an "
+                   "egress-allowlist naming only the service the key is for limits that")
     scope = man.results.determinism_scope
     if scope not in pf.SCOPE_MIX:
         out.append(f"results.determinism_scope {scope!r} is not known to this SDK; replicas compare within one platform")
