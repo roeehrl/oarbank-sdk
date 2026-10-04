@@ -119,3 +119,55 @@ def test_a_redirect_to_an_allowed_host_works_and_egress_outside_the_list_fails(t
     assert sneaky["exit 0"][0] == "pass"                                # the runner coped with the 403
     assert sneaky["egress within the allowlist"] == ("fail", f"evil.test:{port} is not in the module's allow list")
     assert not rep.ok
+
+
+# A bootstrap fetch for the toy runner: payload.fetch downloads into one artifact; the payload stays empty only while
+# the runner sees the bootstrap grants (no module data directory, no tools, empty settings).
+BOOT = '''
+    if "fetch" in spec.get("payload", {}):
+        import json as _j, os as _o, urllib.request
+        data = urllib.request.urlopen(spec["payload"]["fetch"], timeout=20).read()
+        (workdir / "out").mkdir()
+        (workdir / "out" / "f.bin").write_bytes(data)
+        seen = {"data": _o.environ.get("OARBANK_MODULE_DATA"), "tools": open(_o.environ["OARBANK_TOOLS_FILE"]).read(),
+                "settings": open(_o.environ["OARBANK_SETTINGS_FILE"]).read()}
+        leak = {} if seen == {"data": None, "tools": "{}", "settings": "{}"} else seen
+        atomic_write(out, {"envelope": 1, "schema": "toy/result@1", "module_version": "0.1.0", "protocol": 1,
+                           "artifacts": [{"name": "tool", "files": [{"path": "f.bin", "local": "out/f.bin"}]}],
+                           "payload": {**leak, **spec["payload"].get("extra", {})}})
+        return 0
+'''
+
+
+def bootstrap_toy(tmp_path, allow: list[str], sha: str) -> Path:
+    d = toy(tmp_path, allow=allow)
+    r = (d / "toy_runner.py").read_text(encoding="utf-8")
+    (d / "toy_runner.py").write_text(r.replace('    n = spec.get("payload", {}).get("n")\n',
+                                               BOOT + '    n = spec.get("payload", {}).get("n")\n', 1), encoding="utf-8", newline="\n")
+    m = (d / "oarbank-module.toml").read_text(encoding="utf-8")
+    m = m.replace('core = ">=2.1,<3"', 'core = ">=2.4,<3"').replace('name = "run"\n', 'name = "run"\ndefault = true\n')
+    m = m.replace('capabilities = ["ui.view.compute",', 'capabilities = ["result.merge", "ui.view.compute",')
+    m = m.replace("[results]", '[[stages]]\nname = "fetch"\nbootstrap = true\ndeterminism = "none"\ntimeout_s = 60\n\n[results]')
+    m += ('\n[datasets]\nkinds = ["tool"]\n\n[[datasets.pinned]]\ndataset_id = "tool:asset-1"\nkind = "tool"\n'
+          f'files = [{{ path = "f.bin", sha256 = "{sha}", size = 11 }}]\n')
+    (d / "oarbank-module.toml").write_text(m, encoding="utf-8", newline="\n")
+    return d
+
+
+def test_a_bootstrap_spec_runs_with_the_bootstrap_grants_and_must_produce_exactly_the_pins(tmp_path, origin):
+    import hashlib
+    port = origin
+    allow = [f"release.test:{port}", f"assets.test:{port}"]
+    url = f"http://release.test:{port}/dl"
+    d = bootstrap_toy(tmp_path / "ok", allow, hashlib.sha256(b"asset bytes").hexdigest())
+    rep = conform(d, {"settings": {"token": "secret"}, "runner_specs": [
+        {"name": "fetch", "stage": "fetch", "payload": {"fetch": url}, "expect": {"artifacts": ["tool"]}},
+        {"name": "chatty", "stage": "fetch", "payload": {"fetch": url, "extra": {"note": "hi"}}},
+    ]})
+    assert checks(rep, "runner spec fetch") == {"exit 0": ("pass", "exit 0"), "artifacts": ("pass", "wrote ['tool'], expected ['tool']"),
+                                                "artifacts match the pinned datasets": ("pass", "")}, rep.text()
+    assert checks(rep, "runner spec chatty")["artifacts match the pinned datasets"] == ("fail", "a bootstrap result carries no payload")
+    d = bootstrap_toy(tmp_path / "drift", allow, "00" * 32)
+    rep = conform(d, {"runner_specs": [{"name": "fetch", "stage": "fetch", "payload": {"fetch": url}}]})
+    status, detail = checks(rep, "runner spec fetch")["artifacts match the pinned datasets"]
+    assert status == "fail" and detail.startswith("artifact 'tool': f.bin is sha256 ") and "pins " + "00" * 32 in detail

@@ -35,6 +35,7 @@ runs like a golden, sandboxed with the egress proxy, and is checked against `exp
 fails its run (goldens too).
 A dataset with a `dir` is mounted (copied) into the runner's workdir under the golden spec's mount name.
 """
+import hashlib
 import json
 import os
 import shutil
@@ -390,7 +391,8 @@ def _spec_envelope(man, stage_name, payload: dict, datasets: list, mounts: dict,
 class Grants:
     """What the agent would give the runner beyond its directories, from the module's [sandbox] and the fixtures:
     the tool paths (fixtures `tools`: {id: path}, resolved as the agent does), the settings file (fixtures `settings`)
-    and, for egress-allowlist, a real allowlist proxy (egress_proxy)."""
+    and, for egress-allowlist, a real allowlist proxy (egress_proxy). A bootstrap stage's jobs get the bootstrap grants
+    instead (spec/sandbox.md, "Bootstrap jobs"): the same proxy, no tools, `{}` as settings, no module data directory."""
 
     def __init__(self, man, fx: dict):
         self.dir = Path(tempfile.mkdtemp(prefix="conform-grants-"))
@@ -400,22 +402,29 @@ class Grants:
         self.tools = {t: [os.path.realpath(given[t])] for t in want if t in given}
         (self.dir / "tools.json").write_text(json.dumps(self.tools), encoding="utf-8")
         (self.dir / "settings.json").write_text(json.dumps(fx.get("settings") or {}), encoding="utf-8")
+        (self.dir / "bootstrap").mkdir()
+        for name in ("tools.json", "settings.json"):
+            (self.dir / "bootstrap" / name).write_text("{}", encoding="utf-8")
         self.proxy = None
         if man.sandbox.net.mode == "egress-allowlist":
             from .egress_proxy import AllowlistProxy
             self.proxy = AllowlistProxy(man.sandbox.net.allow).start()
 
-    def env(self) -> dict:
-        e = {"OARBANK_TOOLS_FILE": str(self.dir / "tools.json"), "OARBANK_SETTINGS_FILE": str(self.dir / "settings.json")}
+    def env(self, bootstrap: bool = False) -> dict:
+        files = self.dir / "bootstrap" if bootstrap else self.dir
+        e = {"OARBANK_TOOLS_FILE": str(files / "tools.json"), "OARBANK_SETTINGS_FILE": str(files / "settings.json")}
         if self.proxy:
             url = f"http://127.0.0.1:{self.proxy.port}"
             e.update({"HTTPS_PROXY": url, "HTTP_PROXY": url, "ALL_PROXY": url, "https_proxy": url, "http_proxy": url,
                       "NO_PROXY": ""})
         return e
 
-    def policy(self, man, root, ws, data, kind="runner"):
+    def policy(self, man, root, ws, data, kind="runner", bootstrap: bool = False):
         from . import sandbox as S
         # the grants directory (tools.json, settings.json) is readable like the agent's per-job files
+        if bootstrap:
+            return S.node_policy(man.module.id, root, ws, None, sandbox=man.sandbox.for_bootstrap(), kind=kind,
+                                 tool_paths=[str(self.dir / "bootstrap")], proxy_port=self.proxy.port if self.proxy else None)
         return S.node_policy(man.module.id, root, ws, data, sandbox=man.sandbox, kind=kind,
                              tool_paths=[p for ps in self.tools.values() for p in ps] + [str(self.dir)],
                              proxy_port=self.proxy.port if self.proxy else None)
@@ -499,7 +508,7 @@ def _read_json(path: Path) -> dict | None:
         return None
 
 
-def _run(root: Path, man, env_doc: dict, fx: dict, locale: str = "C", stop: bool = False) -> Outcome:
+def _run(root: Path, man, env_doc: dict, fx: dict, locale: str = "C", stop: bool = False, bootstrap: bool = False) -> Outcome:
     ws = Path(tempfile.mkdtemp(prefix="conform-"))
     for did in env_doc["datasets"]:
         src = (fx.get("datasets") or {}).get(did, {}).get("dir")
@@ -512,12 +521,14 @@ def _run(root: Path, man, env_doc: dict, fx: dict, locale: str = "C", stop: bool
     g = GRANTS["g"]
     nudge = _Nudge()
     run = man.runner.for_platform(portable.host_platform())
-    env = {**job_env(man, ws, data, locale), **run.env, **g.env(), **nudge.env()}
+    env = {**job_env(man, ws, data, locale), **run.env, **g.env(bootstrap), **nudge.env()}
+    if bootstrap:
+        env.pop("OARBANK_MODULE_DATA")                   # a bootstrap job keeps nothing on the node
     (ws / "control.json").write_text(json.dumps({"seq": 0}), encoding="utf-8")
     argv = _argv(run.exec, root) + ["run", "--spec", str(ws / "spec.json"), "--workdir", str(ws), "--out", str(ws / "result.json")]
     if SANDBOX["on"]:
         from . import sandbox as S
-        text, params = S.render(g.policy(man, root, ws, data))
+        text, params = S.render(g.policy(man, root, ws, data, bootstrap=bootstrap))
         argv = S.launch_argv(S.write_profile(text, data.parent / f"{data.name}.sb"), params, argv)
     seen = len(g.proxy.refused) if g.proxy else 0
     out, exited = {}, threading.Event()
@@ -784,10 +795,27 @@ class RunnerSpec(StrictContract):
     expect: RunnerSpecExpect = Field(default_factory=RunnerSpecExpect)
 
 
+def _uploaded(ws: Path, res: ResultEnvelope) -> list[dict]:
+    """The result's artifacts as the host sees them after the agent's upload: each file's sha256 and size, hashed from
+    the workdir (`local`); a file the runner listed but did not write has neither."""
+    out = []
+    for a in res.artifacts:
+        files = []
+        for f in a.files:
+            src = ws / (f.local or "")
+            if f.local and src.is_file():
+                files.append({"path": f.path, "digest": hashlib.sha256(src.read_bytes()).hexdigest(), "size": src.stat().st_size})
+            else:
+                files.append({"path": f.path, "digest": f.digest, "size": f.size})
+        out.append({"name": a.name, "files": files})
+    return out
+
+
 def _check_runner_specs(root: Path, man, fx: dict, r: Report):
     """Every `runner_specs` entry runs as a golden does (sandboxed with the module's grants, the egress proxy for
     egress-allowlist) and is checked against `expect`: the exit code; for exit 0 a valid ResultEnvelope (artifact names
-    are Names) with the expected artifact names; otherwise a valid failure.json with the expected reason."""
+    are Names) with the expected artifact names; otherwise a valid failure.json with the expected reason. A bootstrap
+    stage's spec runs with the bootstrap grants, and its result must be exactly pinned datasets, as the host requires."""
     for i, raw in enumerate(fx.get("runner_specs") or []):
         try:
             spec = RunnerSpec.model_validate(raw)
@@ -813,7 +841,8 @@ def _check_runner_specs(root: Path, man, fx: dict, r: Report):
         sent = None if stage is None or stage.name == man.default_stage() else stage.name     # as the host sends it
         env_doc = _spec_envelope(man, sent, spec.payload, spec.datasets, spec.mounts, 1,
                                  job_key(man.module.id, man.module.compat, spec.payload, sent))
-        o = _run(root, man, env_doc, fx)
+        boot = stage is not None and stage.bootstrap
+        o = _run(root, man, env_doc, fx, bootstrap=boot)
         _egress(r, label, o)
         r.add("runner", f"{label}: exit {spec.expect.exit}", o.code == spec.expect.exit,
               f"exit {o.code}" + (f": {o.stderr}" if o.stderr else ""))
@@ -827,6 +856,9 @@ def _check_runner_specs(root: Path, man, fx: dict, r: Report):
             if spec.expect.artifacts is not None:
                 r.add("runner", f"{label}: artifacts", names == sorted(spec.expect.artifacts),
                       f"wrote {names}, expected {sorted(spec.expect.artifacts)}")
+            if boot:
+                problem = man.bootstrap_problem(res.payload, _uploaded(o.ws, res))
+                r.add("runner", f"{label}: artifacts match the pinned datasets", problem is None, problem or "")
         elif isinstance(o.code, int):
             try:
                 f = Failure.model_validate(o.failure)

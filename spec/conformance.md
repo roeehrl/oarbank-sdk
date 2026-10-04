@@ -63,3 +63,9 @@ on this host would (the stage's resources and timeout), runs it sandboxed with t
 and reports the exit code, the result's artifact names (each must be a `Name`, which a real agent also requires) or the
 `failure.json` (required for a non-zero exit). A spec whose datasets the fixtures lack, or whose stage reserves the
 `containers` pool, is skipped with the reason.
+
+A runner spec for a **bootstrap stage** runs with the bootstrap grants instead ([sandbox.md](sandbox.md#bootstrap-jobs)):
+the allowlist proxy, no tools, `{}` as settings, no module data directory. For exit 0 the kit also checks what the host
+will: the payload is empty, and every artifact's files, hashed from the workdir, are exactly one pinned dataset's
+("artifacts match the pinned datasets", naming the first file that differs). So a fetch is proven against the real
+origins, through the real allowlist, before the module ships.
