@@ -1,0 +1,98 @@
+# reel: the reference module for files and media (oarbank-sdk 1.5). It renders deterministic frames with thumbnails,
+# keeps portable checkpoints so a render paused or moved on one node finishes on another, shows its artifacts with the
+# media components (no iframe), and registers datasets by URL and digest (origins).
+# params: {"frames": int, "seed": int, "step_ms": int, "every": int, "asset"?: dataset id}; result: {"frames": int, "digest": str}.
+manifest = 1
+
+[module]
+id = "dev.codonic.oarbank.reel"
+version = "0.1.0"
+compat = "reel1"
+publisher = "oarbank"
+license = "Apache-2.0"
+codeowners = ["roeehrl"]
+stability = "beta"
+description = "Renders frames with portable checkpoints; the reference module for media, origins and checkpoints"
+
+[requires]
+core = ">=2.5,<3"
+platforms = ["darwin-arm64", "darwin-amd64", "linux-arm64", "linux-amd64", "windows-arm64", "windows-amd64"]
+module_protocol = [1]
+runner_protocol = [1]
+ui_contract = ">=1.1,<2"
+
+[coordinator]
+exec = ["python", "-I", "{bundle}/reel_module.py"]
+runtime = { kind = "python" }
+capabilities = ["ui.view.compute", "op.apply"]
+permissions = ["datasets:read"]
+
+[runner]
+exec = ["python", "-I", "{bundle}/reel_runner.py"]
+runtime = { kind = "python" }
+capabilities = ["cancellable", "cooperative_pause", "checkpoint", "deterministic_output"]
+checkpoint_grace_s = 30
+
+[[stages]]
+name = "render"
+timeout_s = 3600
+checkpoint = { max_mb = 64, min_interval_s = 30 }
+requires = { resources = { cpu = 1, mem_gb = 0.25 } }
+
+[results]
+schema = "schemas/result.schema.json"
+schema_version = 1
+determinism = "exact"
+digest = { version = 1, over = ["digest"] }
+value = { field = "frames", direction = "maximize" }
+fields = [{ name = "frames", type = "integer", ui = { column = "Frames", format = "d" } }, { name = "digest", type = "string" }]
+
+[goldens]
+fixtures = "goldens/*.json"
+
+[datasets]
+kinds = ["asset"]
+
+[ui]
+icon = "cube"
+digest_line = "{frames:d} frames"
+pages = [{ id = "overview", title = "Reel", slot = "module.overview", file = "ui/pages/overview.json" }]
+
+[ui.views.frames]
+shape = "rows"
+inputs = ["results"]
+columns = [{ key = "frame", type = "artifact_ref" }, { key = "index", type = "integer" }]
+
+[ui.views.renders]
+shape = "rows"
+inputs = ["results"]
+columns = [{ key = "job", type = "job_ref" }, { key = "frames", type = "integer" }, { key = "clip", type = "artifact_ref" },
+           { key = "log", type = "artifact_ref" }]
+
+[ui.views.pair]
+shape = "rows"
+inputs = ["results"]
+
+[[operations]]
+verb = "queue_render"
+title = "Queue renders"
+tier = "T1"
+target = "none"
+params_schema = "schemas/queue_render.json"
+effects = ["campaigns.create", "jobs.enqueue"]
+
+[[operations]]
+verb = "import_asset"
+title = "Register an asset by URL"
+tier = "T1"
+target = "none"
+params_schema = "schemas/import_asset.json"
+effects = ["datasets.create"]
+
+[[operations]]
+verb = "adopt_upload"
+title = "Use an uploaded dataset as assets"
+tier = "T1"
+target = "dataset"
+params_schema = "schemas/adopt_upload.json"
+effects = ["datasets.create"]

@@ -21,6 +21,7 @@ A module never sees the backend. It declares what it needs in `[sandbox]`, and a
 | data directory (kept across jobs) | read, write | read, write | read, write |
 | private temporary directory | read, write | read, write (inside work) | read, write (inside data) |
 | approved host tools (`[sandbox].tools`) | none | read, execute | read, execute |
+| approved folders (`[sandbox].folders`) | none | read (input folders); create and write only (outboxes) | none |
 | everything else: homes, other modules, the agent's and coordinator's state, credential stores, devices other than null, zero, random and urandom | denied | denied | denied |
 
 **Processes**
@@ -60,6 +61,7 @@ tools = [{ id = "renderer4", trust = "code-exec" }]
 devices = { gpu = "compute" }
 containers = [{ image = "docker.io/org/tool:1.2@sha256:<64 hex>", platform = "linux/amd64" }]
 exec_writable = false
+folders = [{ id = "inputs", access = "read" }, { id = "outbox", access = "write" }]
 
 [[sandbox.container_sets]]          # images approved by signature (core 2.5): see "Image sets"
 name = "tasks"
@@ -79,6 +81,7 @@ key = "keys/tasks.pub"
 | `containers` | The job's broker endpoint, for these digest-pinned images only. A stage that runs containers reserves the agent-provided `containers` pool. |
 | `container_sets` | The job's broker endpoint, for digest-pinned images under a registry and repository prefix that carry a cosign signature by a pinned key (or that a signed index lists), when the job lists them ([Image sets](#image-sets)). |
 | `exec_writable = true` | Runners may execute files they wrote into the data or work directory, such as downloaded tools. Windows cannot enforce `false` without application control, so nodes report it as `unavailable` there. |
+| `folders` | Runners only. Each id is a folder the operator maps to a path **per node** in the folder registry ([Folders](#folders)); the runner finds the granted ones in `OARBANK_FOLDERS_FILE`. `access = "read"`: read files and listings, never write or execute. `access = "write"`: an outbox: create files and directories and write them, never read, list, rename or delete anything there. |
 
 **Network rules, whatever the mode:**
 - never loopback or link-local;
@@ -95,6 +98,27 @@ key = "keys/tasks.pub"
 it). A module runs only where all of its grants, and the always-on rules above, are enforced. A node that
 cannot enforce them advertises `SANDBOX_BACKEND_MISSING` or `CAPABILITY_NOT_ENFORCED` for that module.
 
+## Folders
+
+A runner that works on the user's own files on a node, or leaves results there, asks for folders by id. Nothing about
+where they are is in the module: the operator maps each id to a path per node, and the node checks it.
+
+- **Approval.** Folders are part of the requests an operator approves per version. The approval names each folder and
+  its access; an outbox's approval warns that files the module creates may replace files of the same name there (give
+  it an empty, dedicated directory).
+- **Mapping.** The operator's folder registry maps an id to an absolute path on each node, with an access that must
+  equal the module's. In signing mode a node accepts its mapping only in a statement signed by the owner's release
+  key, so a compromised coordinator cannot point an approved folder at another directory.
+- **On the node.** The agent grants the folder's canonical path (symlinks resolved) and refuses a mapping that is a
+  filesystem root, a home directory itself, inside the agent's or the coordinator's data, a system directory, or that
+  overlaps another grant or another folder. It reports each folder `ok` or why not; a job of a module that needs a
+  folder the node does not provide waits with `FOLDER_UNAVAILABLE`.
+- **Links.** Every backend checks a link's target, so a symlink inside an input folder that points elsewhere leads
+  nowhere, and a runner cannot create a symlink or a hard link in an outbox.
+- **Execution.** Nothing in a folder may be executed, except on Windows, where any readable file can be (as for tools).
+- **Enforcement.** Nodes report `folders.read` and `folders.write` in `sandbox.enforcement`; a module that requests
+  folders runs only where both of its kinds are enforced.
+
 ## Bootstrap jobs
 
 A job of a bootstrap stage ([manifest.md](manifest.md#pinned-datasets), `stages[].bootstrap`) may run on a node
@@ -106,7 +130,7 @@ before the module's goldens pass there, so it gets less than any other job of it
 | work directory (and the private temporary directory inside it) | read, write |
 | data directory | none: `OARBANK_MODULE_DATA` is not set, and nothing it fetched stays on the node |
 | network | the module's `egress-allowlist`, through the agent's proxy; none when the module's mode is `none` (a module with a bootstrap stage never requests `egress-any`) |
-| host tools, GPU, the container broker, executing written files | none (`OARBANK_TOOLS_FILE` lists no tools) |
+| host tools, folders, GPU, the container broker, executing written files | none (`OARBANK_TOOLS_FILE` and `OARBANK_FOLDERS_FILE` list none) |
 | module settings | an empty object in `OARBANK_SETTINGS_FILE` |
 | secrets | none (a bootstrap stage lists none; no `OARBANK_SECRETS_FILE`) |
 

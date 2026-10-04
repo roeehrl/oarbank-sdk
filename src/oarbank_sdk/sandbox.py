@@ -3,7 +3,9 @@
 A module process may read its own bundle (and the interpreter it runs on), read and write its own data directory
 and, for a job, its private work directory, and nothing else on the host: not the user's home, not other modules,
 not the coordinator's or the agent's state. Network, host tool paths, the GPU and the container broker are
-grants: declared in the manifest's `[sandbox]` section and approved by an operator for that module version.
+grants: declared in the manifest's `[sandbox]` section and approved by an operator for that module version. A runner may
+also get folders (`[sandbox].folders`): read-only input folders, and write-only outboxes it can create files in but never
+read, list, rename or delete.
 
 `Policy` is the backend-neutral description of one process's grants. The macOS backend below renders it as a Seatbelt
 profile (spec/sandbox/backends/macos.md; golden shapes in spec/sandbox/golden/). Every path enters the profile as a parameter
@@ -19,7 +21,7 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
-PROFILE_VERSION = 3
+PROFILE_VERSION = 4
 BACKEND = "seatbelt"
 LAUNCHER = Path(__file__).with_name("_sandbox_launch.py")
 
@@ -61,6 +63,14 @@ _RO = """(allow file-read* file-map-executable process-exec (subpath (param "RO_
 """
 _RW = """(allow file-read* file-write* (subpath (param "RW_{i}")))
 (allow file-read-metadata (path-ancestors (param "RW_{i}")))
+"""
+_RD = """(allow file-read* (subpath (param "RD_{i}")))
+(allow file-read-metadata (path-ancestors (param "RD_{i}")))
+"""
+# an outbox: create regular files and directories (never links) and write them; no reading, listing, unlink or rename
+_WO = """(allow file-read-metadata (subpath (param "WO_{i}")) (path-ancestors (param "WO_{i}")))
+(allow file-write-create (require-all (subpath (param "WO_{i}")) (vnode-type REGULAR-FILE DIRECTORY)))
+(allow file-write-data (subpath (param "WO_{i}")))
 """
 _LINK = """(allow file-read-metadata (literal (param "LINK_{i}")) (path-ancestors (param "LINK_{i}")))
 """
@@ -111,7 +121,8 @@ class SandboxError(RuntimeError):
 @dataclass
 class Policy:
     """What one module process may touch. `ro`: read, map and exec (bundle, interpreter, approved host paths);
-    `rw`: read and write (data dir, job work dir, tmp). The kind only labels the profile."""
+    `rw`: read and write (data dir, job work dir, tmp); `rd`: read only, never execute (a runner's read folders); `wo`:
+    create and write, never read, list, unlink or rename (a runner's outboxes). The kind only labels the profile."""
     module: str
     ro: list = field(default_factory=list)
     rw: list = field(default_factory=list)
@@ -122,6 +133,8 @@ class Policy:
     exec_rw: bool = False                        # exec_writable: the rw roots may hold executables
     kind: str = "runner"
     exe: str | None = None                       # argv[0]: its symlink hops need metadata rules too
+    rd: list = field(default_factory=list)
+    wo: list = field(default_factory=list)
 
 
 def _real(p) -> str:
@@ -150,7 +163,7 @@ def links_of(p, _depth: int = 0) -> list[str]:
 
 
 def render_text(kind: str, n_ro: int, n_rw: int, n_links: int, net: str, broker: bool, gpu: bool,
-                proxy_port: int | None = None, exec_rw: bool = False) -> str:
+                proxy_port: int | None = None, exec_rw: bool = False, n_rd: int = 0, n_wo: int = 0) -> str:
     """The profile text for a policy shape (spec/sandbox/golden pins it)."""
     if net not in NET_MODES:
         raise SandboxError(f"network mode {net!r} is not enforceable by the {BACKEND} backend")
@@ -162,6 +175,8 @@ def render_text(kind: str, n_ro: int, n_rw: int, n_links: int, net: str, broker:
         parts.append(_RW.format(i=i))
         if exec_rw:
             parts.append(_RW_EXEC.format(i=i))
+    parts += [_RD.format(i=i) for i in range(n_rd)]
+    parts += [_WO.format(i=i) for i in range(n_wo)]
     parts += [_LINK.format(i=i) for i in range(n_links)]
     if net == "egress-any":
         parts.append(_EGRESS_ANY)
@@ -181,17 +196,21 @@ def render(policy: Policy) -> tuple[str, list[tuple[str, str]]]:
     """The profile text and its parameters, every path realpath'd. The text depends only on the counts and flags."""
     ro = list(dict.fromkeys(_real(p) for p in policy.ro))
     rw = list(dict.fromkeys(_real(p) for p in policy.rw))
-    links = list(dict.fromkeys(link for p in list(policy.ro) + list(policy.rw) + ([policy.exe] if policy.exe else [])
+    rd = list(dict.fromkeys(_real(p) for p in policy.rd))
+    wo = list(dict.fromkeys(_real(p) for p in policy.wo))
+    links = list(dict.fromkeys(link for p in [*policy.ro, *policy.rw, *policy.rd, *policy.wo, *([policy.exe] if policy.exe else [])]
                                for link in links_of(p)))
     params = [("MODULE_ID", policy.module)]
     params += [(f"RO_{i}", p) for i, p in enumerate(ro)]
     params += [(f"RW_{i}", p) for i, p in enumerate(rw)]
+    params += [(f"RD_{i}", p) for i, p in enumerate(rd)]
+    params += [(f"WO_{i}", p) for i, p in enumerate(wo)]
     params += [(f"LINK_{i}", p) for i, p in enumerate(links)]
     if policy.broker_socket:
         b = Path(policy.broker_socket)
         params.append(("BROKER_SOCKET", _real(b.parent) + "/" + b.name))
     text = render_text(policy.kind, len(ro), len(rw), len(links), policy.net, bool(policy.broker_socket), policy.gpu,
-                       policy.proxy_port, policy.exec_rw)
+                       policy.proxy_port, policy.exec_rw, len(rd), len(wo))
     return text, params
 
 
@@ -247,17 +266,22 @@ def interpreter_roots(python: str | None = None, layout: dict | None = None) -> 
 
 
 def node_policy(module: str, bundle, work, data, python: str | None = None, sandbox=None, broker_socket: str | None = None,
-                kind: str = "runner", tool_paths: list | None = None, proxy_port: int | None = None) -> Policy:
+                kind: str = "runner", tool_paths: list | None = None, proxy_port: int | None = None,
+                folders: dict | None = None) -> Policy:
     """A node-side process (runner, doctor, service, probe): its bundle and interpreter read-only, the job's work dir
     and the module's data dir read-write, plus the approved grants of `sandbox` (a manifest SandboxSection).
-    `tool_paths`: the host's paths for the approved tool ids (the operator's tool registry resolves them per OS)."""
+    `tool_paths`: the host's paths for the approved tool ids (the operator's tool registry resolves them per OS).
+    `folders`: {id: {path, access}} for a runner's granted folders (only runners get them)."""
+    granted = folders if kind == "runner" else {}
     ro = [str(bundle), *interpreter_roots(python), *(tool_paths or [])]
     rw = [str(p) for p in (work, data) if p]
     net = sandbox.net.mode if sandbox else "none"
     return Policy(module=module, ro=ro, rw=rw, net=net, proxy_port=proxy_port if net == "egress-allowlist" else None,
                   broker_socket=broker_socket if sandbox and sandbox.containers else None,
                   gpu=bool(sandbox and sandbox.devices.gpu != "none"), kind=kind, exe=python or sys.executable,
-                  exec_rw=bool(sandbox and sandbox.exec_writable))
+                  exec_rw=bool(sandbox and sandbox.exec_writable),
+                  rd=[f["path"] for f in (granted or {}).values() if f["access"] == "read"],
+                  wo=[f["path"] for f in (granted or {}).values() if f["access"] == "write"])
 
 
 def write_profile(text: str, path) -> Path:

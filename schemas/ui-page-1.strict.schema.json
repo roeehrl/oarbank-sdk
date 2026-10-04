@@ -400,6 +400,7 @@
             "node_ref",
             "dataset_ref",
             "campaign_ref",
+            "artifact_ref",
             "link"
           ],
           "title": "Type",
@@ -436,15 +437,18 @@
                 "callout": "#/$defs/Callout",
                 "chart": "#/$defs/Chart",
                 "columns": "#/$defs/Columns",
+                "compare": "#/$defs/Compare",
                 "empty": "#/$defs/Empty",
                 "filter_bar": "#/$defs/FilterBar",
                 "form": "#/$defs/Form",
+                "gallery": "#/$defs/Gallery",
                 "iframe": "#/$defs/Frame",
                 "json": "#/$defs/JSONView",
                 "kv": "#/$defs/KV",
                 "link": "#/$defs/LinkC",
                 "logs": "#/$defs/Logs",
                 "markdown": "#/$defs/Markdown",
+                "media": "#/$defs/Media",
                 "progress": "#/$defs/Progress",
                 "section": "#/$defs/Section",
                 "stat": "#/$defs/Stat",
@@ -515,6 +519,15 @@
               },
               {
                 "$ref": "#/$defs/Frame"
+              },
+              {
+                "$ref": "#/$defs/Media"
+              },
+              {
+                "$ref": "#/$defs/Gallery"
+              },
+              {
+                "$ref": "#/$defs/Compare"
               }
             ]
           },
@@ -583,6 +596,117 @@
         "children"
       ],
       "title": "Columns",
+      "type": "object"
+    },
+    "Compare": {
+      "additionalProperties": false,
+      "description": "Two images from the source's first row, side by side or overlaid with a slider. [beta, UI contract 1.1]",
+      "properties": {
+        "fallback": {
+          "default": "placeholder",
+          "enum": [
+            "drop",
+            "placeholder"
+          ],
+          "title": "Fallback",
+          "type": "string"
+        },
+        "id": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Id"
+        },
+        "labels": {
+          "anyOf": [
+            {
+              "items": {
+                "maxLength": 80,
+                "minLength": 1,
+                "type": "string"
+              },
+              "maxItems": 2,
+              "minItems": 2,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Labels"
+        },
+        "left": {
+          "maxLength": 64,
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "title": "Left",
+          "type": "string"
+        },
+        "mode": {
+          "default": "side_by_side",
+          "enum": [
+            "side_by_side",
+            "slider"
+          ],
+          "title": "Mode",
+          "type": "string"
+        },
+        "requires": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Minimum ui_contract minor for this component, e.g. '1.1'.",
+          "title": "Requires"
+        },
+        "right": {
+          "maxLength": 64,
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "title": "Right",
+          "type": "string"
+        },
+        "source": {
+          "$ref": "#/$defs/Source"
+        },
+        "type": {
+          "const": "compare",
+          "title": "Type",
+          "type": "string"
+        },
+        "when": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Visibility, e.g. \"node.online == true\".",
+          "title": "When"
+        }
+      },
+      "required": [
+        "type",
+        "source",
+        "left",
+        "right"
+      ],
+      "title": "Compare",
       "type": "object"
     },
     "Empty": {
@@ -994,6 +1118,112 @@
       "title": "Frame",
       "type": "object"
     },
+    "Gallery": {
+      "additionalProperties": false,
+      "description": "A grid of image or video artifacts, one per source row, each shown by its thumbnail when it has one and linked to\nits job. [beta, UI contract 1.1]",
+      "properties": {
+        "caption_field": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "pattern": "^[a-z][a-z0-9_]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Caption Field"
+        },
+        "columns": {
+          "default": 4,
+          "maximum": 8,
+          "minimum": 2,
+          "title": "Columns",
+          "type": "integer"
+        },
+        "fallback": {
+          "default": "placeholder",
+          "enum": [
+            "drop",
+            "placeholder"
+          ],
+          "title": "Fallback",
+          "type": "string"
+        },
+        "field": {
+          "maxLength": 64,
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "title": "Field",
+          "type": "string"
+        },
+        "id": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Id"
+        },
+        "kind": {
+          "default": "image",
+          "enum": [
+            "image",
+            "video"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "requires": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Minimum ui_contract minor for this component, e.g. '1.1'.",
+          "title": "Requires"
+        },
+        "source": {
+          "$ref": "#/$defs/Source"
+        },
+        "type": {
+          "const": "gallery",
+          "title": "Type",
+          "type": "string"
+        },
+        "when": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Visibility, e.g. \"node.online == true\".",
+          "title": "When"
+        }
+      },
+      "required": [
+        "type",
+        "source",
+        "field"
+      ],
+      "title": "Gallery",
+      "type": "object"
+    },
     "JSONView": {
       "additionalProperties": false,
       "properties": {
@@ -1201,6 +1431,7 @@
             "node_ref",
             "dataset_ref",
             "campaign_ref",
+            "artifact_ref",
             "link"
           ],
           "title": "Type",
@@ -1537,6 +1768,129 @@
       "title": "Markdown",
       "type": "object"
     },
+    "Media": {
+      "additionalProperties": false,
+      "description": "One artifact: an image, a video or audio player, or a text file shown as plain text. [beta, UI contract 1.1]",
+      "properties": {
+        "caption": {
+          "anyOf": [
+            {
+              "maxLength": 80,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Caption"
+        },
+        "caption_field": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "pattern": "^[a-z][a-z0-9_]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Caption Field"
+        },
+        "fallback": {
+          "default": "placeholder",
+          "enum": [
+            "drop",
+            "placeholder"
+          ],
+          "title": "Fallback",
+          "type": "string"
+        },
+        "field": {
+          "description": "The field of the source's first row that holds the artifact reference.",
+          "maxLength": 64,
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "title": "Field",
+          "type": "string"
+        },
+        "height": {
+          "default": 360,
+          "maximum": 2000,
+          "minimum": 60,
+          "title": "Height",
+          "type": "integer"
+        },
+        "id": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Id"
+        },
+        "kind": {
+          "enum": [
+            "image",
+            "video",
+            "audio",
+            "text"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "requires": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Minimum ui_contract minor for this component, e.g. '1.1'.",
+          "title": "Requires"
+        },
+        "source": {
+          "$ref": "#/$defs/Source"
+        },
+        "type": {
+          "const": "media",
+          "title": "Type",
+          "type": "string"
+        },
+        "when": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Visibility, e.g. \"node.online == true\".",
+          "title": "When"
+        }
+      },
+      "required": [
+        "type",
+        "kind",
+        "source",
+        "field"
+      ],
+      "title": "Media",
+      "type": "object"
+    },
     "Progress": {
       "additionalProperties": false,
       "properties": {
@@ -1637,15 +1991,18 @@
                 "callout": "#/$defs/Callout",
                 "chart": "#/$defs/Chart",
                 "columns": "#/$defs/Columns",
+                "compare": "#/$defs/Compare",
                 "empty": "#/$defs/Empty",
                 "filter_bar": "#/$defs/FilterBar",
                 "form": "#/$defs/Form",
+                "gallery": "#/$defs/Gallery",
                 "iframe": "#/$defs/Frame",
                 "json": "#/$defs/JSONView",
                 "kv": "#/$defs/KV",
                 "link": "#/$defs/LinkC",
                 "logs": "#/$defs/Logs",
                 "markdown": "#/$defs/Markdown",
+                "media": "#/$defs/Media",
                 "progress": "#/$defs/Progress",
                 "section": "#/$defs/Section",
                 "stat": "#/$defs/Stat",
@@ -1716,6 +2073,15 @@
               },
               {
                 "$ref": "#/$defs/Frame"
+              },
+              {
+                "$ref": "#/$defs/Media"
+              },
+              {
+                "$ref": "#/$defs/Gallery"
+              },
+              {
+                "$ref": "#/$defs/Compare"
               }
             ]
           },
@@ -2189,15 +2555,18 @@
                 "callout": "#/$defs/Callout",
                 "chart": "#/$defs/Chart",
                 "columns": "#/$defs/Columns",
+                "compare": "#/$defs/Compare",
                 "empty": "#/$defs/Empty",
                 "filter_bar": "#/$defs/FilterBar",
                 "form": "#/$defs/Form",
+                "gallery": "#/$defs/Gallery",
                 "iframe": "#/$defs/Frame",
                 "json": "#/$defs/JSONView",
                 "kv": "#/$defs/KV",
                 "link": "#/$defs/LinkC",
                 "logs": "#/$defs/Logs",
                 "markdown": "#/$defs/Markdown",
+                "media": "#/$defs/Media",
                 "progress": "#/$defs/Progress",
                 "section": "#/$defs/Section",
                 "stat": "#/$defs/Stat",
@@ -2268,6 +2637,15 @@
               },
               {
                 "$ref": "#/$defs/Frame"
+              },
+              {
+                "$ref": "#/$defs/Media"
+              },
+              {
+                "$ref": "#/$defs/Gallery"
+              },
+              {
+                "$ref": "#/$defs/Compare"
               }
             ]
           },
@@ -2570,15 +2948,18 @@
             "callout": "#/$defs/Callout",
             "chart": "#/$defs/Chart",
             "columns": "#/$defs/Columns",
+            "compare": "#/$defs/Compare",
             "empty": "#/$defs/Empty",
             "filter_bar": "#/$defs/FilterBar",
             "form": "#/$defs/Form",
+            "gallery": "#/$defs/Gallery",
             "iframe": "#/$defs/Frame",
             "json": "#/$defs/JSONView",
             "kv": "#/$defs/KV",
             "link": "#/$defs/LinkC",
             "logs": "#/$defs/Logs",
             "markdown": "#/$defs/Markdown",
+            "media": "#/$defs/Media",
             "progress": "#/$defs/Progress",
             "section": "#/$defs/Section",
             "stat": "#/$defs/Stat",
@@ -2649,6 +3030,15 @@
           },
           {
             "$ref": "#/$defs/Frame"
+          },
+          {
+            "$ref": "#/$defs/Media"
+          },
+          {
+            "$ref": "#/$defs/Gallery"
+          },
+          {
+            "$ref": "#/$defs/Compare"
           }
         ]
       },
@@ -2672,7 +3062,7 @@
       "title": "Title"
     },
     "ui_contract": {
-      "default": "1.0",
+      "default": "1.1",
       "pattern": "^1\\.\\d+$",
       "title": "Ui Contract",
       "type": "string"

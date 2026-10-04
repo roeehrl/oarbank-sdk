@@ -79,7 +79,19 @@
     }
   }
 
-  function init(root) { charts(root); bridges(root); }
+  // compare (slider): the top image is clipped to the slider's position; no module script is involved
+  function compares(root) {
+    (root || document).querySelectorAll(".mod-compare[data-compare]:not([data-bound])").forEach(function (fig) {
+      fig.dataset.bound = "1";
+      var top = fig.querySelector(".mod-compare-top"), range = fig.querySelector("input[type=range]");
+      if (!top || !range) return;
+      var set = function () { top.style.clipPath = "inset(0 0 0 " + Number(range.value) + "%)"; };
+      range.addEventListener("input", set);
+      set();
+    });
+  }
+
+  function init(root) { charts(root); bridges(root); compares(root); }
   document.addEventListener("htmx:afterSwap", function (ev) { init(ev.target); });
   if (document.readyState !== "loading") init(); else document.addEventListener("DOMContentLoaded", function () { init(); });
 })();

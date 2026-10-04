@@ -1,0 +1,26 @@
+{
+ "ui_contract": "1.1",
+ "title": "Reel",
+ "body": [
+  {"type": "section", "title": "Latest render", "children": [
+   {"type": "gallery", "requires": "1.1", "fallback": "placeholder", "kind": "image", "source": {"view": "frames", "limit": 48},
+    "field": "frame", "caption_field": "index", "columns": 6}
+  ]},
+  {"type": "columns", "children": [
+   {"type": "section", "title": "First and last frame", "children": [
+    {"type": "compare", "requires": "1.1", "fallback": "placeholder", "source": {"view": "pair"}, "left": "first", "right": "last",
+     "mode": "slider", "labels": ["first frame", "last frame"]}
+   ]},
+   {"type": "section", "title": "Clip", "children": [
+    {"type": "media", "requires": "1.1", "fallback": "placeholder", "kind": "video", "source": {"view": "renders"}, "field": "clip",
+     "caption": "the render's clip"},
+    {"type": "media", "requires": "1.1", "fallback": "drop", "kind": "text", "source": {"view": "renders"}, "field": "log",
+     "height": 80}
+   ]}
+  ]},
+  {"type": "section", "title": "Renders", "children": [
+   {"type": "table", "source": {"view": "renders"}, "columns": [{"key": "job", "type": "job_ref"}, {"key": "frames", "type": "integer"}]},
+   {"type": "form", "schema": "schemas/queue_render.json", "hints": {"order": ["renders", "name"]}, "submit": {"op": "self.queue_render"}}
+  ]}
+ ]
+}

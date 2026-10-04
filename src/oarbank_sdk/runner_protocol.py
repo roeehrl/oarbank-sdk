@@ -10,8 +10,9 @@ inherited event named by OARBANK_CONTROL_EVENT on Windows), and the runner re-re
 """
 from typing import Annotated, Any, Literal
 
-from pydantic import Field
+from pydantic import Field, field_validator
 
+from . import portable
 from ._base import Contract
 
 # Exit codes ------------------------------------------------------------------
@@ -27,8 +28,11 @@ ENV_MODULE, ENV_MODULE_DATA, ENV_ATTEMPT, ENV_PROTOCOL = "OARBANK_MODULE", "OARB
 ENV_SETTINGS_FILE, ENV_LIMITS_FILE = "OARBANK_SETTINGS_FILE", "OARBANK_LIMITS_FILE"
 ENV_BROKER = "OARBANK_BROKER"
 ENV_TOOLS_FILE = "OARBANK_TOOLS_FILE"          # {"<tool id>": ["<canonical path>", ...]} for the approved [sandbox].tools
+ENV_FOLDERS_FILE = "OARBANK_FOLDERS_FILE"      # {"<folder id>": {"path": "<canonical path>", "access": "read|write"}}
 ENV_CONTROL_EVENT = "OARBANK_CONTROL_EVENT"    # Windows: the inherited control event's handle, in decimal
 CONTROL_FILE, FAILURE_FILE, RESULT_FILE = "control.json", "failure.json", "result.json"
+CHECKPOINT_DIR = "checkpoint"                  # <W>/checkpoint/: the checkpoint a resumed attempt starts from (read-only)
+CHECKPOINT_DATA_MAX = 4096                     # bytes of a checkpoint event's `data` (compact JSON)
 
 
 class Versions(Contract):
@@ -50,6 +54,22 @@ class DoctorOutput(Contract):
     checks: list[DoctorCheck] = Field(default_factory=list)
 
 
+class CheckpointFile(Contract):
+    """One file of a checkpoint: a regular file in the workdir, and where it appears in the checkpoint. [beta]"""
+    path: str = Field(description="[beta] The workdir file (a PortablePath). Once the event is written it belongs to the agent, which moves it away.")
+    name: str | None = Field(None, description="[beta] Where it appears under <W>/checkpoint/ on resume (a PortablePath; default: `path`).")
+
+    @field_validator("path", "name")
+    @classmethod
+    def _portable(cls, v):
+        if v is not None:
+            portable.check_portable_path(v)
+        return v
+
+    def checkpoint_name(self) -> str:
+        return self.name or self.path
+
+
 class Event(Contract):
     """One NDJSON line in --events (capability progress_events)."""
     t: float = Field(description="[stable] Unix seconds.")
@@ -60,6 +80,9 @@ class Event(Contract):
     name: str | None = Field(None, description="[stable] metric/phase name.")
     value: float | None = None
     data: dict[str, Any] = Field(default_factory=dict)
+    files: list[CheckpointFile] = Field(default_factory=list, description=(
+        "[beta] checkpoint: the checkpoint's files (runner capability `checkpoint`, a stage with `checkpoint`); `data` (at "
+        "most 4 KiB) comes back in the resumed attempt's spec envelope."))
 
 
 class Control(Contract):
@@ -73,6 +96,9 @@ class Control(Contract):
     gpu_duty: float | None = Field(None, ge=0, le=1, description="[beta] Max GPU duty fraction (reduce batch size/concurrency).")
     pause: bool = Field(False, description="[stable] Hold at the next safe point until a newer document clears it (cooperative_pause).")
     reason: str | None = Field(None, description="[beta] Human-readable reason code for logs.")
+    checkpoint: bool = Field(False, description=(
+        "[beta] Sent only with `stop`: write a checkpoint at the next safe point, then acknowledge the stop, within "
+        "runner.checkpoint_grace_s (runner capability `checkpoint`)."))
 
 
 # failure.json reasons the agent reports as the attempt's end reason (the coordinator maps each to its registry code)
@@ -98,3 +124,12 @@ class Failure(Contract):
 # atomically (write phase.tmp, rename). Shown in the console and used by host protection to learn
 # per-phase resource profiles. Optional; the `phase` event kind carries the same information.
 PHASE_FILE = "phase"
+
+
+def checkpoint_digest(files: list[dict]) -> str:
+    """A checkpoint's digest (spec envelope `resume.digest`): sha256 of the canonical JSON list of its files'
+    {name, digest, size}, sorted by name."""
+    import hashlib
+    from .keys import canonical_json
+    entries = sorted(({"name": f["name"], "digest": f["digest"], "size": int(f["size"])} for f in files), key=lambda f: f["name"])
+    return hashlib.sha256(canonical_json(entries).encode()).hexdigest()

@@ -2,10 +2,12 @@
 escaped HTML. The oarbank console and `oarbank-sdk preview` both use it, so a module author sees
 exactly what the console will draw.
 
-The host supplies a `Host` with three callbacks, so this package never touches a database or a network:
+The host supplies a `Host` with these callbacks, so this package never touches a database or a network:
 - resolve(source, ctx) -> rows (list of dicts) | kv (dict) | series (dict of lists) | None, plus meta;
 - operation(op_id) -> {id, title, tier, summary} (registry metadata; the label a button shows);
-- urls: how typed links, operation forms and frames become URLs.
+- urls: how typed links, operation forms and frames become URLs;
+- media(ref, kind) -> {src, thumb, job} for an artifact reference the host checked belongs to the module (URLs on the
+  module origin, never the console's), or None: the component then shows a placeholder.
 
 Security properties (see spec/ui-contract.md): Jinja autoescape everywhere; no `|safe` on module data;
 formats from a whitelist; tones map to fixed classes; links only from typed references; every module
@@ -35,6 +37,8 @@ class Host:
     op_url: Callable[[str], str]                         # op id -> form action URL
     link_url: Callable[[U.Link], str]
     frame_url: Callable[[str], str]                      # iframe view id -> src on the module origin
+    media: Callable[[Any, str], dict | None] = lambda ref, kind: None   # artifact reference, kind -> {src, thumb, job}
+    ui_minor: int = int(U.UI_CONTRACT.split(".")[1])     # the UI contract minor this host renders
     schema: Callable[[str], dict] = lambda path: {}     # bundle path -> JSON Schema (forms)
     module: str = "module"
     context: dict = field(default_factory=dict)          # route/job/node/user/setting values for `when` and $-params
@@ -48,6 +52,8 @@ def fmt_value(v, type_: str = "text", spec: str | None = None, unit: str | None 
     """Whitelisted formatting of raw module values. Returns plain text (escaped by the template)."""
     if v is None:
         return "—"
+    if type_ == "artifact_ref":
+        return (f"{v.get('artifact')}/{v.get('path')}" if v.get("path") else str(v.get("digest", ""))[:12]) if isinstance(v, dict) else "—"
     try:
         if type_ in ("number", "integer", "percent"):
             x = float(v)
@@ -165,6 +171,11 @@ def resolve(host: "Host", source: U.Source, ctx: dict, row: dict | None = None) 
         return {"error": f"{type(e).__name__}"}
 
 
+def first_row(d: dict) -> dict:
+    """The row a single-value component reads: a kv answer, else the first row."""
+    return d.get("kv") or ((d.get("rows") or [{}])[0]) or {}
+
+
 TONE_CLASS = {"ok": "ok", "warn": "warn", "error": "bad", "info": "acc", "neutral": "", "running": "acc"}
 TIER_CLASS = {"T0": "", "T1": "", "T2": "pri", "T3": "danger"}
 
@@ -175,7 +186,8 @@ def environment() -> jinja2.Environment:
     env.filters.update(link_obj=lambda d: U.Link.model_validate(d),
                        extract_col=lambda col, rows: [r.get(col) for r in rows],
                        fmt=fmt_value, md=md_lite, tojson_compact=lambda v: json.dumps(v, separators=(",", ":"), default=str))
-    env.globals.update(TONE_CLASS=TONE_CLASS, TIER_CLASS=TIER_CLASS, when_ok=when_ok, interpolate=interpolate, resolve=resolve)
+    env.globals.update(TONE_CLASS=TONE_CLASS, TIER_CLASS=TIER_CLASS, when_ok=when_ok, interpolate=interpolate, resolve=resolve,
+                       minor_of=U.minor_of, first_row=first_row)
     return env
 
 

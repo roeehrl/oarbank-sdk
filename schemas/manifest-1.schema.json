@@ -136,6 +136,7 @@
             "node_ref",
             "dataset_ref",
             "campaign_ref",
+            "artifact_ref",
             "link"
           ],
           "title": "Type",
@@ -611,6 +612,33 @@
         }
       },
       "title": "FieldUI",
+      "type": "object"
+    },
+    "FolderGrant": {
+      "additionalProperties": true,
+      "description": "A folder on the node, from the operator's folder registry (a logical id the operator maps to a path per node).\nOnly runners get folders. [beta]",
+      "properties": {
+        "access": {
+          "description": "[beta] `read`: read the folder's files and listings, never write. `write`: an outbox: create files and directories and write them, never read, list, rename or delete anything there (files it creates may replace files there).",
+          "enum": [
+            "read",
+            "write"
+          ],
+          "title": "Access",
+          "type": "string"
+        },
+        "id": {
+          "description": "[beta] Logical folder id, e.g. `inputs`.",
+          "pattern": "^[a-z][a-z0-9_.-]{0,63}$",
+          "title": "Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "access"
+      ],
+      "title": "FolderGrant",
       "type": "object"
     },
     "GPUNeed": {
@@ -1690,7 +1718,7 @@
           "title": "Bandwidth Class"
         },
         "capabilities": {
-          "description": "[stable] By intent: cancellable (honours a stop request within stop_grace_s), freeze_ok (safe to freeze at any instruction), cooperative_pause (pauses on control.json), resumable (resumes from its own checkpoint after a restart), progress_events, deterministic_output, cooperative_throttle.",
+          "description": "[stable] By intent: cancellable (honours a stop request within stop_grace_s), freeze_ok (safe to freeze at any instruction), cooperative_pause (pauses on control.json), resumable (resumes from its own checkpoint after a restart), progress_events, deterministic_output, cooperative_throttle, checkpoint (writes portable checkpoints, honours a checkpoint-then-stop request and resumes from <W>/checkpoint/; needs requires.core >= 2.5).",
           "items": {
             "maxLength": 64,
             "pattern": "^[a-z0-9][a-z0-9._-]*$",
@@ -1698,6 +1726,14 @@
           },
           "title": "Capabilities",
           "type": "array"
+        },
+        "checkpoint_grace_s": {
+          "default": 120.0,
+          "description": "[beta] Seconds between a checkpoint-then-stop request and forced termination of the process container. Needs requires.core >= 2.5.",
+          "maximum": 1800,
+          "minimum": 1,
+          "title": "Checkpoint Grace S",
+          "type": "number"
         },
         "env": {
           "description": "[beta] Extra environment for the runner and doctor, applied after the agent's own variables (names `^[A-Z][A-Z0-9_]*$`, never OARBANK_* or another reserved name), e.g. MKL_CBWR or OMP_NUM_THREADS for determinism. Needs requires.core >= 2.2.",
@@ -1969,6 +2005,14 @@
           "title": "Exec Writable",
           "type": "boolean"
         },
+        "folders": {
+          "description": "[beta] Folders on the node (registry ids the operator maps to a path per node) the runner may read, or write into as an outbox. Needs requires.core >= 2.5.",
+          "items": {
+            "$ref": "#/$defs/FolderGrant"
+          },
+          "title": "Folders",
+          "type": "array"
+        },
         "net": {
           "$ref": "#/$defs/SandboxNet"
         },
@@ -2207,6 +2251,18 @@
           "title": "Bootstrap",
           "type": "boolean"
         },
+        "checkpoint": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StageCheckpoint"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "[beta] The stage keeps portable checkpoints: the latest one a job's runner wrote is uploaded, and the job's next attempt, on any node, resumes from it. Needs the runner capability `checkpoint` and requires.core >= 2.5."
+        },
         "default": {
           "default": false,
           "description": "[beta] The default stage: what a job runs when it names no stage (the single-stage form). Only a standalone stage sets it; exactly one does when several stages are standalone. Needs requires.core >= 2.3.",
@@ -2292,6 +2348,32 @@
         "name"
       ],
       "title": "Stage",
+      "type": "object"
+    },
+    "StageCheckpoint": {
+      "additionalProperties": true,
+      "description": "Portable checkpoints for a stage's jobs (spec/runner-protocol.md, \"Checkpoints\"). [beta]",
+      "properties": {
+        "max_mb": {
+          "description": "[beta] The largest checkpoint (all its files) the agent uploads, MB.",
+          "maximum": 65536,
+          "minimum": 1,
+          "title": "Max Mb",
+          "type": "integer"
+        },
+        "min_interval_s": {
+          "default": 600.0,
+          "description": "[beta] The agent uploads at most one checkpoint per interval; a checkpoint answering a checkpoint-then-stop request is always uploaded.",
+          "maximum": 86400,
+          "minimum": 30,
+          "title": "Min Interval S",
+          "type": "number"
+        }
+      },
+      "required": [
+        "max_mb"
+      ],
+      "title": "StageCheckpoint",
       "type": "object"
     },
     "StagePlacement": {

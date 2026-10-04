@@ -71,6 +71,18 @@
           ],
           "default": null,
           "title": "Size"
+        },
+        "thumbnail": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Thumbnail"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "[beta] A preview image of this file, made by the runner."
         }
       },
       "required": [
@@ -114,6 +126,52 @@
         }
       },
       "title": "Provenance",
+      "type": "object"
+    },
+    "Thumbnail": {
+      "additionalProperties": true,
+      "description": "A small preview image a runner made of a result file (a PNG, JPEG, WebP or AVIF of at most 1 MiB): galleries and\nvideo posters show it, so the host never transcodes module media. [beta]",
+      "properties": {
+        "digest": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Digest"
+        },
+        "local": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "[beta] Runner-written only: the workdir-relative image; the agent uploads it and replaces it with digest/size.",
+          "title": "Local"
+        },
+        "size": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Size"
+        }
+      },
+      "title": "Thumbnail",
       "type": "object"
     }
   },

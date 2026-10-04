@@ -18,7 +18,7 @@ So a runner can be written in any language, for any platform ([platforms.md](pla
   `CommandLineToArgvW` quoting rules.
 - **Process container:** the runner and every process it starts live in one process container ([platforms.md](platforms.md#process-containers))
   that the agent can stop, freeze and kill as a whole. A runner never detaches.
-- `--events` is passed only to a runner that declares `progress_events`.
+- `--events` is passed only to a runner that declares `progress_events` or `checkpoint`.
 - **cwd:** the work directory for `run`; the module's data directory for `doctor`.
 
 ## Environment
@@ -43,6 +43,7 @@ then the manifest's `[runner].env` with the platform variant's `env` merged over
 | `OARBANK_BROKER` | beta | The job's container broker endpoint, `unix:/path` or `npipe://./pipe/<name>` ([sandbox.md](sandbox.md#containers-the-agents-broker)). Set only for a module approved for containers. |
 | `OARBANK_SERVICE_<NAME>` | beta | The job's connector to its module's endpoint service `<name>` (upper-cased), `fd:<n>` or `handle:<n>`, for each endpoint service providing a pool its stage reserves ([service-protocol.md](service-protocol.md#endpoints)). Use `oarbank_sdk.service_endpoint`. |
 | `OARBANK_TOOLS_FILE` | stable | A UTF-8 JSON file `{"<tool id>": ["<canonical path>", ...]}` for the module's approved `[sandbox].tools` on this node: exactly the paths the sandbox grants (resolved; conventional symlinks such as `/opt/homebrew/opt/...` are not readable inside the sandbox). `oarbank_sdk.tools.path(id)` reads it. |
+| `OARBANK_FOLDERS_FILE` | beta | A UTF-8 JSON file `{"<folder id>": {"path": "<canonical path>", "access": "read" \| "write"}}` for the runner's granted `[sandbox].folders` on this node (an empty object when there are none): exactly the paths the sandbox grants. `oarbank_sdk.folders.path(id, access)` reads it. |
 | `HTTPS_PROXY`, `HTTP_PROXY`, `ALL_PROXY` | stable | Set for `egress-allowlist`: the agent's local proxy, the only network route ([sandbox.md](sandbox.md#sandbox-grants)). |
 | `OARBANK_CONTROL_EVENT` | stable | Windows: the handle, in decimal, of the auto-reset event the runner inherits and the agent sets after every change to `control.json` ([Control](#control)). |
 | `PYTHONUTF8=1` | stable | For Python runtimes, on every OS. |
@@ -51,7 +52,8 @@ A module gets host tools through `[sandbox].tools` and finds them in `OARBANK_TO
 variables such as `JAVA_HOME`.
 
 A job of a bootstrap stage gets less ([sandbox.md](sandbox.md#bootstrap-jobs)): no `OARBANK_MODULE_DATA`, no
-`OARBANK_BROKER`, an `OARBANK_TOOLS_FILE` that lists no tools and an `OARBANK_SETTINGS_FILE` holding `{}`, and no `OARBANK_SECRETS_FILE`.
+`OARBANK_BROKER`, an `OARBANK_TOOLS_FILE` that lists no tools, an `OARBANK_FOLDERS_FILE` that lists no folders and an
+`OARBANK_SETTINGS_FILE` holding `{}`, and no `OARBANK_SECRETS_FILE`.
 
 All of this runs under the module sandbox ([sandbox.md](sandbox.md)).
 
@@ -65,17 +67,20 @@ names is a PortablePath, `/`-separated ([platforms.md](platforms.md#portable-pat
 | `spec.json` | agent | The spec envelope ([envelopes.md](envelopes.md)). |
 | `<mount>/...` | agent | Each dataset in `spec.datasets`, under `spec.mounts[id]`, as **read-only regular files** (never symlinks). How they are placed (clone, hardlink or copy) is the agent's business. Modifying one is a fault, and the agent may verify. |
 | `inputs/<name>/...` | agent | Artifacts of the upstream stage (`spec.inputs`). |
+| `checkpoint/...` | agent | [beta] When `spec.resume` is set: the job's latest checkpoint, each file under its name, as read-only regular files ([Checkpoints](#checkpoints)). |
 | `control.json` | agent | The control document, always present ([Control](#control)). |
 | `.grants/` | agent | The files the environment names (tools, settings, and for a stage that lists secrets `secrets.json`, mode 0600). Not output. |
 | `result.json` | runner | The result envelope, written atomically (a temporary file, then rename) before exiting 0. |
 | `failure.json` | runner | `{reason, detail, fault?, retryable?}`, written atomically before a non-zero exit. `reason` is one of the agent's end reasons (`bad_input`, `mode_mismatch`, `oom`, `doctor`, `no_metrics`), which the coordinator maps to its reason codes, or the module's own `<module-short>/<code>`, which ends the attempt as `exit_nonzero` with the code in its detail. |
-| `events.ndjson` | runner | One UTF-8 event per line (LF; CR tolerated): log, progress, metric, checkpoint or phase. |
+| `events.ndjson` | runner | One UTF-8 event per line (LF; CR tolerated): log, progress, metric, checkpoint or phase. The agent reads complete lines only. |
 | `phase` | runner | Optional: one line naming the current phase, replaced atomically. |
 
 Writers replace atomically. A replace that fails because the other side has the file open (Windows) is retried for up
 to 2 s. `oarbank_sdk` helpers do this. Output artifacts are listed in `result.json` as
 `artifacts[].files[] = {path, local}`, with `local` relative to the workdir. The agent uploads each file by content
-digest and replaces `local` with `digest` and `size`. Artifacts carry no file modes.
+digest and replaces `local` with `digest` and `size`. Artifacts carry no file modes. A file may name a `thumbnail:
+{local}`: a small preview image the runner made of it (PNG, JPEG, WebP or AVIF, at most 1 MiB), uploaded the same way,
+which media components show (spec/ui-contract.md, "Media").
 
 ### Bootstrap results
 
@@ -102,7 +107,7 @@ job crashed (a POSIX signal, or a Windows exception code).
 
 ## Control
 
-`<W>/control.json` is a `Control` document: `{seq, stop, pause, threads?, gpu_duty?, reason?}`.
+`<W>/control.json` is a `Control` document: `{seq, stop, pause, threads?, gpu_duty?, reason?, checkpoint?}`.
 - The agent writes it for **every** job, atomically (a temporary file, then rename): `{"seq": 0}` before the runner
   starts, then a newer `seq` on every change.
 - **After every change the agent nudges the runner:**
@@ -150,14 +155,68 @@ except Stopped:
   it.
   - Runners that declare `freeze_ok` may instead be frozen at any instruction, with the platform's mechanism: SIGSTOP,
     the cgroup freezer, or suspending every process of the Job Object on Windows.
-  - A pause lasts at most 10 minutes. After that the agent releases the attempt (not a failure), and the job runs again
-    elsewhere or later. Runners that declare `resumable` continue from their own checkpoint.
+  - A pause lasts at most 10 minutes (an owner may set less on a node). After that the agent releases the attempt (not a
+    failure), and the job runs again elsewhere or later: a runner that declares `checkpoint` is asked to checkpoint
+    first and resumes from it on any node ([Checkpoints](#checkpoints)); one that declares `resumable` continues from
+    its own data-directory checkpoint on the same node only.
 - **Throttle** (`cooperative_throttle`):
   - `threads` is the maximum number of active compute threads from the next safe point on.
   - `gpu_duty` is the maximum GPU duty fraction.
   - Time spent held is left out of any speed the result reports.
 
-Host protection prefers cooperative runners: it throttles before it pauses, and pauses before it evicts.
+- **Checkpoint, then stop** (`stop: true` with `checkpoint: true`, runners that declare `checkpoint`): write a
+  checkpoint at the next safe point, then acknowledge the stop as above, within `runner.checkpoint_grace_s` instead of
+  `stop_grace_s`. The agent sends no SIGTERM with this request ([Checkpoints](#checkpoints)).
+
+Host protection prefers cooperative runners: it throttles before it pauses, and pauses before it evicts; a
+checkpointing runner is asked to checkpoint before it is evicted.
+
+## Checkpoints
+
+A runner that declares the capability `checkpoint`, on a stage with `checkpoint = {max_mb, min_interval_s}`
+([manifest.md](manifest.md#portable-checkpoints)), keeps **portable checkpoints**: the job's next attempt, on any
+node, resumes from the latest one.
+
+- **Announce.** The runner writes a checkpoint's files into the workdir, then appends a `checkpoint` event:
+  `{"t", "kind": "checkpoint", "files": [{"path": "<workdir path>", "name": "<checkpoint path>"}], "data": {...}}`.
+  `path` names a regular file in the workdir (never a symlink), `name` where it appears in the checkpoint (default:
+  `path`); both are PortablePaths and names are unique. `data` is at most 4 KiB of JSON, given back on resume.
+- **Hand over.** Once the event is written, its files belong to the agent: it moves them out of the workdir, uploads
+  them by content digest and records them. Write each checkpoint to new paths and never touch a named file again.
+  Only the latest checkpoint is kept.
+- **Limits.** The agent skips (and logs) a checkpoint over the stage's `max_mb`, or one that comes sooner than
+  `min_interval_s` after the last one it uploaded, unless it answers a checkpoint-then-stop request.
+- **When the job must leave the node** (a pause past its limit, an eviction, an owner's hard cap, a drain, its deadline),
+  the agent sends checkpoint-then-stop ([Control](#control)), takes the last checkpoint the runner wrote before it
+  exited, and releases the attempt only after the upload.
+- **Resume.** The next attempt finds the checkpoint under `<W>/checkpoint/<name>` (read-only regular files), and its
+  spec envelope carries `resume: {from_attempt, digest, data}`; `digest` is the sha256 of the canonical JSON list of
+  the files' `{name, digest, size}` sorted by name (`oarbank_sdk.runner_protocol.checkpoint_digest`). Without
+  `resume`, start from the beginning.
+- **Not for goldens or bootstrap jobs.** A golden runs whole (certification never resumes one) and a bootstrap job keeps
+  nothing: the agent ignores their checkpoint events and stops them like any other job.
+- **Determinism.** A resumed attempt gives the same result as an uninterrupted one: `results.determinism` and the
+  stage's apply to it like any other result, and the conformance kit replays an interrupted run to check.
+
+`oarbank_sdk.control.Checkpoints` (stdlib only, vendorable) writes each checkpoint into a fresh directory and appends
+its event, and reads `resume`; `Control.checkpoint_requested` says a stop asks for a checkpoint first:
+
+```python
+ckpt = Checkpoints(workdir, events_path, spec)
+step = int(ckpt.resume_data().get("step", 0)) if ckpt.resume() else 0
+try:
+    while step < n:
+        ctl.safe_point()
+        work(step); step += 1
+        if step % 50 == 0:
+            with ckpt.write({"step": step}) as d:
+                save_state(d / "state.bin")
+except Stopped:
+    if ctl.checkpoint_requested:
+        with ckpt.write({"step": step}) as d:
+            save_state(d / "state.bin")
+    sys.exit(ctl.acknowledge_stop())
+```
 
 ### GPU use
 

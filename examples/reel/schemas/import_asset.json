@@ -1,0 +1,11 @@
+{
+ "type": "object",
+ "properties": {
+  "dataset_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:+-]{0,127}$"},
+  "url": {"type": "string", "format": "uri", "description": "An https URL on a public host"},
+  "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+  "size": {"type": "integer", "minimum": 0},
+  "name": {"type": "string"}
+ },
+ "required": ["dataset_id", "url", "sha256", "size"]
+}

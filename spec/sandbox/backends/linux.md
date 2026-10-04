@@ -19,6 +19,8 @@ what they cannot enforce as `unavailable`, and work that needs it is not placed 
 |---|---|
 | read and execute the bundle, runtime and tools | Landlock `path_beneath` with the read and execute rights |
 | work, data and temporary directories | Landlock with every file right; execute only with `exec_writable` |
+| a runner's input folders | Landlock `ReadFile` and `ReadDir` beneath the folder; no execute |
+| a runner's outboxes | Landlock `MakeReg`, `MakeDir`, `WriteFile` and `Truncate` beneath the folder; no `ReadFile`, `ReadDir`, `RemoveFile`, `RemoveDir`, `MakeSym`, `Refer` (no links or renames into or out of it) or execute |
 | base system | read and execute `/usr`, `/lib`, `/lib32`, `/lib64`, `/bin`, `/sbin`, `/etc`, `/opt`, `/proc`, `/sys/devices/system/cpu`; read and write `/dev/{null,zero,random,urandom,full}` |
 | no local IPC except the broker | seccomp refuses `socket(AF_UNIX)` without a broker grant (`socketpair` stays: event loops need it) and every family other than unix, IPv4 and IPv6; Landlock ABI 6 scopes abstract unix sockets and signals to the sandbox |
 | `net = none` | seccomp refuses IPv4 and IPv6 sockets |
@@ -32,7 +34,7 @@ what they cannot enforce as `unavailable`, and work that needs it is not placed 
 
 | Capability | Status |
 |---|---|
-| filesystem, `net.none`, `exec_writable` deny, GPU | enforced (Landlock ABI 3+) |
+| filesystem, `net.none`, `exec_writable` deny, GPU, `folders.read`, `folders.write` | enforced (Landlock ABI 3+) |
 | `net.egress-allowlist`, no loopback, no link-local | enforced with Landlock ABI 4+ (Linux 6.7) |
 | IPC | enforced with Landlock ABI 6+ (Linux 6.12) |
 | `net.egress-any` | unavailable |

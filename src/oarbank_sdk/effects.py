@@ -130,10 +130,18 @@ def jobs_enqueue(campaign_id: str, jobs: list[dict]) -> mp.Effect:
 
 def datasets_create(dataset_id: str, kind: str, files: list[dict], meta: dict | None = None,
                     platform: str | None = None) -> mp.Effect:
-    """Registers a dataset whose blobs the coordinator holds. `kind` is a short kind from [datasets].kinds. Creating an id
-    that exists with the same kind, meta, files and platform is a no-op; anything else fails the whole operation (409
-    dataset_exists). `platform` (a token) binds it to one platform; kinds in [datasets].platform_bound must give it (host
-    capability placement.v1)."""
+    """Registers a dataset. `files` are `{path, digest, size}` (digest and size always), naming blobs the coordinator
+    holds, or `{path, digest, size, origins: [https URLs]}` for blobs it may not hold yet (host capability
+    datasets.origins): nodes fetch those from an origin and check the digest, and the coordinator fetches one only when
+    every origin failed for a node. `kind` is a short kind from [datasets].kinds. Creating an id that exists with the
+    same kind, meta, files and platform is a no-op; anything else fails the whole operation (409 dataset_exists).
+    `platform` (a token) binds it to one platform; kinds in [datasets].platform_bound must give it (host capability
+    placement.v1)."""
+    from .origins import file_problem
+    for f in files:
+        why = file_problem(f)
+        if why:
+            raise ValueError(f"dataset {dataset_id}: {why}")
     if platform is not None and not portable.is_platform_token(platform):
         raise ValueError(f"dataset platform {platform!r}: a platform token")
     args: dict[str, Any] = {"dataset_id": dataset_id, "kind": kind, "meta": meta or {}, "files": files}

@@ -8,8 +8,12 @@ without a fleet.
   the host to make.
 - Sandboxed frames are served from a second origin (port + 1, or any free port when port is 0) with the console's
   frame CSP and bridge.
+- Media components resolve artifact references from `<bundle>/fixtures/ui/media/`: `{job, artifact, path}` is the file
+  `<artifact>/<path>` there, `{digest}` the file with that sha256. The second origin serves them as the console's module
+  origin does: only what oarbank_sdk.media allows, sniffed from the bytes, with nosniff and a sandboxing CSP.
 Standard library HTTP server only; it binds 127.0.0.1.
 """
+import hashlib
 import html
 import json
 import sys
@@ -18,7 +22,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from . import manifest as mf, ui as U
+from . import manifest as mf, media as M, ui as U
 from .client import ModuleClient
 from .render import CSS_PATH, HERE as RENDER_HERE, Host, render_page
 
@@ -39,8 +43,9 @@ CONFIRM_JS = """document.addEventListener("submit",function(e){var f=e.target;if
 
 
 def console_csp(frame_origin: str) -> str:
-    return ("default-src 'self'; script-src 'self'; style-src 'self'; style-src-attr 'unsafe-inline'; img-src 'self' data:; "
-            f"connect-src 'self'; frame-src {frame_origin}; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'")
+    return ("default-src 'self'; script-src 'self'; style-src 'self'; style-src-attr 'unsafe-inline'; "
+            f"img-src 'self' data: {frame_origin}; media-src {frame_origin}; connect-src 'self'; frame-src {frame_origin}; "
+            "frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'")
 
 
 def frame_csp(console_origin: str) -> str:
@@ -101,8 +106,33 @@ class Preview:
                 return {"id": op_id, "title": o.title, "tier": o.effective_tier(), "summary": o.title}
         return {"id": op_id, "title": op_id, "tier": "T1", "summary": "core operation (not executed in preview)"}
 
+    def media_file(self, ref) -> Path | None:
+        """The fixture file an artifact reference names (fixtures/ui/media/), or None."""
+        base = (self.fix / "media").resolve()
+        if not isinstance(ref, dict) or not base.is_dir():
+            return None
+        if ref.get("digest"):
+            for f in sorted(base.rglob("*")):
+                if f.is_file() and hashlib.sha256(f.read_bytes()).hexdigest() == ref["digest"]:
+                    return f
+            return None
+        f = (base / str(ref.get("artifact") or "") / str(ref.get("path") or "")).resolve()
+        return f if base in f.parents and f.is_file() else None
+
+    def media(self, ref, kind: str) -> dict | None:
+        try:
+            r = U.ArtifactRef.model_validate(ref)
+        except Exception:                               # noqa: BLE001 - not a reference: a placeholder
+            return None
+        f = self.media_file(ref)
+        if f is None:
+            return None
+        url = lambda k, path: f"http://127.0.0.1:{self.frame_port}/b/{k}/{path.relative_to((self.fix / 'media').resolve()).as_posix()}"
+        thumb = self.media_file({"digest": r.thumbnail}) if r.thumbnail else None
+        return {"src": url(kind, f), "thumb": url(M.THUMBNAIL, thumb) if thumb else None, "job": r.job}
+
     def host(self, return_to: str) -> Host:
-        return Host(resolve=self.resolve, operation=self.operation, op_url=lambda op: f"/op/{op}",
+        return Host(resolve=self.resolve, operation=self.operation, op_url=lambda op: f"/op/{op}", media=self.media,
                     link_url=lambda l: f"/page/{l.page}" if l.page else (l.url or "#"),
                     frame_url=lambda v: f"http://127.0.0.1:{self.frame_port}/f/{v}/",
                     schema=lambda p: self._json(self.root / p, {}), module=self.name,
@@ -189,8 +219,27 @@ class Preview:
             def log_message(self, *a):
                 pass
 
+            def media(self, kind: str, rel: str):
+                base = (pv.fix / "media").resolve()
+                f = (base / rel).resolve()
+                if base not in f.parents or not f.is_file() or kind not in M.CAPS:
+                    self.send_response(404)
+                    self.end_headers()
+                    return
+                head = f.read_bytes()[:M.HEAD_BYTES]
+                why = M.problem(kind, head, f.stat().st_size)
+                self.send_response(415 if why and "type" in why else 413 if why else 200)
+                self.send_header("Content-Type", M.sniff(kind, head) or "text/plain; charset=utf-8")
+                self.send_header("X-Content-Type-Options", "nosniff")
+                self.send_header("Content-Security-Policy", f"sandbox; default-src 'none'; frame-ancestors http://127.0.0.1:{pv.port}")
+                self.send_header("Cross-Origin-Resource-Policy", "cross-origin")
+                self.end_headers()
+                self.wfile.write(why.encode() if why else f.read_bytes())
+
             def do_GET(self):
                 parts = urlparse(self.path).path.strip("/").split("/", 2)
+                if len(parts) == 3 and parts[0] == "b":
+                    return self.media(parts[1], parts[2])
                 decl = next((f for f in pv.man.ui.iframes if len(parts) >= 2 and parts[0] == "f" and f.id == parts[1]), None)
                 ok = False
                 if decl:

@@ -1,0 +1,10 @@
+{
+ "type": "object",
+ "properties": {
+  "dataset_id": {
+   "type": "string",
+   "pattern": "^asset:[A-Za-z0-9_.+-]{1,120}$",
+   "description": "The new asset dataset's id (default asset:<the upload's id after its kind>)"
+  }
+ }
+}

@@ -1,0 +1,73 @@
+---
+title: Datasets, folders and downloads
+description: Upload folders as datasets, download datasets and campaign results, decide which hosts nodes may fetch from, and give modules folders on a node.
+type: how-to
+core: "2.5.0"
+sidebar:
+  order: 2
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Jobs read their inputs from datasets: content-addressed files the coordinator or an origin holds. This page covers
+getting files into the fleet and results out of it, and the folders a module may use on a node.
+
+## Upload a folder
+
+```sh
+oarbank dataset upload ./shots --kind inputs
+```
+
+Every regular file under the folder is hashed and uploaded, then registered as one dataset (the id defaults to
+`<kind>:<folder name>-<8 hex digits>`; set it with `--id`). With `--module <name>` the dataset belongs to that module
+and only it sees it; without, every module sees it. An interrupted upload resumes: run the same command again, and only
+what the coordinator does not hold yet is sent. Symlinks and file names that are not portable across macOS, Linux and
+Windows stop the upload before anything is sent, naming each one.
+
+In the console, **Datasets → Upload** does the same from the browser: pick a folder, and the page hashes and uploads
+each file, resuming after a failure or a reload. A module may then offer an operation that turns your upload into one
+of its own datasets.
+
+## Download datasets and results
+
+```sh
+oarbank dataset download inputs:shots-1a2b3c4d ./here
+oarbank campaign download c_render_17 ./results
+```
+
+Downloads resume where they stopped and check every file's digest. A campaign download writes each done job's
+artifacts under `<job id>[-<job name>]/<artifact>/<path>`. The console offers the same as zip files on each dataset's
+page and each campaign's page.
+
+## Datasets by URL
+
+A module can register a file by its URL and digest, so nodes fetch it from the origin and the coordinator keeps no
+copy. Under **Settings → Dataset origins** list the hosts nodes may fetch from (`huggingface.co`, `*.example.org`); an
+empty list allows any public https host. A URL must be `https` to a public host name either way, and redirects are
+followed only under the same rule. When every origin fails for a node, the coordinator fetches the file once and
+serves it.
+
+## Folders on a node
+
+A module may ask for folders by id: `read` folders it only reads, `write` folders (outboxes) it only creates files in.
+You approve the request with the module version; then map each id to a directory on each node under **Settings →
+Folders**, or with the CLI:
+
+```sh
+oarbank folders map inbox --access read --node n_4f2a91c0=/Volumes/Data/inbox
+oarbank folders list
+```
+
+`--node` takes a node id (`oarbank fleet` lists them) and may repeat; `--node <id>=` removes that node's mapping.
+
+Each node checks its folders and reports them; jobs of the module run only where every folder it asks for is `ok`.
+A node refuses a filesystem root, a home directory itself, Oarbank's own data, system directories, and folders that
+overlap each other.
+
+<Aside type="caution">
+  A module can replace a file in its outbox whose name it guesses. Give each outbox an empty directory of its own.
+</Aside>
+
+With release signing on, folder mappings are signed like releases: run `oarbank folders sign <node>` on the machine
+that holds the release key, and the node applies the new mapping only then, so nobody who takes over the coordinator
+can point a folder elsewhere.

@@ -50,5 +50,17 @@
   "net": "egress-any",
   "broker": false,
   "gpu": false
+ },
+ {
+  "name": "runner-folders",
+  "kind": "runner",
+  "ro": 3,
+  "rw": 2,
+  "links": 1,
+  "net": "none",
+  "broker": false,
+  "gpu": false,
+  "rd": 2,
+  "wo": 1
  }
 ]

@@ -34,6 +34,14 @@ export const PAGES = [
     order: 3,
   },
   {
+    src: 'docs/files-media-checkpoints.md',
+    dest: 'build/files-media-checkpoints.md',
+    type: 'how-to',
+    description:
+      'Register datasets by URL, import uploads, use folders on the node, show media artifacts on module pages and keep portable checkpoints, with the reel example.',
+    order: 4,
+  },
+  {
     src: 'spec/public-surface.md',
     dest: 'spec/public-surface.md',
     type: 'spec',

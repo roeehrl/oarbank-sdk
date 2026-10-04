@@ -20,7 +20,8 @@ def test_old_messages_still_validate_and_new_fields_are_optional():
         mp.PlanItem(key_inputs={}, group="x" * 65)
     with pytest.raises(ValidationError):
         mp.PlanItem(key_inputs={}, platforms=["Linux"])
-    assert set(mp.HOST_CAPABILITIES) == {"placement.v1", "nodes.platform", "goldens.by_platform", "coordinator.variants", "jobs.stage"}
+    assert set(mp.HOST_CAPABILITIES) == {"placement.v1", "nodes.platform", "goldens.by_platform", "coordinator.variants", "jobs.stage",
+                                         "datasets.origins"}
 
 
 def test_golden_resolution_per_platform():
