@@ -33,7 +33,8 @@ The Python package `oarbank_sdk` implements these contracts:
   by the agent (a signal on POSIX, an event on Windows), never polled. It is stdlib only, so a runner can vendor it.
 - **The conformance kit** (`oarbank-sdk conform`): it checks the manifest, builds and verifies the bundle, drives the
   coordinator side over the module protocol and runs the runner on its goldens, and on any other runner specs its
-  fixtures list, as this host's platform would (sandboxed, through the egress proxy).
+  fixtures list, as this host's platform would (sandboxed, through the egress proxy; a bootstrap stage's with the
+  bootstrap grants, its artifacts checked against the module's pinned datasets).
 - **Bundles** (`oarbank-sdk bundle build|verify|wheels`): digest-addressed `.mfb` files, with per-platform wheels and
   files. `oarbank-sdk deps compile` resolves a `requirements.in` into one hash-pinned, marker-free requirements file
   for every platform that installs it.
