@@ -60,7 +60,8 @@ def test_specs_pass_or_fail_on_exit_code_failure_reason_and_artifact_names(tmp_p
     ]})
     assert checks(rep, "runner spec sum") == {"exit 0": ("pass", "exit 0"), "artifacts": ("pass", "wrote [], expected []")}
     assert {k: v[0] for k, v in checks(rep, "runner spec bad-spec").items()} == {"exit 2": "pass", "failure reason": "pass"}
-    assert checks(rep, "runner spec wrong-exit")["exit 0"] == ("fail", "exit 2")
+    status, why = checks(rep, "runner spec wrong-exit")["exit 0"]           # the exit code and failure.json's reason
+    assert status == "fail" and why.startswith("exit 2; failure.json ") and "bad_spec" in why, why
     assert checks(rep, "runner spec wrong-reason")["failure reason"][0] == "fail"
     bad = checks(rep, "runner spec bad-name")
     assert bad["result envelope valid"][0] == "fail" and "name" in bad["result envelope valid"][1]   # not a Name
