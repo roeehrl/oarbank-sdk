@@ -147,7 +147,7 @@ module-data directories:
 |---|---|
 | macOS | Colima, or Apple `container` |
 | Linux | rootless Podman, or Docker Engine |
-| Windows | an agent-owned WSL2 distribution running Podman |
+| Windows | an agent-owned WSL containers (WSLc) session: a VM of its own, WSL 2.9.3 or later |
 
 Each job whose module may run containers gets an endpoint, `OARBANK_BROKER` (`unix:/path` or `npipe://./pipe/<name>`),
 the only IPC its confinement allows. Requests are one JSON object per line, one request per connection. Use
@@ -163,6 +163,10 @@ the only IPC its confinement allows. Requests are one JSON object per line, one 
 **Mounts**
 - Mount sources are PortablePaths inside the work directory, or `data:<path>` inside the data directory.
 - Destinations are POSIX absolute paths, for `linux/*` images.
+
+**Platforms.** A runtime runs the platforms it reports (`containers.platforms` on Windows); others are
+`platform_unavailable`. Linux adds a foreign platform where binfmt has a handler for it, macOS runs `linux/amd64` under
+Rosetta, Windows runs its own architecture only (WSLc has no emulation).
 
 **The agent's container run**
 - Always: `run --rm`, the platform, the CPU and memory limits within the job's reservation, the validated mounts and
@@ -225,8 +229,15 @@ without cosign or a registry.
 | Platform | Mechanism | The node |
 |---|---|---|
 | Linux | CDI: a CDI spec (`/etc/cdi`, `/var/run/cdi`) with an `all` device, such as `nvidia-ctk cdi generate` writes; the run gets `--device <kind>=all` (Podman 4.1+, Docker 25+ with CDI) | offers the `gpu` pool; facts `containers.gpu = "cdi:<kind>"` |
-| Windows | the WSL2 GPU-PV path (`nvidia-ctk cdi generate --mode=wsl` in the agent's distribution, then CDI) | no agent container runtime yet: `containers.gpu = "undetected"` |
+| Windows | GPU-PV in the agent's WSLc session: its guest writes a CDI spec (`microsoft.com/wslc=gpu`: `/dev/dxg` and the host driver's libraries under `/usr/lib/wsl`, the same edits `nvidia-ctk cdi generate --mode=wsl` makes, for every vendor); the run gets `--gpus all` | offers the `gpu` pool when the session's VM has a GPU; facts `containers.gpu = "cdi:microsoft.com/wslc"` |
 | macOS | none: Colima and Apple `container` VMs have no Metal passthrough | `containers.gpu = "undetected"`, no `gpu` pool |
+
+**GPU APIs in containers.** The node's facts `containers.gpu_apis` list the GPU APIs a `gpus = "all"` container can use
+there, in `runner.gpu.apis_any` tokens: `cuda`, `rocm` and `levelzero` from a Linux CDI kind (`nvidia.com/gpu`,
+`amd.com/gpu`, `intel.com/gpu`); on Windows `directml` (D3D12 and DXCore come with WSL) and `cuda` where the host's
+NVIDIA driver provides its WSL library. Runtimes that come in the image (ROCm or Level Zero on WSL, Mesa's Vulkan) are
+not listed. Empty wherever `containers.gpu` is `undetected`. On Windows, GPU containers need a glibc image (the guest's
+hook runs the image's `ldconfig`).
 
 ## Testing your module
 

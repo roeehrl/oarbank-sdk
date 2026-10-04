@@ -1252,6 +1252,13 @@ def lint(man: Manifest) -> list[str]:
     if man.sandbox.net.mode == "egress-any" and any(s.secrets for s in man.stages):
         out.append("stages receive secrets while sandbox.net.mode is 'egress-any': a leaked key can reach any host; an "
                    "egress-allowlist naming only the service the key is for limits that")
+    # a Windows node's container runtime runs its own architecture only (spec/sandbox.md, "Containers")
+    images = {c.platform for c in man.sandbox.containers} | {c.platform for c in man.sandbox.container_sets}
+    for plat in man.requires.platforms:
+        os_, arch = plat.split("-", 1) if "-" in plat else (plat, "")
+        if images and os_ == "windows" and f"linux/{arch}" not in images:
+            out.append(f"requires.platforms lists {plat}, but no container image or set is for linux/{arch}: Windows nodes run "
+                       f"containers of their own architecture only, so its containers cannot run there")
     scope = man.results.determinism_scope
     if scope not in pf.SCOPE_MIX:
         out.append(f"results.determinism_scope {scope!r} is not known to this SDK; replicas compare within one platform")

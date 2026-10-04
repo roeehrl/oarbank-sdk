@@ -6,6 +6,7 @@ import socket
 import subprocess
 import sys
 import threading
+import time
 from pathlib import Path
 
 import pytest
@@ -288,6 +289,39 @@ def test_broker_client_round_trip(tmp_path, monkeypatch):
     monkeypatch.delenv(broker.ENV)
     with pytest.raises(broker.BrokerError, match="no_broker"):
         broker.status()
+
+
+@pytest.mark.skipif(os.name != "nt", reason="named pipes")
+def test_broker_client_waits_while_every_pipe_instance_is_busy(monkeypatch):
+    """A broker pipe with one instance, taken by another client: the SDK waits for the next instance instead of failing
+    with ERROR_PIPE_BUSY (the agent creates one as soon as a client connects)."""
+    import _winapi
+    name = rf"\\.\pipe\oarbank-test-busy-{os.getpid()}"
+    mode = _winapi.PIPE_WAIT                             # byte type and read mode (both 0)
+
+    def instance():
+        return _winapi.CreateNamedPipe(name, _winapi.PIPE_ACCESS_DUPLEX, mode, 1, 65536, 65536, 0, _winapi.NULL)
+    first = instance()
+    holder = broker._open_pipe(name, 5)                  # takes the only instance (connected before any ConnectNamedPipe)
+
+    def serve():
+        time.sleep(0.5)
+        holder.close()
+        _winapi.CloseHandle(first)
+        h = instance()
+        _winapi.ConnectNamedPipe(h, False)
+        data = b""
+        while not data.endswith(b"\n"):
+            data += _winapi.ReadFile(h, 65536)[0]
+        _winapi.WriteFile(h, json.dumps({"ok": True, "running": True, "images": [], "gpus": "none"}).encode() + b"\n")
+        _winapi.CloseHandle(h)
+    t = threading.Thread(target=serve, daemon=True)
+    t.start()
+    monkeypatch.setenv(broker.ENV, f"npipe://./pipe/oarbank-test-busy-{os.getpid()}")
+    started = time.monotonic()
+    assert broker.status()["running"] is True
+    assert time.monotonic() - started >= 0.4             # it waited for the instance instead of failing
+    t.join(5)
 
 
 def _layout(prefix, exe, paths, base=None):
