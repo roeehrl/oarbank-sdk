@@ -27,13 +27,47 @@ def split_platform(token: str) -> tuple[str, str]:
 
 
 def host_platform() -> str:
-    """This machine's platform token."""
+    """This machine's platform token: the machine's, not the interpreter's (an x64 Python under Windows on Arm's
+    emulation runs on windows-arm64)."""
     import platform
     import sys
     os_ = {"darwin": "darwin", "win32": "windows"}.get(sys.platform, "linux" if sys.platform.startswith("linux") else sys.platform)
-    m = platform.machine().lower()
+    m = _native_machine() if sys.platform == "win32" else None
+    m = m or platform.machine().lower()
     arch = {"x86_64": "amd64", "amd64": "amd64", "arm64": "arm64", "aarch64": "arm64"}.get(m, m)
     return f"{os_}-{arch}"
+
+
+def _native_machine() -> str | None:
+    """Windows: the machine's architecture (IsWow64Process2), whatever the interpreter was built for."""
+    import ctypes
+    from ctypes import wintypes
+    k = ctypes.WinDLL("kernel32")
+    process, native = wintypes.USHORT(), wintypes.USHORT()
+    fn = getattr(k, "IsWow64Process2", None)
+    if fn is None or not fn(wintypes.HANDLE(-1), ctypes.byref(process), ctypes.byref(native)):
+        return None
+    return {0xAA64: "arm64", 0x8664: "amd64"}.get(native.value)
+
+
+def os_env(home, tmp, locale: str = "C.UTF-8") -> dict:
+    """The conventional variables a module process gets from its host, for this host's OS (spec/platforms.md,
+    "Environment per OS"): the search path, `home` as the home directory and `tmp` for temporary files, plus on Windows
+    the system variables programs need to start at all. There LOCALAPPDATA stays the host account's: starting a process
+    in an AppContainer points LOCALAPPDATA, TEMP and TMP at the container's own profile folder under it, which exists
+    only there (and the start fails without the variable)."""
+    import os
+    if os.name == "nt":
+        root = os.environ.get("SystemRoot", r"C:\Windows")
+        return {"SystemRoot": root, "windir": root, "SystemDrive": os.environ.get("SystemDrive", root[:2]),
+                "ComSpec": rf"{root}\System32\cmd.exe", "PATHEXT": ".COM;.EXE",
+                "PATH": rf"{root}\System32;{root};{root}\System32\Wbem", "USERPROFILE": str(home), "TEMP": str(tmp),
+                "TMP": str(tmp), "APPDATA": os.path.join(str(home), "AppData", "Roaming"),
+                "LOCALAPPDATA": os.environ.get("LOCALAPPDATA") or os.path.join(str(home), "AppData", "Local"),
+                "PROCESSOR_ARCHITECTURE": os.environ.get("PROCESSOR_ARCHITECTURE", "AMD64"),
+                "NUMBER_OF_PROCESSORS": os.environ.get("NUMBER_OF_PROCESSORS", "1"), "PYTHONUTF8": "1"}
+    return {"PATH": "/usr/bin:/bin:/usr/sbin:/sbin", "HOME": str(home), "TMPDIR": str(tmp), "LANG": locale,
+            "LC_ALL": locale, "PYTHONUTF8": "1"}
 
 
 def oci_platform(token: str) -> str:

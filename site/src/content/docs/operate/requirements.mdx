@@ -26,8 +26,7 @@ A fleet is one coordinator and any number of nodes. The coordinator can also be 
 | Windows node | Windows 10 version 1809 or later, Windows 11 | x64, ARM64 |
 | Coordinator on macOS | macOS 15 or later | Apple silicon |
 | Coordinator on Linux | systemd, Linux 6.2 or later | x86_64, arm64 |
-
-The coordinator does not run on Windows. Windows computers join a fleet as nodes.
+| Coordinator on Windows | Windows 10 version 1809 or later, Windows 11, Windows Server 2019 or later | x64, ARM64 |
 
 ## Nodes
 
@@ -78,10 +77,14 @@ on every node, and a node that lacks it is reported as unable to run that module
 
 ## The coordinator
 
-- **A computer that stays on:** a Mac with Apple silicon and macOS 15 or later, or a Linux machine (x86_64 or
-  arm64) with systemd and Linux 6.2 or later.
-- **It runs as background services for your user account:** LaunchAgents on macOS, systemd user units on Linux. On
-  Linux, run `loginctl enable-linger` once so they start at boot without a login.
+- **A computer that stays on:** a Mac with Apple silicon and macOS 15 or later, a Linux machine (x86_64 or arm64)
+  with systemd and Linux 6.2 or later, or a Windows machine (x64 or ARM64) with Windows 10 version 1809 or later,
+  Windows 11 or Windows Server 2019 or later.
+- **It runs as background services:** LaunchAgents for your user account on macOS; systemd user units on Linux (run
+  `loginctl enable-linger` once so they start at boot without a login); on Windows two services, each under its own
+  virtual account, that start at boot, with the coordinator's data in `C:\ProgramData\Oarbank\coordinator`, readable
+  only by administrators and the two services. Administrator rights are needed to install it on Windows, and the CLI
+  runs there in an elevated prompt. On ARM64 its Python runs as x64 code under Windows' built-in emulation.
 - **Its module processes are sandboxed too,** with the same backend as on a node of that operating system. A
   coordinator on an operating system without a sandbox backend refuses to start module processes.
 - **It can also be a node:** install the node package on the same computer.

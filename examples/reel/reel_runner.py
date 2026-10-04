@@ -51,7 +51,7 @@ def run(spec_path: Path, workdir: Path, out: Path, events: str | None) -> int:
                 (d / sub).mkdir()
                 for i in range(next_index):
                     shutil.copyfile(src / F.frame_name(i), d / sub / F.frame_name(i))
-            (d / "state.json").write_text(json.dumps({"next": next_index, "digests": digests}), encoding="utf-8")
+            (d / "state.json").write_text(json.dumps({"next": next_index, "digests": digests}), encoding="utf-8", newline="\n")
 
     ctl.phase("render")
     i = start
@@ -73,14 +73,14 @@ def run(spec_path: Path, workdir: Path, out: Path, events: str | None) -> int:
         return ctl.acknowledge_stop()
     ctl.phase("finishing")
     log = workdir / "out" / "render.txt"
-    log.write_text(f"reel {VERSION}: {frames} frames, seed {seed}, resumed at frame {start}\n", encoding="utf-8")
+    log.write_text(f"reel {VERSION}: {frames} frames, seed {seed}, resumed at frame {start}\n", encoding="utf-8", newline="\n")
     shutil.copyfile(Path(__file__).parent / "assets" / "clip.webm", workdir / "out" / "clip.webm")
     arts = []
     if p.get("asset"):
         root = workdir / spec["mounts"][p["asset"]]
         lines = [f"{hashlib.sha256(f.read_bytes()).hexdigest()}  {f.relative_to(root).as_posix()}"
                  for f in sorted(root.rglob("*")) if f.is_file()]
-        (workdir / "out" / "asset.txt").write_text("".join(x + "\n" for x in lines), encoding="utf-8")
+        (workdir / "out" / "asset.txt").write_text("".join(x + "\n" for x in lines), encoding="utf-8", newline="\n")
         arts.append({"name": "asset", "files": [{"path": "asset.txt", "local": "out/asset.txt"}]})
     arts += [{"name": "frames", "files": [{"path": F.frame_name(k), "local": f"out/frames/{F.frame_name(k)}",
                                           "thumbnail": {"local": f"out/thumbs/{F.frame_name(k)}"}} for k in range(frames)]},

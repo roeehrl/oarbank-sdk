@@ -859,20 +859,9 @@ def _stop(p, ws: Path, nudge: "_Nudge", exited: threading.Event, grace: float, l
 
 def job_env(man, ws: Path, data: Path, locale: str = "C.UTF-8") -> dict:
     """The runner environment the agent passes (spec/runner-protocol.md and spec/platforms.md), for this host's OS."""
-    env = {"OARBANK_WORKDIR": str(ws), "OARBANK_TMP": str(ws / "tmp"), "OARBANK_MODULE_DATA": str(data),
-           "OARBANK_MODULE": man.module.id.rsplit(".", 1)[-1], "OARBANK_ATTEMPT_ID": "1", "OARBANK_PROTOCOL": "1",
-           "OARBANK_PLATFORM": portable.host_platform(), "PYTHONUTF8": "1"}
-    if os.name == "nt":
-        root = os.environ.get("SystemRoot", r"C:\Windows")
-        env.update({"SystemRoot": root, "windir": root, "ComSpec": rf"{root}\System32\cmd.exe", "PATHEXT": ".COM;.EXE",
-                    "PATH": rf"{root}\System32;{root};{root}\System32\Wbem", "USERPROFILE": str(ws), "TEMP": str(ws / "tmp"),
-                    "TMP": str(ws / "tmp"), "APPDATA": str(ws / "AppData" / "Roaming"), "LOCALAPPDATA": str(ws / "AppData" / "Local"),
-                    "PROCESSOR_ARCHITECTURE": os.environ.get("PROCESSOR_ARCHITECTURE", "AMD64"),
-                    "NUMBER_OF_PROCESSORS": os.environ.get("NUMBER_OF_PROCESSORS", "1")})
-    else:
-        env.update({"PATH": "/usr/bin:/bin:/usr/sbin:/sbin", "HOME": str(ws), "TMPDIR": str(ws / "tmp"),
-                    "LANG": locale, "LC_ALL": locale})
-    return env
+    return {"OARBANK_WORKDIR": str(ws), "OARBANK_TMP": str(ws / "tmp"), "OARBANK_MODULE_DATA": str(data),
+            "OARBANK_MODULE": man.module.id.rsplit(".", 1)[-1], "OARBANK_ATTEMPT_ID": "1", "OARBANK_PROTOCOL": "1",
+            "OARBANK_PLATFORM": portable.host_platform(), **portable.os_env(ws, ws / "tmp", locale)}
 
 
 def _spawn(argv, cwd, env, kwargs: dict):
