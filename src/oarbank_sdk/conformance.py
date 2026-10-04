@@ -24,13 +24,18 @@ Suites:
   exits within `stop_grace_s`;
   `doctor --json` is a valid DoctorOutput whose `attrs.platform`, when present, is OARBANK_PLATFORM. The runner runs
   with this host's runner variant (exec and env), the stage's variant (timeout, resources) and the golden's expected
-  value resolved for this host's platform.
+  value resolved for this host's platform. A stage that reserves an endpoint service's pool runs with that service up
+  and its connector, as on an agent;
+- **service**: each endpoint service starts as an agent starts it (with its endpoint channel), says hello, becomes
+  ready, answers the fixtures' `service_specs` through connections the kit hands it, drops an attempt that ended, stops,
+  and **never listens itself** (no process of it holds a listening socket).
 
 Fixtures (optional `conformance.json` next to the manifest) feed the fake host:
 `{"datasets": {id: {"kind", "attrs", "dir"?}}, "settings": {...}, "node_classes": [{"platform"?, "pools": {...},
 "capabilities": [...]}], "params": [...examples for params.check...], "store": {"<collection>/<key>": doc},
 "files": {"<path>": "<text content>"}, "runner_specs": [{"name", "stage"?, "payload", "datasets"?, "mounts"?,
-"expect": {"exit"?, "artifacts"?, "reason"?}}]}`. Each runner spec (a non-golden task: an ingestion or provisioning job)
+"expect": {"exit"?, "artifacts"?, "reason"?}}], "service_specs": [{"name", "service", "method"?, "path", "body"?,
+"expect": {"status"?}}]}`. Each runner spec (a non-golden task: an ingestion or provisioning job)
 runs like a golden, sandboxed with the egress proxy, and is checked against `expect`; any connection the proxy refused
 fails its run (goldens too).
 A dataset with a `dir` is mounted (copied) into the runner's workdir under the golden spec's mount name.
@@ -59,6 +64,8 @@ from .envelopes import ResultEnvelope, SpecEnvelope
 from .keys import job_key
 from ._base import Name, StrictContract
 from .runner_protocol import DoctorOutput, Failure
+from . import _endpoint_host as EH
+from ._service_run import ServiceRun
 
 
 @dataclass
@@ -421,12 +428,14 @@ class Grants:
 
     def policy(self, man, root, ws, data, kind="runner", bootstrap: bool = False):
         from . import sandbox as S
-        # the grants directory (tools.json, settings.json) is readable like the agent's per-job files
+        # the grants directory (tools.json, settings.json) is readable like the agent's per-job files, and so is the SDK
+        # the host provides to every module process (an agent's node runtime has it installed)
+        sdk = str(Path(__file__).resolve().parents[1])
         if bootstrap:
             return S.node_policy(man.module.id, root, ws, None, sandbox=man.sandbox.for_bootstrap(), kind=kind,
-                                 tool_paths=[str(self.dir / "bootstrap")], proxy_port=self.proxy.port if self.proxy else None)
+                                 tool_paths=[str(self.dir / "bootstrap"), sdk], proxy_port=self.proxy.port if self.proxy else None)
         return S.node_policy(man.module.id, root, ws, data, sandbox=man.sandbox, kind=kind,
-                             tool_paths=[p for ps in self.tools.values() for p in ps] + [str(self.dir)],
+                             tool_paths=[p for ps in self.tools.values() for p in ps] + [str(self.dir), sdk],
                              proxy_port=self.proxy.port if self.proxy else None)
 
     def close(self):
@@ -435,6 +444,51 @@ class Grants:
 
 
 GRANTS: dict = {}
+SERVICES: dict = {}          # the endpoint services the runner suite started, by name, until it ends
+
+
+def _service_run(root: Path, man, svc, g: "Grants") -> ServiceRun:
+    policy = (lambda data: g.policy(man, root, None, data, kind="service")) if SANDBOX["on"] else None
+    return ServiceRun(root, man, svc, g.env(), policy)
+
+
+def _connectors(root: Path, man, stage, attempt: int) -> tuple[list, str | None]:
+    """The connectors a job of `stage` gets (its stage reserves the services' pools), each service started once for the
+    runner suite: (connectors, None) or ([], what went wrong)."""
+    out = []
+    for svc in man.endpoint_services_of(stage):
+        run = SERVICES.get(svc.name)
+        if run is None:
+            run = SERVICES[svc.name] = _service_run(root, man, svc, GRANTS["g"])
+            why = run.start()
+            if why:
+                run.failed = why
+        if getattr(run, "failed", None):
+            return [], f"endpoint service {svc.name}: {run.failed}"
+        out.append(EH.ConnectorHost(svc.name, run.host, attempt))
+    return out, None
+
+
+def _stop_services():
+    for run in SERVICES.values():
+        run.stop()
+    SERVICES.clear()
+
+
+def _merged(*kwargs: dict) -> dict:
+    """Popen arguments passing every handle each part passes (one handle list on Windows)."""
+    out, handles = {}, []
+    for k in kwargs:
+        si = k.get("startupinfo")
+        if si is not None:
+            handles += list((si.lpAttributeList or {}).get("handle_list") or [])
+        out.update({n: v for n, v in k.items() if n not in ("startupinfo", "pass_fds")})
+        out["pass_fds"] = list(out.get("pass_fds", [])) + list(k.get("pass_fds", []))
+    if not out.get("pass_fds"):
+        out.pop("pass_fds", None)
+    if handles:
+        out["startupinfo"] = subprocess.STARTUPINFO(lpAttributeList={"handle_list": handles})
+    return out
 
 
 STOP_REACTION_S = 2.0      # a cancellable runner acknowledges a nudged stop this soon (at its next safe point)
@@ -526,6 +580,12 @@ def _run(root: Path, man, env_doc: dict, fx: dict, locale: str = "C", stop: bool
         env.pop("OARBANK_MODULE_DATA")                   # a bootstrap job keeps nothing on the node
     (ws / "control.json").write_text(json.dumps({"seq": 0}), encoding="utf-8")
     argv = _argv(run.exec, root) + ["run", "--spec", str(ws / "spec.json"), "--workdir", str(ws), "--out", str(ws / "result.json")]
+    conns, why = _connectors(root, man, env_doc.get("stage"), 1)
+    if why:
+        nudge.close()
+        return Outcome("service", None, None, why, ws)
+    for c in conns:
+        env.update(c.env)
     if SANDBOX["on"]:
         from . import sandbox as S
         text, params = S.render(g.policy(man, root, ws, data, bootstrap=bootstrap))
@@ -533,7 +593,9 @@ def _run(root: Path, man, env_doc: dict, fx: dict, locale: str = "C", stop: bool
     seen = len(g.proxy.refused) if g.proxy else 0
     out, exited = {}, threading.Event()
     try:
-        p = _spawn(nudge.argv(argv), ws, env, nudge.popen_kwargs())
+        p = _spawn(nudge.argv(argv), ws, env, _merged(nudge.popen_kwargs(), *(c.popen_kwargs for c in conns)))
+        for c in conns:
+            c.spawned()
 
         def reap():                                      # the one owner of the wait: drains the pipes, records the exit
             out["err"] = p.communicate()[1]
@@ -550,6 +612,8 @@ def _run(root: Path, man, env_doc: dict, fx: dict, locale: str = "C", stop: bool
         reader.join()
     finally:
         nudge.close()
+        for c in conns:
+            c.close()                                    # the attempt ended: its connector closes, the service is told
     o.refused = list(g.proxy.refused[seen:]) if g.proxy else []
     if o.stop != "timeout":
         o.code = p.returncode
@@ -684,7 +748,9 @@ def check_runner(root: Path, man, fx: dict, runs: list, r: Report):
     g = GRANTS["g"] = Grants(man, fx)
     try:
         _check_runner(root, man, fx, runs, r, g)
+        check_services(root, man, fx, r, g)
     finally:
+        _stop_services()
         g.close()
 
 
@@ -868,6 +934,79 @@ def _check_runner_specs(root: Path, man, fx: dict, r: Report):
             if spec.expect.reason is not None:
                 r.add("runner", f"{label}: failure reason", f.reason == spec.expect.reason,
                       f"{f.reason!r}" + (f" ({f.detail[:200]})" if f.detail else ""))
+
+
+class ServiceSpecExpect(StrictContract):
+    status: int = 200
+
+
+class ServiceSpec(StrictContract):
+    """A conformance fixture's request to an endpoint service (`service_specs`), sent through a connection the kit
+    hands the service as an agent would."""
+    name: str = Field(min_length=1, max_length=80)
+    service: Name
+    method: str = "POST"
+    path: str = Field(min_length=1)
+    body: dict | list | None = None
+    expect: ServiceSpecExpect = Field(default_factory=ServiceSpecExpect)
+
+
+def _request(conn, method: str, path: str, body) -> tuple[int, bytes]:
+    import http.client
+
+    class _Here(http.client.HTTPConnection):
+        def connect(self):
+            self.sock = conn
+    c = _Here("localhost")
+    data = json.dumps(body).encode() if body is not None else None
+    c.request(method, path, body=data, headers={"Content-Type": "application/json", "Connection": "close"} if data else
+              {"Connection": "close"})
+    resp = c.getresponse()
+    out = (resp.status, resp.read())
+    c.close()
+    return out
+
+
+def check_services(root: Path, man, fx: dict, r: Report, g: "Grants"):
+    """The service suite: each endpoint service on this host's platform, run as an agent runs it (spec/service-protocol.md,
+    "Endpoints")."""
+    host = portable.host_platform()
+    specs = []
+    for i, raw in enumerate(fx.get("service_specs") or []):
+        try:
+            specs.append(ServiceSpec.model_validate(raw))
+        except ValidationError as e:
+            r.add("service", f"service spec #{i}: fixture", False, str(e).replace("\n", " ")[:300])
+    for svc in man.services:
+        if not svc.endpoint or not pf.matches(host, svc.platforms):
+            continue
+        label = f"service {svc.name}"
+        run = _service_run(root, man, svc, g)
+        try:
+            why = run.start()
+            r.add("service", f"{label}: starts, says hello on its endpoint channel and becomes ready", why is None, why or "")
+            if why:
+                refused = any(w in why.lower() for w in ("permission", "not permitted")) and any(
+                    w in why for w in ("bind", "listen"))
+                if refused:
+                    r.add("service", f"{label}: the service never listens itself", False,
+                          f"the sandbox refused it a listening socket: {why}")
+                continue
+            listens = run.listening()
+            for spec in [s for s in specs if s.service == svc.name]:
+                try:
+                    status, body = _request(run.connect(attempt=7), spec.method, spec.path, spec.body)
+                    r.add("service", f"{label}: service spec {spec.name}", status == spec.expect.status,
+                          f"status {status}: {body[:200]!r}")
+                except OSError as e:
+                    r.add("service", f"{label}: service spec {spec.name}", False, repr(e))
+            run.host.ended(7)
+            listens += run.listening()
+            r.add("service", f"{label}: the service never listens itself", not listens,
+                  "; ".join(sorted(set(listens)))[:600] or "no listening socket after ready and after its requests")
+        finally:
+            stopped = run.stop()
+        r.add("service", f"{label}: stops", stopped is None, stopped or "")
 
 
 SANDBOX = {"on": sys.platform == "darwin"}
