@@ -20,7 +20,7 @@ through the versioned contracts in this repository.
 | Envelopes | Spec and result documents | [spec/envelopes.md](spec/envelopes.md) |
 | Platforms | Platform tokens, per-platform declarations, placement | [spec/platforms.md](spec/platforms.md) |
 | Sandbox | What a module process may touch, and the grants an operator approves | [spec/sandbox.md](spec/sandbox.md) |
-| UI contract 1 | Pages, panels and views the console renders for a module | [spec/ui-contract.md](spec/ui-contract.md) |
+| UI contract 1 | Pages, panels and views the console renders for a module, media components among them | [spec/ui-contract.md](spec/ui-contract.md) |
 | Bundles and lifecycle | The `.mfb` file, its digest, install, canary, promote, rollback | [spec/bundles.md](spec/bundles.md) |
 | Conformance kit | What a module must pass (`oarbank-sdk conform`) | [spec/conformance.md](spec/conformance.md) |
 
@@ -30,7 +30,9 @@ The Python package `oarbank_sdk` implements these contracts:
   [`schemas/`](schemas/) are generated from them.
 - **`oarbank_sdk.server.Module`**, the coordinator side of a module: declare verbs, return effects, call the host.
 - **`oarbank_sdk.control.Control`**, the runner side of Control: stop, pause and thread limits at safe points, nudged
-  by the agent (a signal on POSIX, an event on Windows), never polled. It is stdlib only, so a runner can vendor it.
+  by the agent (a signal on POSIX, an event on Windows), never polled; and `Checkpoints`, which writes portable
+  checkpoints and reads the one a resumed attempt starts from. It is stdlib only, so a runner can vendor it, like
+  `oarbank_sdk.folders` (the folders a runner was granted on its node).
 - **`oarbank_sdk.service_endpoint`**, HTTP over a service endpoint: `request()` in a job, `serve_http()` in an
   endpoint service, which is handed every connection and never listens. Stdlib only. A how-to:
   [docs/service-endpoints.md](docs/service-endpoints.md); the reference module: [`examples/modelserver`](examples/modelserver).
@@ -40,11 +42,14 @@ The Python package `oarbank_sdk` implements these contracts:
   bootstrap grants, its artifacts checked against the module's pinned datasets; a stage that reserves an endpoint
   service's pool with that service up), and drives each endpoint service through its endpoint channel, failing one that
   listens itself. Secrets reach only the stages that list them and must never appear in what a run or a verb returns;
-  container sets' members verify against their key, and images outside a set or unsigned are refused.
+  container sets' members verify against their key, and images outside a set or unsigned are refused. A stage that
+  keeps checkpoints is stopped with checkpoint-then-stop and resumed in a fresh workdir, which must give the same
+  digest.
 - **Bundles** (`oarbank-sdk bundle build|verify|wheels`): digest-addressed `.mfb` files, with per-platform wheels and
   files. `oarbank-sdk deps compile` resolves a `requirements.in` into one hash-pinned, marker-free requirements file
   for every platform that installs it.
-- **A preview server** (`oarbank-sdk preview`) that renders a module's pages as the console will, from fixtures.
+- **A preview server** (`oarbank-sdk preview`) that renders a module's pages as the console will, from fixtures, media
+  served through the same type sniffer the console uses (`oarbank_sdk.media`).
 - **Shared test vectors** in [`spec/vectors/`](spec/vectors/) (canonical JSON, job keys, portable paths, platform
   tokens, variant resolution, placement classes, container image signatures) that every implementation reproduces
   exactly.
@@ -71,6 +76,8 @@ platform. The reference module in [`examples/toy`](examples/toy) is the finished
 (`toy_module.py`, on `oarbank_sdk.server`) and a runner (`toy_runner.py`, stdlib only).
 [`examples/taskbench`](examples/taskbench) shows a write-only secret delivered to one stage and container task images
 approved by their signing key ([Use secrets and signed container images](docs/secrets-and-images.md)).
+[`examples/reel`](examples/reel) shows datasets by URL, folders on the node, media on module pages and portable
+checkpoints ([Files, media and checkpoints](docs/files-media-checkpoints.md)).
 
 ## Developing the SDK
 
