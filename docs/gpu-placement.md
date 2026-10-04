@@ -79,7 +79,7 @@ requires.pools = { containers = 1, gpu = 1 }
 
 `apis_any` is then checked against the APIs the node reports in its containers. On Linux they come from the node's CDI
 spec (an NVIDIA spec gives `cuda`, and `vulkan` and `opencl` when it mounts their drivers). On a Mac with Apple
-silicon, installing krunkit (`brew tap slp/krun && brew install krunkit`) gives containers `vulkan` on the Mac's GPU:
+silicon, installing krunkit (`brew tap slp/krun && brew trust slp/krun && brew install krunkit`) gives containers `vulkan` on the Mac's GPU:
 the agent runs GPU containers in a second VM whose virtio-gpu device carries Vulkan to the host. The image needs Mesa's
 Venus driver and the Vulkan loader (Fedora's `mesa-vulkan-drivers` and `vulkan-loader`). Metal itself never reaches a
 Linux container.

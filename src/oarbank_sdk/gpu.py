@@ -151,7 +151,7 @@ def _vulkan() -> list[str]:
             fams = (u32 * (6 * max(q.value, 1)))()        # VkQueueFamilyProperties: 6 words, queueFlags first
             get_queues(handles[i], ctypes.byref(q), fams)
             compute = any(fams[6 * k] & _VK_COMPUTE for k in range(q.value))
-            if kind == _VK_CPU or not compute:
+            if kind == _VK_CPU or not compute or _software(name):
                 skipped.append(f"{name} ({_VK_TYPES.get(kind, kind)}{'' if compute else ', no compute queue'})")
             else:
                 out.append(f"{name} ({_VK_TYPES.get(kind, kind)})")
@@ -274,9 +274,11 @@ def _directml() -> list[str]:
             desc = (ctypes.c_uint8 * 512)()                   # DXGI_ADAPTER_DESC1
             method(adapter, 10, hr, vp)(adapter, desc)        # GetDesc1
             name = bytes(desc[:256]).decode("utf-16-le", "replace").split("\0", 1)[0]
-            off = 256 + 16 + 3 * ctypes.sizeof(ctypes.c_size_t) + 8
-            flags = int.from_bytes(bytes(desc[off:off + 4]), "little")
-            ok = not flags & 2 and create(adapter, 0xB000, ctypes.byref(iid_device), None) >= 0    # not SOFTWARE; 11_0
+            word = lambda at: int.from_bytes(bytes(desc[at:at + 4]), "little")
+            vendor, device, flags = word(256), word(260), word(256 + 16 + 3 * ctypes.sizeof(ctypes.c_size_t) + 8)
+            # not a software adapter: the SOFTWARE flag, or the Basic Render Driver by its ids (a VM's shows no flag)
+            warp = flags & 2 or (vendor, device) == (0x1414, 0x8C) or _software(name)
+            ok = not warp and create(adapter, 0xB000, ctypes.byref(iid_device), None) >= 0       # feature level 11_0
             (out if ok else skipped).append(name)
             method(adapter, 2, ctypes.c_ulong)(adapter)       # Release
     finally:

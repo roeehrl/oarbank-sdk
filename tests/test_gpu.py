@@ -143,16 +143,21 @@ def fake_host(monkeypatch, host: list[str]):
     monkeypatch.setattr(gpu, "detect", lambda: {"host": host, "containers": [], "evidence": {}})
 
 
-def test_the_kit_runs_goldens_where_the_host_provides_the_runners_api(monkeypatch):
-    api = "metal" if portable.host_platform().startswith("darwin") else "cuda"
-    fake_host(monkeypatch, [api])
-    rep = conform(GPUINFO, sandbox=False)
+def test_the_kit_runs_goldens_where_the_host_provides_the_runners_api():
+    """On a host that provides one of gpuinfo's APIs (every Mac with Apple silicon: Metal) the goldens run, the runner
+    reaching its API from its own process."""
+    need = model(gpuinfo()).runner_gpu_need(portable.host_platform())
+    have = gpu.detect()["host"]
+    if not gpu.fits(need["apis"], have):
+        pytest.skip(f"this host provides {have or 'no GPU API'}, none of {need['apis']}")
+    api = next(a for a in need["apis"] if a in have)
+    rep = conform(GPUINFO)
     assert rep.ok, rep.text()
     gpu_checks = [c for c in rep.checks if c.suite == "gpu"]
     assert [c.status for c in gpu_checks] == ["pass"] and api in gpu_checks[0].detail
     assert any(c.name == "golden gpuinfo-golden (squares): matches the golden" and c.status == "pass" for c in rep.checks)
     host_class = [c for c in rep.checks if c.name.startswith("goldens exist") and portable.host_platform() in c.name]
-    assert host_class and f'"host": ["{api}"]' in host_class[0].name    # this host's node class carries its APIs
+    assert host_class and f'"host": {json.dumps(have)}' in host_class[0].name   # this host's node class carries its APIs
 
 
 def test_the_kit_skips_work_this_host_could_never_get(monkeypatch):
@@ -171,7 +176,7 @@ def test_the_kit_skips_a_gpu_service_whose_api_the_host_lacks(monkeypatch, tmp_p
     shutil.copytree(EXAMPLES / "modelserver", d, ignore=shutil.ignore_patterns("__pycache__"))
     toml = (d / "oarbank-module.toml").read_text(encoding="utf-8")
     toml = toml.replace("yieldable = true", 'yieldable = true\ngpu = { use = "shared", apis_any = ["cuda"] }')
-    (d / "oarbank-module.toml").write_text(toml + '\n[sandbox]\ndevices = { gpu = "compute" }\n', encoding="utf-8")
+    (d / "oarbank-module.toml").write_text(toml + '\n[sandbox]\ndevices = { gpu = "compute" }\n', encoding="utf-8", newline="\n")
     fake_host(monkeypatch, ["metal"])
     rep = conform(d, sandbox=False)
     assert rep.ok, rep.text()
