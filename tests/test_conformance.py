@@ -183,3 +183,35 @@ def test_killing_a_runner_group_that_already_exited_is_not_an_error():
     _kill_tree(p)
     p.wait()
     _kill_tree(p)
+
+
+MODELSERVER = Path(__file__).parents[1] / "examples" / "modelserver"
+
+
+def test_the_endpoint_reference_module_conforms_with_its_service_up():
+    """modelserver's golden reaches its warm service through a connector the kit hands it, as on an agent, and the service
+    suite drives the service through its endpoint channel."""
+    rep = conform(MODELSERVER)
+    assert rep.ok, rep.text()
+    names = {c.name for c in rep.checks if c.status == "pass"}
+    assert {"service model: starts, says hello on its endpoint channel and becomes ready",
+            "service model: service spec generate", "service model: service spec unknown-path",
+            "service model: the service never listens itself", "service model: stops"} <= names, rep.text()
+    assert "golden modelserver-golden (generate): matches the golden" in names
+
+
+def test_a_service_that_listens_is_caught(tmp_path):
+    d = tmp_path / "modelserver"
+    shutil.copytree(MODELSERVER, d, ignore=shutil.ignore_patterns("__pycache__"))
+    code = (d / "model_service.py").read_text(encoding="utf-8").replace(
+        'def main(op: str) -> int:\n',
+        'LISTENER = []\n\n\ndef main(op: str) -> int:\n'
+        '    if op in ("start", "serve"):                     # a model server that also opens a port of its own\n'
+        '        import socket\n'
+        '        s = socket.socket()\n'
+        '        s.bind(("127.0.0.1", 0))\n'
+        '        s.listen()\n'
+        '        LISTENER.append(s)\n')
+    (d / "model_service.py").write_text(code, encoding="utf-8", newline="\n")
+    rep = conform(d)
+    assert "service model: the service never listens itself" in failed(rep), rep.text()

@@ -25,6 +25,15 @@ export const PAGES = [
     order: 2,
   },
   {
+    src: 'docs/service-endpoints.md',
+    dest: 'build/service-endpoints.md',
+    type: 'how-to',
+    title: 'Serve jobs from a warm service',
+    description:
+      'Load a model once per node in an endpoint service and let every job on the node send it work, without anything listening: the manifest, the service, the job and the conformance kit.',
+    order: 3,
+  },
+  {
     src: 'spec/public-surface.md',
     dest: 'spec/public-surface.md',
     type: 'spec',

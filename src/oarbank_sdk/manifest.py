@@ -34,7 +34,8 @@ BUNDLE_TOKEN = "{bundle}"
 PLATFORM_KEYS_CORE = (2, 2)       # the per-platform and placement keys (SDK 1.1)
 SDK13_KEYS_CORE = (2, 3)          # stage determinism and default, structured tick results, dataset update/delete (SDK 1.3)
 BOOTSTRAP_KEYS_CORE = (2, 4)      # bootstrap stages and the pinned dataset table (SDK 1.4)
-TRUST_KEYS_CORE = (2, 5)          # secrets, signed container image sets and the container GPU pool (SDK 1.5)
+SDK15_KEYS_CORE = (2, 5)          # secrets, signed container image sets, the container GPU pool, service endpoints and
+                                  # service GPU use (SDK 1.5)
 KNOWN_FEATURES = ("placement",)          # requires.features this SDK understands (must-understand)
 ENV_NAME = r"^[A-Z][A-Z0-9_]*$"
 # Variables the agent or the host sets itself (spec/runner-protocol.md, spec/platforms.md "Environment per OS"); a
@@ -218,6 +219,7 @@ class MoveSection(Contract):
 
 IMAGE_REF = r"^[a-z0-9][a-z0-9._/:-]*@sha256:[0-9a-f]{64}$"
 CORE_POOLS = ("containers", "gpu")              # pools the agent itself provides
+SERVICE_ENV_PREFIX = "OARBANK_SERVICE_"         # + the endpoint service's name, upper-cased: a job's connector
 RESERVED_CAPABILITY_PREFIXES = ("os.", "arch.", "gpu.", "containers.", "oarbank.")
 HOST_PATTERN = r"^(\*\.)?[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*(:[0-9]{1,5})?$"
 
@@ -543,6 +545,15 @@ class ServiceProvides(Contract):
     pools: list[Name] = Field(default_factory=list, description="[stable] Pools whose token counts the service's `fingerprint` reports.")
 
 
+class ServiceGPU(Contract):
+    """A service's GPU use, as `runner.gpu` without the runner-only keys. [beta]"""
+    use: Literal["none", "shared", "exclusive"] = Field("none", description=(
+        "[beta] A running service that is not `none` is GPU-resident fleet work: host protection stops it, when "
+        "yieldable, while GPU work may not run, and a job reserving one of its pools is a GPU job. Needs "
+        "sandbox.devices.gpu = 'compute' and requires.core >= 2.5."))
+    apis_any: list[Annotated[str, Field(pattern=r"^[a-z][a-z0-9]*$")]] = Field(default_factory=list, description="[beta] Any of these GPU APIs (open set: metal, cuda, rocm, directml, vulkan).")
+
+
 class Service(Contract):
     """A node helper the agent manages generically (service protocol). [beta]"""
     name: Name
@@ -555,8 +566,20 @@ class Service(Contract):
     restart: RestartPolicy = Field(default_factory=RestartPolicy)
     provides: ServiceProvides = Field(default_factory=ServiceProvides)
     reserves_host_memory: bool = Field(False, description="[beta] The fingerprint's reserve.mem_gb is charged to the host while running.")
-    yieldable: bool = Field(True, description="[beta] The agent may stop it when idle under memory pressure.")
+    yieldable: bool = Field(True, description=(
+        "[beta] The agent may stop it when idle under memory pressure, and host protection may stop it, releasing the "
+        "jobs using it, when it evicts or while GPU work may not run (a GPU service)."))
     freeze_ok: bool = Field(False, description="[beta] The agent may freeze the service's process container (freezing returns no memory).")
+    endpoint: bool = Field(False, description=(
+        "[beta] Jobs reach the service: each attempt whose stage reserves one of its pools gets OARBANK_SERVICE_<NAME>, "
+        "and the agent hands the service every connection over its endpoint channel; the service never listens "
+        "(spec/service-protocol.md, \"Endpoints\"). Provides at least one pool; lifecycle on_demand or always. Needs "
+        "requires.core >= 2.5."))
+    gpu: ServiceGPU = Field(default_factory=ServiceGPU, description="[beta] Needs requires.core >= 2.5 when `use` is not none.")
+
+    def env_name(self) -> str:
+        """The variable a job finds this endpoint service's connector in."""
+        return SERVICE_ENV_PREFIX + self.name.upper()
 
 
 class Probe(Contract):
@@ -777,9 +800,11 @@ class Manifest(Contract):
             ("the secrets:read:self permission", "secrets:read:self" in self.coordinator.permissions),
             ("sandbox.container_sets", bool(self.sandbox.container_sets)),
             ("a stage reserving the gpu pool", any("gpu" in s.requires.pools for s in self.stages)),
+            ("services[].endpoint", any(s.endpoint for s in self.services)),
+            ("services[].gpu", any(s.gpu.use != "none" or s.gpu.apis_any for s in self.services)),
         ]
         return (out + [(k, SDK13_KEYS_CORE) for k, on in sdk13 if on] + [(k, BOOTSTRAP_KEYS_CORE) for k, on in sdk14 if on]
-                + [(k, TRUST_KEYS_CORE) for k, on in sdk15 if on])
+                + [(k, SDK15_KEYS_CORE) for k, on in sdk15 if on])
 
     # ------------------------------------------------------------------------ stages
 
@@ -919,6 +944,7 @@ class Manifest(Contract):
                     raise ValueError(f"stage {s.name!r} needs capability {c!r} that no probe or service provides")
         if (self.services or self.probes) and not self.requires.service_protocol:
             raise ValueError("services/probes are declared, so requires.service_protocol must list a major")
+        self._endpoint_rules()
         field_names = {f.name for f in self.results.fields}
         if self.results.value and self.results.value.field not in field_names:
             raise ValueError(f"results.value.field {self.results.value.field!r} is not a declared result field")
@@ -974,6 +1000,29 @@ class Manifest(Contract):
             raise ValueError(f"{', '.join(k for k, _ in short)} need requires.core >= {floor} (older cores ignore them); "
                              f"core is {self.requires.core!r}")
         return self
+
+    def endpoint_services_of(self, stage: str | None) -> list[Service]:
+        """The endpoint services a job of this stage reaches (None: the default stage): those providing a pool the stage
+        reserves (`requires.pools`; `needs_pools` gives no endpoint)."""
+        st = self.stage(stage or self.default_stage() or "")
+        pools = set(st.requires.pools) if st else set()
+        return [s for s in self.services if s.endpoint and pools & set(s.provides.pools)]
+
+    def gpu_pools(self) -> set[str]:
+        """Pools provided by services that use a GPU: a job reserving one is a GPU job."""
+        return {p for s in self.services if s.gpu.use != "none" for p in s.provides.pools}
+
+    def _endpoint_rules(self):
+        """Service endpoints and service GPU use (spec/manifest.md, rule 18)."""
+        for s in self.services:
+            if s.endpoint and not s.provides.pools:
+                raise ValueError(f"service {s.name!r}: an endpoint service provides at least one pool (a job reaches it "
+                                 "through a pool its stage reserves)")
+            if s.endpoint and s.lifecycle == "manual":
+                raise ValueError(f"service {s.name!r}: an endpoint service is on_demand or always (the agent never starts "
+                                 "a manual service, so it could never hand it its endpoint channel)")
+            if s.gpu.use != "none" and self.sandbox.devices.gpu != "compute":
+                raise ValueError(f"service {s.name!r}: gpu.use = {s.gpu.use!r} needs sandbox.devices.gpu = 'compute'")
 
     def _bootstrap_rules(self, chain: set):
         """Bootstrap stages and the pinned dataset table (spec/manifest.md, rule 15)."""

@@ -64,7 +64,7 @@ array, never a shell string.
 | `[coordinator.move]` | The module's part in a coordinator move: `rules` (a files prefix or a store collection, with class `carry`, `rebuild` or `drop`) and the `effects` the move verbs may request ([module-protocol.md](module-protocol.md#coordinator-moves)). |
 | `[runner]` | The runner-protocol executable: `exec`, `runtime`, `capabilities`, `stop_grace_s`, `gpu`, `bandwidth_class`, `env`, and per-platform `variants`. |
 | `[[stages]]` | At least one. Each has `name`, optional `after`, and `requires` (node capabilities, reserved `pools`, `needs_pools` that must merely exist, and `resources` cpu/mem_gb), plus `timeout_s` and `retry`, per-platform `variants`, a `placement` constraint with its `after` stage, and, for a standalone stage, `default` (the stage a job runs when it names none) and its own `determinism` (`none` for work whose results depend on when it ran, such as ingesting a moving feed: the host never replicates, compares, caches or golden-tests it). |
-| `[[services]]` | Node helpers the agent manages through the [service protocol](service-protocol.md): lifecycle, timeouts, restart policy, which pools and capabilities they `provide`, and the memory, yield and pause flags. |
+| `[[services]]` | Node helpers the agent manages through the [service protocol](service-protocol.md): lifecycle, timeouts, restart policy, which pools and capabilities they `provide`, the memory, yield and pause flags, GPU use (`gpu`), and `endpoint` for a service jobs reach through the agent (a warm model server). |
 | `[[probes]]` | Read-only capability checks (`fingerprint` only), each run every `period_s`. |
 | `[settings]` | The JSON Schema for the module's settings. The core stores settings but never interprets them. Settings are visible to the owner: never put a credential in them. |
 | `[[secrets]]` | Write-only credentials the owner sets through the core: `name`, `description` ([Secrets](#secrets)). |
@@ -95,8 +95,8 @@ The models enforce these, beyond the per-field types:
     - **2.2:** the per-platform and placement keys (`requires.coordinator_platforms`, `requires.unsupported`, `requires.features`, `coordinator.env`, `coordinator.variants`, `runner.env` and runner variant `env`, `stages[].variants`, `stages[].placement`, `[placement]`, a `determinism_scope` other than `global` or `platform`, `bundle.platform_files`, `datasets.platform_bound`);
     - **2.3:** `stages[].determinism`, `stages[].default`, the coordinator capability `campaign.tick.results`, and the effects `datasets.update` and `datasets.delete` in any effects list (`coordinator.campaign_effects`, `operations[].effects`, `coordinator.move.effects`).
     - **2.4:** `stages[].bootstrap` and `datasets.pinned`.
-    - **2.5:** `[[secrets]]`, `stages[].secrets`, the permission `secrets:read:self`, `sandbox.container_sets`, and a
-      stage reserving the agent's `gpu` pool.
+    - **2.5:** `[[secrets]]`, `stages[].secrets`, the permission `secrets:read:self`, `sandbox.container_sets`, a
+      stage reserving the agent's `gpu` pool, `services[].endpoint` and `services[].gpu`.
 
     Every entry of `requires.features` is one this SDK knows.
 13. Every bundle path a node exec names (argv[0], or the script a `python` exec runs) reaches each platform that runs it under `bundle.platform_files`. `datasets.platform_bound` kinds are declared kinds.
@@ -108,7 +108,10 @@ The models enforce these, beyond the per-field types:
     `oarbank-sdk check` and bundle verification). A stage that reserves the `gpu` pool also reserves `containers`, and
     the runner declares `gpu.in_container = true` with `gpu.use` `shared` or `exclusive`
     ([sandbox.md](sandbox.md#gpu-passthrough)).
-18. **Lint** (warnings, not errors): an unknown `mix`; a stage `placement` on a stage without `after`; an unknown `determinism_scope`; a placement mix coarser than `determinism_scope` while `results.value` is set (values in one campaign would come from classes whose results are not comparable); stages receiving secrets while the network mode is `egress-any`. `oarbank-sdk check` prints them; `oarbank_sdk.manifest.lint` returns them.
+18. An endpoint service (`endpoint = true`) provides at least one pool (a job reaches it through a pool its stage
+    reserves) and its `lifecycle` is `on_demand` or `always` (the agent never starts a `manual` service, so it could never
+    hand it its channel). A service whose `gpu.use` is not `none` needs `[sandbox].devices.gpu = "compute"`.
+19. **Lint** (warnings, not errors): an unknown `mix`; a stage `placement` on a stage without `after`; an unknown `determinism_scope`; a placement mix coarser than `determinism_scope` while `results.value` is set (values in one campaign would come from classes whose results are not comparable); stages receiving secrets while the network mode is `egress-any`. `oarbank-sdk check` prints them; `oarbank_sdk.manifest.lint` returns them.
 
 A module may offer both forms of an evaluation. For example, render declares a single `eval` stage and a `render → score` chain; the operator's pipeline setting picks the form for jobs that name no stage. A module may also declare standalone utility stages (an ingestion `sync`, a `fetch` that provisions tools) and enqueue jobs that name them; it then marks its evaluation stage `default = true`.
 

@@ -288,3 +288,46 @@ def test_bootstrap_jobs_get_the_network_and_nothing_else():
                                           "containers": [{"image": "docker.io/x/y@sha256:" + SHA}], "exec_writable": True})
     b = sb.for_bootstrap()
     assert (b.net, b.tools, b.devices.gpu, b.containers, b.exec_writable) == (sb.net, [], "none", [], False)
+
+
+def served(d, **svc):
+    """toy whose `run` stage reserves the `model` pool of an on-demand endpoint service."""
+    d["requires"].update(core=">=2.5,<3", service_protocol=[1])
+    d["stages"][0]["requires"]["pools"] = {"model": 1}
+    d["services"] = [{"name": "model", "exec": ["python", "-I", "{bundle}/model.py"], "endpoint": True,
+                      "provides": {"pools": ["model"]}, **svc}]
+    return d
+
+
+def test_endpoint_services_are_reached_through_a_reserved_pool_and_need_core_2_5():
+    man = m.Manifest.model_validate(served(copy.deepcopy(doc("toy"))))
+    assert [s.name for s in man.endpoint_services_of(None)] == ["model"] == [s.name for s in man.endpoint_services_of("run")]
+    assert man.services[0].env_name() == "OARBANK_SERVICE_MODEL"
+    assert man.core_keys_used()[-1:] == [("services[].endpoint", (2, 5))]
+    assert man.gpu_pools() == set()
+    bad(lambda d: served(d)["requires"].update(core=">=2.4,<3"), r"services\[\]\.endpoint need requires.core >= 2.5", name="toy")
+    bad(lambda d: served(d, provides={"capabilities": ["llm"]}).update(stages=[{**d["stages"][0], "requires": {}}]),
+        "an endpoint service provides at least one pool", name="toy")
+    bad(lambda d: served(d, lifecycle="manual"), "an endpoint service is on_demand or always", name="toy")
+    # needs_pools gives no endpoint: only a reservation does
+    d = served(copy.deepcopy(doc("toy")))
+    d["stages"][0]["requires"] = {"needs_pools": ["model"]}
+    assert m.Manifest.model_validate(d).endpoint_services_of(None) == []
+    # a service that is not an endpoint is reached by nobody
+    assert m.Manifest.model_validate(served(copy.deepcopy(doc("toy")), endpoint=False)).endpoint_services_of(None) == []
+
+
+def test_service_gpu_use_needs_the_gpu_grant_and_core_2_5():
+    gpu = {"use": "shared", "apis_any": ["metal", "cuda"]}
+    d = served(copy.deepcopy(doc("toy")), gpu=gpu)
+    d["sandbox"] = {"devices": {"gpu": "compute"}}
+    man = m.Manifest.model_validate(d)
+    assert man.services[0].gpu.use == "shared" and man.gpu_pools() == {"model"}
+    assert ("services[].gpu", (2, 5)) in man.core_keys_used()
+    bad(lambda d: served(d, gpu=gpu), r"gpu.use = 'shared' needs sandbox.devices.gpu = 'compute'", name="toy")
+    bad(lambda d: served(d, gpu={"use": "always"}).update(sandbox={"devices": {"gpu": "compute"}}), "use", name="toy")
+
+    def old_core(d):
+        served(d, endpoint=False, gpu=gpu).update(sandbox={"devices": {"gpu": "compute"}})
+        d["requires"]["core"] = ">=2.4,<3"
+    bad(old_core, r"services\[\]\.gpu need requires.core >= 2.5", name="toy")

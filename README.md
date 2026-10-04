@@ -16,7 +16,7 @@ through the versioned contracts in this repository.
 | Manifest (schema 1) | Everything the core must know before it runs any module code | [spec/manifest.md](spec/manifest.md) |
 | Module protocol 1 | Coordinator ↔ module: JSON-RPC 2.0 over stdio | [spec/module-protocol.md](spec/module-protocol.md) |
 | Runner protocol 1 | Agent ↔ job runner: argv, files, exit codes, events, Control | [spec/runner-protocol.md](spec/runner-protocol.md) |
-| Service protocol 1 | Agent ↔ node services and probes | [spec/service-protocol.md](spec/service-protocol.md) |
+| Service protocol 1 | Agent ↔ node services and probes, and the endpoints jobs reach a warm service through | [spec/service-protocol.md](spec/service-protocol.md) |
 | Envelopes | Spec and result documents | [spec/envelopes.md](spec/envelopes.md) |
 | Platforms | Platform tokens, per-platform declarations, placement | [spec/platforms.md](spec/platforms.md) |
 | Sandbox | What a module process may touch, and the grants an operator approves | [spec/sandbox.md](spec/sandbox.md) |
@@ -31,12 +31,16 @@ The Python package `oarbank_sdk` implements these contracts:
 - **`oarbank_sdk.server.Module`**, the coordinator side of a module: declare verbs, return effects, call the host.
 - **`oarbank_sdk.control.Control`**, the runner side of Control: stop, pause and thread limits at safe points, nudged
   by the agent (a signal on POSIX, an event on Windows), never polled. It is stdlib only, so a runner can vendor it.
+- **`oarbank_sdk.service_endpoint`**, HTTP over a service endpoint: `request()` in a job, `serve_http()` in an
+  endpoint service, which is handed every connection and never listens. Stdlib only. A how-to:
+  [docs/service-endpoints.md](docs/service-endpoints.md); the reference module: [`examples/modelserver`](examples/modelserver).
 - **The conformance kit** (`oarbank-sdk conform`): it checks the manifest, builds and verifies the bundle, drives the
   coordinator side over the module protocol and runs the runner on its goldens, and on any other runner specs its
   fixtures list, as this host's platform would (sandboxed, through the egress proxy; a bootstrap stage's with the
-  bootstrap grants, its artifacts checked against the module's pinned datasets). Secrets reach only the stages that
-  list them and must never appear in what a run or a verb returns; container sets' members verify against their key,
-  and images outside a set or unsigned are refused.
+  bootstrap grants, its artifacts checked against the module's pinned datasets; a stage that reserves an endpoint
+  service's pool with that service up), and drives each endpoint service through its endpoint channel, failing one that
+  listens itself. Secrets reach only the stages that list them and must never appear in what a run or a verb returns;
+  container sets' members verify against their key, and images outside a set or unsigned are refused.
 - **Bundles** (`oarbank-sdk bundle build|verify|wheels`): digest-addressed `.mfb` files, with per-platform wheels and
   files. `oarbank-sdk deps compile` resolves a `requirements.in` into one hash-pinned, marker-free requirements file
   for every platform that installs it.

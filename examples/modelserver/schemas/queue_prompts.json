@@ -1,0 +1,6 @@
+{
+ "type": "object",
+ "properties": {"jobs": {"type": "array", "minItems": 1, "items": {"type": "array", "items": {"type": "string"}, "minItems": 1}},
+                "hold_s": {"type": "number", "minimum": 0, "maximum": 60}, "name": {"type": "string"}},
+ "required": ["jobs"]
+}

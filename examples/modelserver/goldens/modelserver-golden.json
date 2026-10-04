@@ -1,0 +1,16 @@
+{
+ "name": "modelserver-golden",
+ "key_inputs": {
+  "prompts": [
+   "the quick brown fox"
+  ]
+ },
+ "expected": {
+  "digest": "412e9e9775f0a96d418ab0534e725b5f35ad4f439bfd2ed898f34925945557ad",
+  "digest_version": 1
+ },
+ "stages": [
+  "generate"
+ ],
+ "datasets": []
+}

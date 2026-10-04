@@ -1,0 +1,3 @@
+{"settings": {"load_s": 0.2},
+ "service_specs": [{"name": "generate", "service": "model", "path": "/v1/generate", "body": {"prompt": "the quick brown fox"}},
+                   {"name": "unknown-path", "service": "model", "path": "/v1/nothing", "body": {}, "expect": {"status": 404}}]}
