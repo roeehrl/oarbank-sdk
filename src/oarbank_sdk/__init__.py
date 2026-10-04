@@ -5,7 +5,7 @@ their JSON Schemas. This package is one convenient implementation of them; it ha
 on the oarbank core, and nothing here may import it.
 """
 
-__version__ = "1.4.0"
+__version__ = "1.5.0"
 
 MANIFEST_SCHEMA = 1        # oarbank-module.toml `manifest = 1`
 MODULE_PROTOCOL = 1        # coordinator <-> module JSON-RPC major
