@@ -684,6 +684,19 @@ class Outcome:
     exit_s: float | None = None
 
 
+def _why(o: Outcome) -> str:
+    """Why a run failed, for the report: its exit code, its failure.json's reason, fault and detail when it wrote one,
+    and its stderr tail."""
+    f = o.failure or {}
+    parts = [f"exit {o.code}"]
+    if f.get("reason"):
+        parts.append(f"failure.json {f['reason']}" + (f" ({f['fault']})" if f.get("fault") else "") +
+                     (f": {f['detail']}" if f.get("detail") else ""))
+    if o.stderr:
+        parts.append(o.stderr)
+    return "; ".join(parts)
+
+
 def _read_json(path: Path) -> dict | None:
     try:
         return json.loads(path.read_text(encoding="utf-8"))
@@ -1110,7 +1123,7 @@ def _check_goldens(root: Path, man, fx: dict, runs: list, r: Report):
             _egress(r, label, o)
             _secret_leaks(r, label, man, o)
             res = o.result
-            if not r.add("runner", f"{label}: result envelope", res is not None, o.stderr or f"exit {o.code}"):
+            if not r.add("runner", f"{label}: result envelope", res is not None, _why(o)):
                 continue
             try:
                 ResultEnvelope.model_validate(res)
@@ -1216,8 +1229,7 @@ def _check_runner_specs(root: Path, man, fx: dict, r: Report):
         o = _run(root, man, env_doc, fx, bootstrap=boot)
         _egress(r, label, o)
         _secret_leaks(r, label, man, o)
-        r.add("runner", f"{label}: exit {spec.expect.exit}", o.code == spec.expect.exit,
-              f"exit {o.code}" + (f": {o.stderr}" if o.stderr else ""))
+        r.add("runner", f"{label}: exit {spec.expect.exit}", o.code == spec.expect.exit, _why(o))
         if o.code == 0:
             try:
                 res = ResultEnvelope.model_validate(o.result)
