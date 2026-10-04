@@ -229,8 +229,9 @@ containers need, checked against the APIs the node reports **in containers** ([r
 | Windows | the WSL2 GPU-PV path (`nvidia-ctk cdi generate --mode=wsl` in the agent's distribution, then CDI) | no agent container runtime yet: `containers.gpu = "undetected"` |
 | macOS (Apple silicon, macOS 14+) | a second agent-owned VM on krunkit (libkrun) whose virtio-gpu device carries Vulkan to the host's GPU: Mesa's Venus driver in the container, MoltenVK on the host; the run gets `--device /dev/dri`. Only jobs that reserved the `gpu` pool run there; other containers keep the Virtualization.framework VM with Rosetta. Metal itself never reaches a Linux container | with krunkit installed: offers the `gpu` pool; facts `containers.gpu = "virtio-gpu:venus"`; container APIs `vulkan` |
 
-On every platform the image brings the API's user space where the mechanism does not: Mesa (with its Venus driver,
-25.2 or newer, on macOS; its AMD and Intel drivers on Linux) and the Vulkan loader. The broker's `status` answers `gpus:
+On every platform the image brings the API's user space where the mechanism does not: Mesa and the Vulkan loader. On
+macOS that Mesa is the libkrun build of the Venus driver (Fedora: `dnf copr enable slp/mesa-libkrun-vulkan`, then
+`mesa-vulkan-drivers`, pinned; stock Mesa fails `vkCreateInstance` under krunkit); on Linux, Mesa's AMD and Intel drivers. The broker's `status` answers `gpus:
 "all"` to a job that reserved the `gpu` pool on a node that passes GPUs through.
 
 ## Testing your module
