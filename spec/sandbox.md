@@ -147,7 +147,7 @@ module-data directories:
 |---|---|
 | macOS | Colima, or Apple `container` |
 | Linux | rootless Podman, or Docker Engine |
-| Windows | an agent-owned WSL2 distribution running Podman |
+| Windows | an agent-owned WSL containers (WSLc) session: a VM of its own, WSL 2.9.3 or later |
 
 Each job whose module may run containers gets an endpoint, `OARBANK_BROKER` (`unix:/path` or `npipe://./pipe/<name>`),
 the only IPC its confinement allows. Requests are one JSON object per line, one request per connection. Use
@@ -163,6 +163,10 @@ the only IPC its confinement allows. Requests are one JSON object per line, one 
 **Mounts**
 - Mount sources are PortablePaths inside the work directory, or `data:<path>` inside the data directory.
 - Destinations are POSIX absolute paths, for `linux/*` images.
+
+**Platforms.** A runtime runs the platforms it reports (`containers.platforms` on Windows); others are
+`platform_unavailable`. Linux adds a foreign platform where binfmt has a handler for it, macOS runs `linux/amd64` under
+Rosetta, Windows runs its own architecture only (WSLc has no emulation).
 
 **The agent's container run**
 - Always: `run --rm`, the platform, the CPU and memory limits within the job's reservation, the validated mounts and
@@ -226,7 +230,7 @@ containers need, checked against the APIs the node reports **in containers** ([r
 | Platform | Mechanism | The node |
 |---|---|---|
 | Linux | CDI: a CDI spec (`/etc/cdi`, `/var/run/cdi`) with an `all` device, such as `nvidia-ctk cdi generate` writes; the run gets `--device <kind>=all` (Podman 4.1+, Docker 25+ with CDI) | offers the `gpu` pool; facts `containers.gpu = "cdi:<kind>"`; container APIs from the spec: `cuda` (it mounts `libcuda.so`), `vulkan` (the NVIDIA Vulkan ICD, or a DRM render node for other kinds), `opencl` (`libnvidia-opencl`), `rocm` (`/dev/kfd`) |
-| Windows | the WSL2 GPU-PV path (`nvidia-ctk cdi generate --mode=wsl` in the agent's distribution, then CDI) | no agent container runtime yet: `containers.gpu = "undetected"` |
+| Windows | GPU-PV in the agent's WSLc session: its guest writes a CDI spec (`microsoft.com/wslc=gpu`: `/dev/dxg` and the host driver's libraries under `/usr/lib/wsl`, the same edits `nvidia-ctk cdi generate --mode=wsl` makes, for every vendor); the run gets `--gpus all` | offers the `gpu` pool when the session's VM has a GPU; facts `containers.gpu = "cdi:microsoft.com/wslc"`; container APIs `directml` (WSL's D3D12 and DXCore, with any hardware GPU; the image brings `libdirectml.so`) and `cuda` (where the host's NVIDIA driver provides its WSL library). GPU containers need a glibc image: the guest's hook runs the image's `ldconfig` |
 | macOS (Apple silicon, macOS 14+) | a second agent-owned VM on krunkit (libkrun) whose virtio-gpu device carries Vulkan to the host's GPU: Mesa's Venus driver in the container, MoltenVK on the host; the run gets `--device /dev/dri`. Only jobs that reserved the `gpu` pool run there; other containers keep the Virtualization.framework VM with Rosetta. Metal itself never reaches a Linux container | with krunkit installed: offers the `gpu` pool; facts `containers.gpu = "virtio-gpu:venus"`; container APIs `vulkan` |
 
 On every platform the image brings the API's user space where the mechanism does not: Mesa and the Vulkan loader. On

@@ -66,7 +66,10 @@ The coordinator does not run on Windows. Windows computers join a fleet as nodes
       service, `OarbankHelper`, that runs elevated and limits each job's network access to its own allowlist proxy.
     - **Sandbox:** an AppContainer per module. Each job runs in its own Job Object.
     - **Host protection:** the memory guard and per-node caps.
-    - **Containers** are not available on Windows nodes yet.
+    - **Containers**, for modules that use them, run in a WSL containers session that the agent owns (a VM of its
+      own). They need WSL 2.9.3 or later and the Virtual Machine Platform: install the MSI with `CONTAINERS=1`, or run
+      `oarbank-agent containers install` as an administrator, then restart. `oarbank-agent containers doctor` says what
+      is missing. A Windows node runs container images of its own architecture.
   </TabItem>
 </Tabs>
 

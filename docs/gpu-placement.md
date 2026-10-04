@@ -78,7 +78,9 @@ requires.pools = { containers = 1, gpu = 1 }
 ```
 
 `apis_any` is then checked against the APIs the node reports in its containers. On Linux they come from the node's CDI
-spec (an NVIDIA spec gives `cuda`, and `vulkan` and `opencl` when it mounts their drivers). On a Mac with Apple
+spec (an NVIDIA spec gives `cuda`, and `vulkan` and `opencl` when it mounts their drivers). On Windows the agent's WSL
+containers session gives `directml` with any hardware GPU and `cuda` where the NVIDIA driver provides its WSL library
+(use a glibc-based image there). On a Mac with Apple
 silicon, installing krunkit (`brew tap slp/krun && brew trust slp/krun && brew install krunkit`) gives containers
 `vulkan` on the Mac's GPU: the agent runs GPU containers in a second VM whose virtio-gpu device carries Vulkan to the
 host. The image needs Mesa's Venus driver in its libkrun build and the Vulkan loader (on Fedora: `dnf copr enable

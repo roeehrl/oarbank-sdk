@@ -11,13 +11,15 @@ own container runtime (a VM that mounts only oarbank's job and module-data direc
 
 Mount sources are paths relative to the job's work directory, or `data:<path>` for the module's data directory.
 The container gets no network unless the module was approved for egress and asks for it, and no GPU unless the job's
-stage reserves the agent's `gpu` pool and asks for `gpus="all"` (CDI on Linux; macOS runtimes cannot pass one through).
+stage reserves the agent's `gpu` pool and asks for `gpus="all"` (CDI on Linux, GPU-PV through WSL containers on
+Windows; macOS runtimes cannot pass one through).
 Images are digest-pinned: one of the module's `containers`, or an image of one of its `container_sets` that the job
 listed (jobs.enqueue `images`), whose cosign signature the agent verifies before pulling.
 """
 import json
 import os
 import socket
+import time
 from dataclasses import dataclass, field
 
 ENV = "OARBANK_BROKER"            # an endpoint URI: unix:/abs/path or npipe://./pipe/<name>
@@ -59,9 +61,28 @@ def _connect(uri: str, timeout: float):
         s.connect(uri[len("unix:"):])
         return s
     if uri.startswith("npipe:"):
-        name = "\\\\.\\pipe\\" + uri.rsplit("/", 1)[-1]
-        return _Pipe(open(name, "r+b", buffering=0))
+        return _Pipe(_open_pipe("\\\\.\\pipe\\" + uri.rsplit("/", 1)[-1], timeout))
     raise BrokerError("bad_endpoint", f"unknown broker endpoint {uri!r}")
+
+
+def _open_pipe(name: str, timeout: float):
+    """Open a named pipe for reading and writing, waiting while every instance is busy (the agent makes the next instance
+    as soon as one is taken, so a wait is short)."""
+    import _winapi
+    import msvcrt
+    deadline = time.monotonic() + timeout
+    while True:
+        try:
+            h = _winapi.CreateFile(name, _winapi.GENERIC_READ | _winapi.GENERIC_WRITE, 0, _winapi.NULL, _winapi.OPEN_EXISTING, 0,
+                                   _winapi.NULL)
+            return open(msvcrt.open_osfhandle(h, 0), "r+b", buffering=0)
+        except OSError as e:
+            if e.winerror != _winapi.ERROR_PIPE_BUSY or time.monotonic() > deadline:
+                raise
+            try:
+                _winapi.WaitNamedPipe(name, 1000)
+            except OSError:
+                pass
 
 
 class _Pipe:
