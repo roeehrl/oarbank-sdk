@@ -220,9 +220,37 @@ except Stopped:
 
 ### GPU use
 
-`runner.gpu.use` (`none`, `shared` or `exclusive`) declares whether jobs use a GPU. `apis_any` and `min_vram_gb` select
-devices. The core leaves GPU jobs pending (`GPU_BLOCKED`) while the node may admit none: the owner set
-`gpu_jobs = "never"`, or a protected process uses that GPU.
+`runner.gpu.use` (`none`, `shared` or `exclusive`) declares whether jobs use a GPU. The core leaves GPU jobs pending
+(`GPU_BLOCKED`) while the node may admit none: the owner set `gpu_jobs = "never"`, or a protected process uses that GPU.
+
+`apis_any` [beta] names the GPU APIs the runner can use; its jobs run only on nodes providing one of them. The set is
+open (`^[a-z][a-z0-9]*$`); a core detects six:
+
+| API | Detected on | Counts when |
+|---|---|---|
+| `metal` | macOS | `MTLCopyAllDevices` returns a device |
+| `cuda` | Linux, Windows | `cuInit` and `cuDeviceGetCount` > 0 (`libcuda.so.1`, `nvcuda.dll`) |
+| `rocm` | Linux, Windows | the HIP runtime's `hipGetDeviceCount` > 0 (`libamdhip64`, `amdhip64_7.dll` or `amdhip64_6.dll`) |
+| `vulkan` | every OS | the loader lists a physical device that is not a CPU device and has a compute queue (MoltenVK on macOS) |
+| `opencl` | every OS | a platform lists a device of type GPU or accelerator (not a CPU device, not Windows' Basic Render Driver) |
+| `directml` | Windows | `DirectML.dll` loads and a hardware DXGI adapter supports Direct3D 12 at feature level 11_0 |
+
+A node's agent reports the APIs it provides on the host and inside its containers in its doctor report (the agent
+command `oarbank-agent gpu-apis` prints them; `oarbank-sdk gpu-apis` runs the same probes on a developer's machine, and
+`oarbank_sdk.gpu.detect()` returns them). What a job of a stage needs on a node of a platform
+(`Manifest.gpu_needs(stage, platform)`) is a list of "any of" groups:
+
+- the runner's `gpu` for that platform (a `[runner.variants.<key>].gpu` replaces it whole), when `use` is not `none`
+  and `apis_any` is not empty: with `in_container = false` it is checked against the host's APIs, for every stage;
+  with `in_container = true` against the containers' APIs, only for stages reserving the agent's `gpu` pool
+  ([sandbox.md](sandbox.md#gpu-passthrough));
+- each service on that platform with `gpu.use` not `none` and `apis_any` set that provides a pool the stage reserves
+  (`requires.pools`), against the host's APIs.
+
+A node runs the job only when every group shares an API with its list (explain: `GPU_API_MISSING`). A module whose
+runner needs an API the node lacks on the host is not certified there, and its doctor should say `undetected`;
+`NodeClass.gpu_apis` lets `golden.list` give nodes of different APIs different goldens. `min_vram_gb` is carried and
+selects nothing yet.
 
 ## doctor
 

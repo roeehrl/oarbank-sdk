@@ -1,5 +1,29 @@
 {
   "$defs": {
+    "GPUAPIs": {
+      "additionalProperties": true,
+      "description": "The GPU APIs a node provides, from its agent's doctor report (spec/runner-protocol.md, \"GPU use\"). [beta]",
+      "properties": {
+        "containers": {
+          "description": "[beta] Inside containers the agent's broker runs with `gpus = \"all\"`.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Containers",
+          "type": "array"
+        },
+        "host": {
+          "description": "[beta] On the node itself (metal, cuda, rocm, vulkan, opencl, directml).",
+          "items": {
+            "type": "string"
+          },
+          "title": "Host",
+          "type": "array"
+        }
+      },
+      "title": "GPUAPIs",
+      "type": "object"
+    },
     "NodeClass": {
       "additionalProperties": true,
       "description": "What golden.list may know about a node: its platform class, capabilities and pools; never identity. [stable]",
@@ -17,8 +41,12 @@
           "title": "Cpu",
           "type": "object"
         },
+        "gpu_apis": {
+          "$ref": "#/$defs/GPUAPIs",
+          "description": "[beta] The GPU APIs the node provides, so goldens can differ per API. Needs core 2.5 (older hosts send none)."
+        },
         "gpus": {
-          "description": "[beta] [{vendor, model, apis, vram_gb}].",
+          "description": "[beta] [{vendor, model, vram_gb, unified}].",
           "items": {
             "additionalProperties": true,
             "type": "object"

@@ -31,13 +31,17 @@ Suites:
   checkpoint-then-stop request once the runner announced its first checkpoint must leave a valid checkpoint, and a run
   resumed from it in a fresh workdir must give the uninterrupted run's digest. Thumbnails a result declares must be
   small allowed images;
+- **gpu**: the runner's GPU APIs for this host's platform against what this host provides (`oarbank-sdk gpu-apis`, the
+  probes an agent runs): a golden run, runner spec or endpoint service whose GPU APIs this host lacks is skipped with
+  that reason, as a node like this host would get none of that work, never failed; this host's node class carries its
+  `gpu_apis`, so golden lists that differ per API are exercised;
 - **service**: each endpoint service starts as an agent starts it (with its endpoint channel), says hello, becomes
   ready, answers the fixtures' `service_specs` through connections the kit hands it, drops an attempt that ended, stops,
   and **never listens itself** (no process of it holds a listening socket).
 
 Fixtures (optional `conformance.json` next to the manifest) feed the fake host:
 `{"datasets": {id: {"kind", "attrs", "dir"?, "files"?}}, "settings": {...}, "node_classes": [{"platform"?, "pools": {...},
-"capabilities": [...]}], "params": [...examples for params.check...], "store": {"<collection>/<key>": doc},
+"capabilities": [...], "gpu_apis"?: {"host": [...], "containers": [...]}}], "params": [...examples for params.check...], "store": {"<collection>/<key>": doc},
 "files": {"<path>": "<text content>"}, "runner_specs": [{"name", "stage"?, "payload", "datasets"?, "mounts"?,
 "expect": {"exit"?, "artifacts"?, "reason"?}}], "service_specs": [{"name", "service", "method"?, "path", "body"?,
 "expect": {"status"?}}], "ops": [{"verb", "target"?, "params"?}], "folders": {"<id>": "<dir>"}}`. A read folder's `dir`
@@ -63,6 +67,7 @@ from pathlib import Path
 from pydantic import Field, ValidationError
 
 from . import bundle as B
+from . import gpu
 from . import platform as pf
 from . import portable
 from . import manifest as mf
@@ -314,8 +319,32 @@ def spawn_coordinator(root: Path, man, fx: dict):
 
 
 def default_node_classes(man) -> list[dict]:
-    """One node class per declared platform (a host asks golden.list per class)."""
-    return [{"platform": p, "pools": {}, "capabilities": []} for p in man.requires.platforms]
+    """One node class per declared platform (a host asks golden.list per class); this host's carries its GPU APIs."""
+    host = portable.host_platform()
+    return [{"platform": p, "pools": {}, "capabilities": [],
+             **({"gpu_apis": {"host": host_gpu_apis(), "containers": []}} if p == host else {})} for p in man.requires.platforms]
+
+
+HOST_GPU: dict = {}
+
+
+def host_gpu_apis() -> list[str]:
+    """This host's GPU APIs (oarbank_sdk.gpu.detect), detected once per conformance run."""
+    if "host" not in HOST_GPU:
+        HOST_GPU.update(gpu.detect())
+    return HOST_GPU["host"]
+
+
+def gpu_shortfall(man, stage: str | None) -> str | None:
+    """Why a node like this host gets none of a stage's jobs, by the GPU APIs it provides (the core places by the same
+    rule, docs: spec/runner-protocol.md "GPU use"), or None. The kit has no container runtime, so it reports no
+    container APIs; a stage needing them runs only on an agent, as every container stage does."""
+    miss = gpu.unmet([n for n in man.gpu_needs(stage, portable.host_platform()) if n["where"] == "host"],
+                     {"host": host_gpu_apis()})
+    if not miss:
+        return None
+    return (f"its {miss[0]['source']} needs {gpu.describe(miss[0])}; this host provides "
+            f"{', '.join(host_gpu_apis()) or 'no GPU API'} (`oarbank-sdk gpu-apis`), so a node like it gets none of these jobs")
 
 
 def check_protocol(root: Path, man, fx: dict, r: Report):
@@ -1036,6 +1065,11 @@ def _check_runner(root: Path, man, fx: dict, runs: list, r: Report, g: "Grants")
                   f"{d.attrs['platform']!r} != {host!r}" if d.attrs["platform"] != host else "")
     except (ValueError, IndexError, ValidationError) as e:
         r.add("runner", "doctor --json", False, f"not a DoctorOutput: {e}")
+    need = man.runner.for_platform(host).gpu
+    if need.use != "none" and need.apis_any and not need.in_container:
+        why = gpu_shortfall(man, None)
+        r.add("gpu", "this host provides a GPU API the runner names", None if why else True,
+              why or f"needs one of {', '.join(need.apis_any)}; this host provides {', '.join(host_gpu_apis())}")
     _check_goldens(root, man, fx, runs, r)
     _check_runner_specs(root, man, fx, r)
 
@@ -1066,6 +1100,10 @@ def _check_goldens(root: Path, man, fx: dict, runs: list, r: Report):
             if _needs_broker(man, st.get("stage")):
                 r.add("runner", label, None, "its stage reserves the agent's `containers` pool; the kit has no container "
                       "broker, so it runs only on an agent")
+                continue
+            short = gpu_shortfall(man, st.get("stage"))
+            if short:
+                r.add("runner", label, None, f"not run here: {short}")
                 continue
             ran = True
             o = _run(root, man, env_doc, fx)
@@ -1167,6 +1205,10 @@ def _check_runner_specs(root: Path, man, fx: dict, r: Report):
         if stage is not None and _needs_broker(man, stage.name):
             r.add("runner", label, None, "its stage reserves the agent's `containers` pool; the kit has no container broker")
             continue
+        short = gpu_shortfall(man, stage.name if stage else None)
+        if short:
+            r.add("runner", label, None, f"not run here: {short}")
+            continue
         sent = None if stage is None or stage.name == man.default_stage() else stage.name     # as the host sends it
         env_doc = _spec_envelope(man, sent, spec.payload, spec.datasets, spec.mounts, 1,
                                  job_key(man.module.id, man.module.compat, spec.payload, sent))
@@ -1257,6 +1299,10 @@ def check_services(root: Path, man, fx: dict, r: Report, g: "Grants"):
         if not svc.endpoint or not pf.matches(host, svc.platforms):
             continue
         label = f"service {svc.name}"
+        if svc.gpu.use != "none" and not gpu.fits(svc.gpu.apis_any, host_gpu_apis()):
+            r.add("service", label, None, f"not run here: it needs one of {', '.join(svc.gpu.apis_any)} on the host; this host "
+                  f"provides {', '.join(host_gpu_apis()) or 'no GPU API'}, so an agent here would not offer it")
+            continue
         run = _service_run(root, man, svc, g)
         try:
             why = run.start()
@@ -1329,6 +1375,7 @@ def conform(root, fixtures: dict | None = None, runner: bool = True, sandbox: bo
     fx = fixtures if fixtures is not None else (json.loads((root / "conformance.json").read_text(encoding="utf-8"))
                                                 if (root / "conformance.json").exists() else {})
     r = Report()
+    HOST_GPU.clear()
     man = check_manifest(root, r)
     if man is None:
         return r

@@ -1,0 +1,56 @@
+# gpuinfo: the reference module for GPU placement (spec/runner-protocol.md, "GPU use"). Its runner names the GPU APIs it
+# can use per platform: CUDA, ROCm, Vulkan or OpenCL on Linux, DirectML besides them on Windows, Metal on macOS. The core
+# grants its jobs only to nodes whose agent reports one of them, and its doctor says `undetected` where none is
+# reachable. The work itself (a sum of squares) runs on the CPU, so it needs no GPU libraries; the result records the
+# API the runner found.
+manifest = 1
+
+[module]
+id = "dev.codonic.oarbank.gpuinfo"
+version = "0.1.0"
+compat = "gpuinfo1"
+publisher = "oarbank"
+license = "Apache-2.0"
+codeowners = ["roeehrl"]
+stability = "beta"
+description = "Runs only where the node provides one of its GPU APIs"
+
+[requires]
+core = ">=2.5,<3"
+platforms = ["darwin-arm64", "darwin-amd64", "linux-arm64", "linux-amd64", "windows-arm64", "windows-amd64"]
+module_protocol = [1]
+runner_protocol = [1]
+
+[coordinator]
+exec = ["python", "-I", "{bundle}/gpuinfo_module.py"]
+runtime = { kind = "python" }
+
+[runner]
+exec = ["python", "-I", "{bundle}/gpuinfo_runner.py"]
+runtime = { kind = "python" }
+capabilities = ["deterministic_output"]
+gpu = { use = "shared", apis_any = ["cuda", "rocm", "vulkan", "opencl"] }
+
+[runner.variants.windows]
+gpu = { use = "shared", apis_any = ["cuda", "rocm", "vulkan", "opencl", "directml"] }
+
+[runner.variants.darwin]
+gpu = { use = "shared", apis_any = ["metal"] }
+
+[[stages]]
+name = "squares"
+timeout_s = 60
+requires.resources = { cpu = 1, mem_gb = 0.1 }
+
+[sandbox]
+devices = { gpu = "compute" }
+
+[results]
+schema = "schemas/result.schema.json"
+schema_version = 1
+determinism = "exact"
+digest = { version = 1, over = ["total"] }
+fields = [{ name = "total", type = "integer", ui = { column = "Sum of squares", format = ",d" } }]
+
+[goldens]
+fixtures = "goldens/*.json"
