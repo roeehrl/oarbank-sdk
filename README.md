@@ -36,6 +36,9 @@ The Python package `oarbank_sdk` implements these contracts:
 - **`oarbank_sdk.service_endpoint`**, HTTP over a service endpoint: `request()` in a job, `serve_http()` in an
   endpoint service, which is handed every connection and never listens. Stdlib only. A how-to:
   [docs/service-endpoints.md](docs/service-endpoints.md); the reference module: [`examples/modelserver`](examples/modelserver).
+- **`oarbank_sdk.gpu`**, the GPU APIs this host provides, detected as a node's agent detects them (`oarbank-sdk
+  gpu-apis`), and whether a node meets a stage's GPU needs. Stdlib only. A how-to:
+  [docs/gpu-placement.md](docs/gpu-placement.md); the reference module: [`examples/gpuinfo`](examples/gpuinfo).
 - **The conformance kit** (`oarbank-sdk conform`): it checks the manifest, builds and verifies the bundle, drives the
   coordinator side over the module protocol and runs the runner on its goldens, and on any other runner specs its
   fixtures list, as this host's platform would (sandboxed, through the egress proxy; a bootstrap stage's with the
@@ -78,6 +81,8 @@ platform. The reference module in [`examples/toy`](examples/toy) is the finished
 approved by their signing key ([Use secrets and signed container images](docs/secrets-and-images.md)).
 [`examples/reel`](examples/reel) shows datasets by URL, folders on the node, media on module pages and portable
 checkpoints ([Files, media and checkpoints](docs/files-media-checkpoints.md)).
+[`examples/gpuinfo`](examples/gpuinfo) runs only where a node provides one of its GPU APIs, a different set per platform
+([Place work by GPU API](docs/gpu-placement.md)).
 
 ## Developing the SDK
 

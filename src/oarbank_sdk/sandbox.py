@@ -107,8 +107,8 @@ ENFORCEMENT = {"fs": "enforced", "ipc": "enforced", "net.none": "enforced", "net
                "exec_writable.deny": "enforced", "devices.gpu": "enforced", "children": "enforced"}
 _GPU = """
 ;; grant: GPU (Metal)
-(allow iokit-open-service (iokit-registry-entry-class "IOAccelerator" "AGXAccelerator"))
-(allow iokit-open-user-client (iokit-user-client-class "AGXDeviceUserClient" "IOAccelerationUserClient" "IOSurfaceRootUserClient"))
+(allow iokit-open-service (iokit-registry-entry-class "IOAccelerator"))
+(allow iokit-open-user-client (iokit-user-client-class "IOGPUDeviceUserClient" "AppleParavirtDeviceUserClient" "IOAccelerationUserClient" "IOSurfaceRootUserClient"))
 (allow iokit-get-properties)
 (allow mach-lookup (global-name "com.apple.MTLCompilerService") (xpc-service-name "com.apple.MTLCompilerService"))
 """

@@ -42,6 +42,16 @@ export const PAGES = [
     order: 4,
   },
   {
+    src: 'docs/gpu-placement.md',
+    dest: 'build/gpu-placement.md',
+    type: 'how-to',
+    title: 'Place work by GPU API',
+    description:
+      'Name the GPU APIs a runner or service can use, per platform, so its jobs run only on nodes that provide one; see what a node provides; give containers the GPU on Linux and macOS.',
+    platforms: ['macos', 'linux', 'windows'],
+    order: 5,
+  },
+  {
     src: 'spec/public-surface.md',
     dest: 'spec/public-surface.md',
     type: 'spec',

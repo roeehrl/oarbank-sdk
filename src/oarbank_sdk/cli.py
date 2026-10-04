@@ -9,6 +9,7 @@
     oarbank-sdk deps compile <module-dir> <requirements.in> [-o FILE] [-- uv args]
                                                    one marker-free, hash-pinned requirements file for every platform
     oarbank-sdk conform <module-dir>               the conformance kit (manifest, bundle, protocol, runner)
+    oarbank-sdk gpu-apis                           the GPU APIs this host provides (JSON), as an agent detects them
 """
 import argparse
 import sys
@@ -17,6 +18,7 @@ from pathlib import Path
 from pydantic import ValidationError
 
 from . import manifest as m
+from . import portable
 from .schemas import export
 
 
@@ -128,7 +130,13 @@ def main(argv=None) -> int:
     cf.add_argument("--fixtures", help="fixtures JSON (default: <dir>/conformance.json if present)")
     cf.add_argument("--no-runner", action="store_true", help="skip the runner suite")
     cf.add_argument("--json", action="store_true")
+    sub.add_parser("gpu-apis", help="the GPU APIs this host provides, as a node's agent would detect them (JSON)")
     a = ap.parse_args(argv)
+    if a.cmd == "gpu-apis":
+        import json as _json
+        from . import gpu
+        print(_json.dumps({**gpu.detect(), "platform": portable.host_platform()}, indent=1))
+        return 0
     if a.cmd == "conform":
         import json as _json
         from .conformance import conform
