@@ -1,0 +1,67 @@
+# modelserver: the reference module for service endpoints (spec/service-protocol.md, "Endpoints"). One warm "model"
+# server per node, an on-demand endpoint service; every `generate` job sends it prompts through its connector. The model
+# is a stand-in: loading it takes a moment and appends a line to <module data>/model.loads, so tests can count loads.
+manifest = 1
+
+[module]
+id = "dev.codonic.oarbank.modelserver"
+version = "0.1.0"
+compat = "modelserver1"
+publisher = "oarbank"
+license = "Apache-2.0"
+codeowners = ["roeehrl"]
+stability = "beta"
+description = "Jobs share one warm model server per node through a service endpoint"
+
+[requires]
+core = ">=2.5,<3"
+platforms = ["darwin-arm64", "darwin-amd64", "linux-arm64", "linux-amd64", "windows-arm64", "windows-amd64"]
+module_protocol = [1]
+runner_protocol = [1]
+service_protocol = [1]
+
+[coordinator]
+exec = ["python", "-I", "{bundle}/model_module.py"]
+runtime = { kind = "python" }
+capabilities = ["op.plan", "op.apply"]
+
+[runner]
+exec = ["python", "-I", "{bundle}/model_runner.py"]
+runtime = { kind = "python" }
+capabilities = []
+
+[[stages]]
+name = "generate"
+timeout_s = 300
+requires.resources = { cpu = 1, mem_gb = 0.1 }
+requires.pools = { model = 1 }          # each job holds a model token and gets OARBANK_SERVICE_MODEL
+
+[[services]]
+name = "model"
+exec = ["python", "-I", "{bundle}/model_service.py"]
+lifecycle = "on_demand"
+idle_timeout_s = 300
+start_timeout_s = 60
+stop_timeout_s = 20
+endpoint = true
+provides = { pools = ["model"] }
+reserves_host_memory = true
+yieldable = true
+
+[results]
+schema = "schemas/result.schema.json"
+schema_version = 1
+determinism = "exact"
+digest = { version = 1, over = ["digest"] }
+fields = [{ name = "prompts", type = "integer", ui = { column = "Prompts", format = "d" } }]
+
+[goldens]
+fixtures = "goldens/*.json"
+
+[[operations]]
+verb = "queue_prompts"
+title = "Queue prompts"
+tier = "T1"
+target = "none"
+params_schema = "schemas/queue_prompts.json"
+effects = ["campaigns.create", "jobs.enqueue"]

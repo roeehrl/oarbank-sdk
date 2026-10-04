@@ -30,8 +30,11 @@ A module never sees the backend. It declares what it needs in `[sandbox]`, and a
   its process container.
 - It cannot rely on sandboxing itself again: tools such as Bazel or SwiftPM must skip their own sandbox.
 
-**Local IPC.** The only channel is the job's broker endpoint, when granted. There are no other sockets, pipes, D-Bus,
-mach services or Docker sockets. Name resolution and logging go through backend-listed system facilities.
+**Local IPC.** The only channels are the job's broker endpoint, when granted, and the endpoint handles the agent hands
+out itself ([service-protocol.md](service-protocol.md#endpoints)): a job's connectors to its module's endpoint
+services and an endpoint service's channel, inherited and already connected, so no rule has to allow a name. There are no
+other sockets, pipes, D-Bus, mach services or Docker sockets. Name resolution and logging go through backend-listed
+system facilities.
 
 **Grants are whole directories or single files**, resolved to canonical absolute paths at launch. There are no globs
 and no "deny inside allow" exceptions.
@@ -71,7 +74,7 @@ exec_writable = false
 
 **Network rules, whatever the mode:**
 - never loopback or link-local;
-- never listening;
+- never listening (an endpoint service is handed its connections);
 - never another unix socket or pipe.
 
 **Approval**
@@ -80,7 +83,8 @@ exec_writable = false
 - A new version needs its own approval. A version that requests nothing needs none.
 
 **Placement.** Every node reports, per capability, whether its backend enforces it: `enforced`, `cooperative` or
-`unavailable`. A module runs only where all of its grants, and the always-on rules above, are enforced. A node that
+`unavailable` (and `endpoints`: whether its agent hands out service endpoints; a module with an endpoint service needs
+it). A module runs only where all of its grants, and the always-on rules above, are enforced. A node that
 cannot enforce them advertises `SANDBOX_BACKEND_MISSING` or `CAPABILITY_NOT_ENFORCED` for that module.
 
 ## Bootstrap jobs

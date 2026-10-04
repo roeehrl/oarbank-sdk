@@ -1,0 +1,3 @@
+{"$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object",
+ "properties": {"texts": {"type": "array", "items": {"type": "string"}}, "digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"}},
+ "required": ["texts", "digest"]}
