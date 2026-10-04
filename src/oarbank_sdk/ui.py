@@ -26,7 +26,7 @@ from pydantic import Field, field_validator, model_validator
 
 from ._base import Contract, Name, StrictContract
 
-UI_CONTRACT = "1.0"
+UI_CONTRACT = "1.1"
 UI_CONTRACT_MAJOR = 1
 
 Text = Annotated[str, Field(max_length=3000)]
@@ -35,9 +35,9 @@ Ident = Annotated[str, Field(pattern=r"^[a-z0-9][a-z0-9_.-]{0,63}$")]
 Tone = Literal["ok", "warn", "error", "info", "neutral", "running"]
 
 CELL_TYPES = ("text", "number", "integer", "percent", "bytes", "duration", "relative_time", "timestamp", "bool",
-              "digest", "code", "status", "job_ref", "node_ref", "dataset_ref", "campaign_ref", "link")
+              "digest", "code", "status", "job_ref", "node_ref", "dataset_ref", "campaign_ref", "artifact_ref", "link")
 CellType = Literal["text", "number", "integer", "percent", "bytes", "duration", "relative_time", "timestamp", "bool",
-                   "digest", "code", "status", "job_ref", "node_ref", "dataset_ref", "campaign_ref", "link"]
+                   "digest", "code", "status", "job_ref", "node_ref", "dataset_ref", "campaign_ref", "artifact_ref", "link"]
 FORMAT_RE = re.compile(r"^([+]?\.\d{1,2}[fe%]|d|,d|s|\.\d{1,2}s|d/d)?$")
 
 # Closed, host-published catalogue of core queries (always filtered to the module's own rows).
@@ -277,6 +277,61 @@ class LinkC(_C):
     to: Link
 
 
+MEDIA_MINOR = "1.1"                # the media components are new in UI contract 1.1
+
+
+class ArtifactRef(StrictContract):
+    """What a media component's field holds (a row value from a host query or a module view): a file of one of a job's
+    canonical result's artifacts, or a blob the module can see by digest. The host checks it belongs to the module before
+    it serves a byte. [beta]"""
+    job: int | None = Field(None, description="A job of this module.")
+    artifact: Name | None = Field(None, description="The artifact's name in the job's canonical result.")
+    path: str | None = Field(None, description="The file's path in the artifact.")
+    digest: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")] | None = Field(None, description="A blob the module can see.")
+    thumbnail: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")] | None = Field(None, description="With `digest`: its preview image.")
+
+    @model_validator(mode="after")
+    def _form(self):
+        job_fields = [self.job, self.artifact, self.path]
+        by_job = all(v is not None for v in job_fields) and self.digest is None and self.thumbnail is None
+        by_digest = self.digest is not None and all(v is None for v in job_fields)
+        if by_job == by_digest:
+            raise ValueError("an artifact reference is {job, artifact, path} or {digest, thumbnail?}")
+        return self
+
+
+class Media(_C):
+    """One artifact: an image, a video or audio player, or a text file shown as plain text. [beta, UI contract 1.1]"""
+    type: Literal["media"]
+    kind: Literal["image", "video", "audio", "text"]
+    source: Source
+    field: Name = Field(description="The field of the source's first row that holds the artifact reference.")
+    caption: Label | None = None
+    caption_field: Name | None = None
+    height: Annotated[int, Field(ge=60, le=2000)] = 360
+
+
+class Gallery(_C):
+    """A grid of image or video artifacts, one per source row, each shown by its thumbnail when it has one and linked to
+    its job. [beta, UI contract 1.1]"""
+    type: Literal["gallery"]
+    kind: Literal["image", "video"] = "image"
+    source: Source
+    field: Name
+    caption_field: Name | None = None
+    columns: Annotated[int, Field(ge=2, le=8)] = 4
+
+
+class Compare(_C):
+    """Two images from the source's first row, side by side or overlaid with a slider. [beta, UI contract 1.1]"""
+    type: Literal["compare"]
+    source: Source
+    left: Name
+    right: Name
+    mode: Literal["side_by_side", "slider"] = "side_by_side"
+    labels: Annotated[list[Label], Field(min_length=2, max_length=2)] | None = None
+
+
 class Frame(_C):
     type: Literal["iframe"]
     view: Ident = Field(description="An iframe view declared in the manifest ([[ui.iframes]]).")
@@ -285,12 +340,24 @@ class Frame(_C):
 
 
 Component = Annotated[Union[Section, Tabs, Columns, TextC, Markdown, KV, Stat, Status, Progress, Callout, Empty, Table,
-                            Chart, Logs, JSONView, Form, FilterBar, Action, LinkC, Frame], Field(discriminator="type")]
+                            Chart, Logs, JSONView, Form, FilterBar, Action, LinkC, Frame, Media, Gallery, Compare],
+                      Field(discriminator="type")]
 for _m in (Section, Tab, Tabs, Columns):
     _m.model_rebuild()
 
 COMPONENT_TYPES = ("section", "tabs", "columns", "text", "markdown", "kv", "stat", "status", "progress", "callout",
-                   "empty", "table", "chart", "logs", "json", "form", "filter_bar", "action", "link", "iframe")
+                   "empty", "table", "chart", "logs", "json", "form", "filter_bar", "action", "link", "iframe", "media",
+                   "gallery", "compare")
+# components newer than UI contract 1.0, with the minor that introduced them: a page names it in `requires`
+COMPONENT_MINOR = {"media": MEDIA_MINOR, "gallery": MEDIA_MINOR, "compare": MEDIA_MINOR}
+
+
+def minor_of(version: str | None) -> int:
+    """The minor of a UI contract version `1.<minor>` (0 when absent or malformed)."""
+    try:
+        return int(str(version).split(".")[1])
+    except (IndexError, ValueError):
+        return 0
 
 
 class Page(StrictContract):
@@ -418,4 +485,10 @@ def check_page(page: Page, ui: UISection, operations: list[OperationDecl], bundl
             errs.append(f"link: {c.to.url!r} is not in ui.external_urls")
         if isinstance(c, Form) and bundle_files is not None and c.schema_ not in bundle_files:
             errs.append(f"form: schema file {c.schema_!r} is not in the bundle")
+        need = COMPONENT_MINOR.get(c.type)
+        cols = getattr(c, "columns", None)
+        if isinstance(cols, list) and any(col.type == "artifact_ref" for col in cols):
+            need = MEDIA_MINOR                               # a cell type new in 1.1
+        if need and minor_of(c.requires) < minor_of(need):
+            errs.append(f"{c.type}: new in UI contract {need}, so it sets requires = \"{need}\" and a fallback for older hosts")
     return errs

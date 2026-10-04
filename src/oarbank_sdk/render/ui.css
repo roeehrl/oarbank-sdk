@@ -16,3 +16,12 @@
 .mod-chart { min-height:40px } .mod-md p { margin:4px 0 }
 .mod-form label { display:block; margin:4px 0 }
 .mod-op + .mod-op { margin-left:4px }
+.mod-media { margin:0 } .mod-media-img { max-width:100%; height:auto; display:block; border-radius:6px }
+.mod-media-av { width:100% } .mod-media-text { width:100%; border:1px solid var(--line); border-radius:6px; background:var(--card) }
+.mod-gallery { list-style:none; padding:0; margin:0; display:grid; gap:8px }
+.mod-gallery figure { margin:0 } .mod-gallery-2 { grid-template-columns:repeat(2,1fr) } .mod-gallery-3 { grid-template-columns:repeat(3,1fr) }
+.mod-gallery-4 { grid-template-columns:repeat(4,1fr) } .mod-gallery-5 { grid-template-columns:repeat(5,1fr) }
+.mod-gallery-6 { grid-template-columns:repeat(6,1fr) } .mod-gallery-7 { grid-template-columns:repeat(7,1fr) } .mod-gallery-8 { grid-template-columns:repeat(8,1fr) }
+@media (max-width:640px) { .mod-gallery { grid-template-columns:repeat(2,1fr) } }
+.mod-compare { margin:0 } .mod-compare-stage { position:relative } .mod-compare-top { position:absolute; inset:0 }
+.mod-compare input[type=range] { width:100% }

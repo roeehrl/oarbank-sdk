@@ -9,7 +9,7 @@
           "type": "object"
         },
         "files": {
-          "description": "[stable] {path, digest, size} per file.",
+          "description": "[stable] {path, digest, size} per file, with [beta] `origins` when it has any.",
           "items": {
             "additionalProperties": true,
             "type": "object"

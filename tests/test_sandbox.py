@@ -24,7 +24,7 @@ def test_golden_profiles_are_fresh():
     for c in json.loads((GOLDEN / "cases.json").read_text(encoding="utf-8")):
         want = (GOLDEN / f"{c['name']}.sb").read_text(encoding="utf-8")
         got = S.render_text(c["kind"], c["ro"], c["rw"], c["links"], c["net"], c["broker"], c["gpu"], c.get("proxy_port"),
-                            c.get("exec_rw", False))
+                            c.get("exec_rw", False), c.get("rd", 0), c.get("wo", 0))
         assert got == want, c["name"]
 
 
@@ -87,6 +87,71 @@ def test_a_sandboxed_process_reaches_only_its_own_directories(tmp_path):
     escaped = [k for k in ("list_ssh", "list_home", "write_desktop", "read_outside", "write_module", "write_tmp_shared",
                            "child_ls_ssh", "hardlink_out", "tcp", "launchctl") if r[k]]
     assert not escaped, escaped
+
+
+FOLDERS_PROBE = r'''
+import json, os, subprocess
+T = os.environ["T"]
+IN, OUT = T + "/inputs", T + "/outbox"
+r = {}
+def t(n, f):
+    try: f(); r[n] = True
+    except Exception: r[n] = False
+def w(p, s="x"): open(p, "w", encoding="utf-8", newline="\n").write(s)
+t("read_input", lambda: open(IN + "/scene.txt", encoding="utf-8").read())
+t("list_input", lambda: os.listdir(IN))
+t("write_input", lambda: w(IN + "/new.txt"))
+t("delete_input", lambda: os.remove(IN + "/scene.txt"))
+t("exec_input", lambda: subprocess.run([IN + "/tool.sh"], check=True, capture_output=True))
+t("follow_link_out", lambda: open(IN + "/leak", encoding="utf-8").read())
+t("create_output", lambda: w(OUT + "/frame.png", "png"))
+t("mkdir_output", lambda: (os.mkdir(OUT + "/d"), w(OUT + "/d/f")))
+t("overwrite_output", lambda: w(OUT + "/existing.txt", "replaced"))
+t("read_output", lambda: open(OUT + "/frame.png", encoding="utf-8").read())
+t("read_existing", lambda: open(OUT + "/existing.txt", encoding="utf-8").read())
+t("list_output", lambda: os.listdir(OUT))
+t("delete_output", lambda: os.remove(OUT + "/frame.png"))
+t("rename_output", lambda: os.rename(OUT + "/frame.png", OUT + "/renamed.png"))
+t("symlink_output", lambda: os.symlink(T + "/outside/secret", OUT + "/sl"))
+t("hardlink_output", lambda: os.link(IN + "/scene.txt", OUT + "/hl"))
+t("chmod_output", lambda: os.chmod(OUT + "/frame.png", 0o777))
+print(json.dumps(r))
+'''
+
+
+@darwin
+def test_a_runner_reads_its_input_folders_and_only_writes_into_its_outboxes(tmp_path):
+    """[sandbox].folders on Seatbelt (profile 4): an input folder is readable and listable, never written, deleted from or
+    executed from, and a symlink in it pointing out leads nowhere; an outbox takes new files and directories (and, by
+    name, replaces a file), and nothing in it can be read, listed, removed, renamed, linked or chmodded."""
+    inputs, outbox = tmp_path / "inputs", tmp_path / "outbox"
+    inputs.mkdir()
+    outbox.mkdir()
+    (tmp_path / "outside").mkdir()
+    (tmp_path / "outside" / "secret").write_text("s", encoding="utf-8")
+    (inputs / "scene.txt").write_text("scene", encoding="utf-8")
+    (inputs / "tool.sh").write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    (inputs / "tool.sh").chmod(0o755)
+    (inputs / "leak").symlink_to(tmp_path / "outside" / "secret")
+    (outbox / "existing.txt").write_text("old", encoding="utf-8")
+    folders = {"inputs": {"path": str(inputs), "access": "read"}, "outbox": {"path": str(outbox), "access": "write"}}
+    r = _probe(tmp_path, {"folders": folders}, FOLDERS_PROBE)
+    assert r["read_input"] and r["list_input"] and r["create_output"] and r["mkdir_output"] and r["overwrite_output"]
+    escaped = [k for k in ("write_input", "delete_input", "exec_input", "follow_link_out", "read_output", "read_existing",
+                           "list_output", "delete_output", "rename_output", "symlink_output", "hardlink_output",
+                           "chmod_output") if r[k]]
+    assert not escaped, escaped
+    assert (outbox / "frame.png").read_text() == "png" and (outbox / "d" / "f").exists()
+    assert not (outbox / "sl").exists() and not (outbox / "hl").exists()
+
+
+def test_only_runners_get_folders(tmp_path):
+    folders = {"inputs": {"path": str(tmp_path), "access": "read"}, "outbox": {"path": str(tmp_path / "o"), "access": "write"}}
+    runner = S.node_policy("m", tmp_path, tmp_path / "w", tmp_path / "d", folders=folders)
+    assert runner.rd == [str(tmp_path)] and runner.wo == [str(tmp_path / "o")]
+    for kind in ("doctor", "service", "probe"):
+        p = S.node_policy("m", tmp_path, None, tmp_path / "d", folders=folders, kind=kind)
+        assert p.rd == [] and p.wo == []
 
 
 @pytest.mark.skipif(os.name == "nt", reason="Seatbelt profiles take POSIX paths")

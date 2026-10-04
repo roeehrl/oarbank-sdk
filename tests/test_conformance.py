@@ -1,3 +1,4 @@
+import json
 import os
 import shutil
 import subprocess
@@ -215,3 +216,56 @@ def test_a_service_that_listens_is_caught(tmp_path):
     (d / "model_service.py").write_text(code, encoding="utf-8", newline="\n")
     rep = conform(d)
     assert "service model: the service never listens itself" in failed(rep), rep.text()
+
+
+REEL = Path(__file__).parents[1] / "examples" / "reel"
+
+
+def copy_reel(tmp_path) -> Path:
+    d = tmp_path / "reel"
+    shutil.copytree(REEL, d, ignore=shutil.ignore_patterns("__pycache__", "dist"))
+    return d
+
+
+def test_reel_conforms_with_its_checkpoint_replay_thumbnails_and_origin_operation():
+    rep = conform(REEL)
+    assert rep.ok, rep.text()
+    names = {c.name for c in rep.checks if c.status == "pass"}
+    assert any("resumes from a checkpoint with the same digest" in n for n in names)
+    assert any("a resumed result's files are all there" in n for n in names)
+    assert any("thumbnails are small allowed images" in n for n in names)
+    assert any("import_asset #1: datasets.create files" in n for n in names)
+    assert any("adopt_upload #0: datasets.create files" in n for n in names)        # an importer of an uploaded dataset
+
+
+def test_a_runner_that_resumes_wrongly_fails_the_replay(tmp_path):
+    d = copy_reel(tmp_path)
+    code = (d / "reel_runner.py").read_text(encoding="utf-8").replace(
+        'digests, start = list(state["digests"]), int(state["next"])',
+        'digests, start = list(state["digests"])[:-1], int(state["next"])')     # loses a frame on resume
+    (d / "reel_runner.py").write_text(code, encoding="utf-8", newline="\n")
+    assert any("resumes from a checkpoint with the same digest" in n for n in failed(conform(d)))
+
+
+def test_a_checkpoint_naming_a_file_outside_the_workdir_fails(tmp_path):
+    d = copy_reel(tmp_path)
+    code = (d / "reel_runner.py").read_text(encoding="utf-8").replace(
+        "        if ctl.checkpoint_requested and i > start:\n            checkpoint(i)",
+        "        if ctl.checkpoint_requested:\n            open(events, 'a').write('{\"t\": 1, \"kind\": \"checkpoint\", "
+        "\"files\": [{\"path\": \"missing/state.json\"}]}\\n')")
+    assert "missing/state.json" in code
+    (d / "reel_runner.py").write_text(code, encoding="utf-8", newline="\n")
+    assert any("checkpoint, then stop" in n for n in failed(conform(d)))
+
+
+def test_an_import_with_a_plain_http_origin_fails(tmp_path):
+    d = copy_reel(tmp_path)
+    fx = json.loads((d / "conformance.json").read_text())
+    code = (d / "reel_module.py").read_text(encoding="utf-8").replace(   # skip the SDK builder's own check
+        "module = Module(MODULE_ID, VERSION)",
+        "fx.datasets_create = lambda d, k, files, meta=None: mp.Effect(kind='datasets.create', args={'dataset_id': d, "
+        "'kind': k, 'files': files, 'meta': meta or {}})\nmodule = Module(MODULE_ID, VERSION)")
+    (d / "reel_module.py").write_text(code, encoding="utf-8", newline="\n")
+    next(o for o in fx["ops"] if o["verb"] == "import_asset")["params"]["url"] = "http://assets.example.org/clip.webm"
+    rep = conform(d, fx, runner=False)
+    assert any("datasets.create files" in n for n in failed(rep)), rep.text()

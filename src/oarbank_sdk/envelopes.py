@@ -28,6 +28,14 @@ class InputRef(Contract):
     _m = field_validator("mount")(classmethod(lambda cls, v: _portable(v)))
 
 
+class Resume(Contract):
+    """The checkpoint this attempt resumes from (spec/runner-protocol.md, "Checkpoints"): its files are under
+    <W>/checkpoint/. [beta]"""
+    from_attempt: int = Field(description="[beta] The attempt that wrote the checkpoint.")
+    digest: Sha256 = Field(description="[beta] sha256 of the canonical JSON list of the checkpoint's {name, digest, size}, sorted by name.")
+    data: dict[str, Any] = Field(default_factory=dict, description="[beta] The `data` of the checkpoint event, as the runner wrote it.")
+
+
 class SpecEnvelope(Contract):
     envelope: Literal[1] = 1
     schema_: str = Field(alias="schema", pattern=SCHEMA_REF, description="[stable] `<module>/spec@N` of the payload.")
@@ -42,6 +50,7 @@ class SpecEnvelope(Contract):
     inputs: dict[Name, InputRef] = Field(default_factory=dict, description="[stable] Outputs of an upstream stage consumed by this stage.")
     resources: dict[str, Any] = Field(default_factory=dict, description="[stable] Resources the job reserves (cpu, mem_gb, pools).")
     timeout_s: float | None = None
+    resume: Resume | None = Field(None, description="[beta] Present when the job resumes from its latest checkpoint, under <W>/checkpoint/.")
     payload: dict[str, Any] = Field(description="[stable] Module-owned spec payload.")
 
     @field_validator("mounts")
@@ -52,12 +61,22 @@ class SpecEnvelope(Contract):
         return v
 
 
+class Thumbnail(Contract):
+    """A small preview image a runner made of a result file (a PNG, JPEG, WebP or AVIF of at most 1 MiB): galleries and
+    video posters show it, so the host never transcodes module media. [beta]"""
+    local: str | None = Field(None, description="[beta] Runner-written only: the workdir-relative image; the agent uploads it and replaces it with digest/size.")
+    _p = field_validator("local")(classmethod(lambda cls, v: _portable(v)))
+    digest: Sha256 | None = None
+    size: int | None = None
+
+
 class ArtifactFile(Contract):
     path: str = Field(description="[stable] PortablePath inside the artifact (what the consumer sees under its mount). Artifacts carry no file modes.")
     local: str | None = Field(None, description="[stable] Runner-written only: workdir-relative source (a PortablePath, `/`-separated). The agent uploads it and replaces it with digest/size.")
     _p = field_validator("path", "local")(classmethod(lambda cls, v: _portable(v)))
     digest: Sha256 | None = None
     size: int | None = None
+    thumbnail: Thumbnail | None = Field(None, description="[beta] A preview image of this file, made by the runner.")
 
 
 class Artifact(Contract):

@@ -17,11 +17,31 @@ after a nudge; a pause blocks until the next nudge. Nothing is polled. Documents
 A safe point is any place where holding or stopping the job changes nothing already written; time held there is left
 out of throughput a runner reports (`paused_s`). The agent bounds how long a job stays paused.
 
+Portable checkpoints (runner capability `checkpoint`, a stage with `checkpoint`; spec/runner-protocol.md "Checkpoints"):
+
+    ckpt = Checkpoints(workdir, events_path, spec)
+    start, state = 0, None
+    if ckpt.resume():                                   # <W>/checkpoint/ holds the job's latest checkpoint
+        state = json.loads((ckpt.resume_dir() / "state.json").read_text())
+    try:
+        for step in range(start, n):
+            ctl.safe_point()
+            do(step)
+            if step % 50 == 0:
+                with ckpt.write({"step": step}) as d:   # a fresh directory; its files become the checkpoint
+                    (d / "state.json").write_text(json.dumps(state))
+    except Stopped:
+        if ctl.checkpoint_requested:                    # checkpoint, then stop: the agent waits checkpoint_grace_s
+            with ckpt.write({"step": step}) as d:
+                (d / "state.json").write_text(json.dumps(state))
+        return ctl.acknowledge_stop()
+
 POSIX: Control installs the SIGUSR1 handler and the signal wakeup fd, so create it on the main thread, once per
 process. safe_point and check may then be called from any thread.
 Windows: a runner started without OARBANK_CONTROL_EVENT (by hand, not by the agent) is never nudged, so the document
 read at creation is the one that applies.
 """
+import contextlib
 import json
 import os
 import time
@@ -30,6 +50,8 @@ from pathlib import Path
 ENV_CONTROL_EVENT = "OARBANK_CONTROL_EVENT"
 EXIT_STOPPED = 75                      # transient: the agent asked for the stop, so the job runs again later or elsewhere
 REPLACE_RETRY_S = 2.0                  # Windows: a replace fails while the agent has the file open
+CHECKPOINT_DIR = "checkpoint"          # <W>/checkpoint/: the checkpoint a resumed attempt starts from (read-only)
+CHECKPOINT_DATA_MAX = 4096             # bytes of a checkpoint event's `data` (compact JSON)
 
 
 def replace_text(path, text: str):
@@ -131,7 +153,7 @@ class Control:
         workdir = workdir or os.environ.get("OARBANK_WORKDIR", ".")
         self.path = Path(workdir) / "control.json"
         self.seq = -1
-        self.stop = self.pause = False
+        self.stop = self.pause = self.checkpoint = False
         self.threads: int | None = None
         self.gpu_duty: float | None = None
         self.paused_s = 0.0
@@ -150,8 +172,14 @@ class Control:
             return False
         self.seq = seq
         self.stop, self.pause = bool(doc.get("stop")), bool(doc.get("pause"))
+        self.checkpoint = bool(doc.get("checkpoint"))
         self.threads, self.gpu_duty = doc.get("threads"), doc.get("gpu_duty")
         return True
+
+    @property
+    def checkpoint_requested(self) -> bool:
+        """The stop asks for a checkpoint first (`stop` with `checkpoint`): write one, then acknowledge the stop."""
+        return self.stop and self.checkpoint
 
     def check(self):
         """Apply a nudged change (never blocks); raise Stopped on a stop request."""
@@ -183,3 +211,55 @@ class Control:
             self.refresh()
             if self.stop:
                 raise Stopped()
+
+
+class Checkpoints:
+    """A runner's portable checkpoints: write each one into a fresh directory and announce it with a `checkpoint` event
+    (the agent then takes the files away and uploads them), and find the checkpoint a resumed attempt starts from.
+
+    `events` is the `--events` path the agent passes; `spec` the parsed spec.json (for `resume`)."""
+
+    def __init__(self, workdir=None, events=None, spec: dict | None = None):
+        self.workdir = Path(workdir or os.environ.get("OARBANK_WORKDIR", "."))
+        self.events = Path(events) if events else None
+        self.spec = spec or {}
+        self.seq = 0
+
+    def resume(self) -> dict | None:
+        """The spec envelope's `resume` ({from_attempt, digest, data}) when this attempt resumes from a checkpoint."""
+        r = self.spec.get("resume")
+        return r if isinstance(r, dict) and (self.workdir / CHECKPOINT_DIR).is_dir() else None
+
+    def resume_dir(self) -> Path:
+        """<W>/checkpoint/: the checkpoint's files under their names (read-only)."""
+        return self.workdir / CHECKPOINT_DIR
+
+    def resume_data(self) -> dict:
+        r = self.resume()
+        return dict(r.get("data") or {}) if r else {}
+
+    @contextlib.contextmanager
+    def write(self, data: dict | None = None):
+        """A fresh directory for one checkpoint; when the block ends, every regular file in it becomes the checkpoint
+        (named by its path inside the directory) and its event is written. The files then belong to the agent: write the
+        next checkpoint with another `write()`."""
+        raw = json.dumps(data or {}, separators=(",", ":"), sort_keys=True)
+        if len(raw.encode()) > CHECKPOINT_DATA_MAX:
+            raise ValueError(f"checkpoint data is {len(raw.encode())} bytes; at most {CHECKPOINT_DATA_MAX}")
+        if self.events is None:
+            raise RuntimeError("no events file: the agent passes --events to a runner that declares `checkpoint`")
+        self.seq += 1
+        d = self.workdir / "ckpt" / f"{self.seq:06d}"
+        d.mkdir(parents=True)
+        yield d
+        files = []
+        for f in sorted(d.rglob("*")):
+            if f.is_file() and not f.is_symlink():
+                files.append({"path": f.relative_to(self.workdir).as_posix(), "name": f.relative_to(d).as_posix()})
+        if not files:
+            raise ValueError("a checkpoint holds at least one file")
+        event = {"t": time.time(), "kind": "checkpoint", "files": files, "data": data or {}}
+        with open(self.events, "a", encoding="utf-8", newline="\n") as out:
+            out.write(json.dumps(event, separators=(",", ":")) + "\n")
+            out.flush()
+            os.fsync(out.fileno())

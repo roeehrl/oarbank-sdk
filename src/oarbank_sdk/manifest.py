@@ -34,8 +34,8 @@ BUNDLE_TOKEN = "{bundle}"
 PLATFORM_KEYS_CORE = (2, 2)       # the per-platform and placement keys (SDK 1.1)
 SDK13_KEYS_CORE = (2, 3)          # stage determinism and default, structured tick results, dataset update/delete (SDK 1.3)
 BOOTSTRAP_KEYS_CORE = (2, 4)      # bootstrap stages and the pinned dataset table (SDK 1.4)
-SDK15_KEYS_CORE = (2, 5)          # secrets, signed container image sets, the container GPU pool, service endpoints and
-                                  # service GPU use (SDK 1.5)
+SDK15_KEYS_CORE = (2, 5)          # SDK 1.5: secrets, signed container image sets, the container GPU pool, service
+                                  # endpoints and GPU use, folder grants, portable checkpoints, artifact_ref
 KNOWN_FEATURES = ("placement",)          # requires.features this SDK understands (must-understand)
 ENV_NAME = r"^[A-Z][A-Z0-9_]*$"
 # Variables the agent or the host sets itself (spec/runner-protocol.md, spec/platforms.md "Environment per OS"); a
@@ -300,6 +300,18 @@ class ToolGrant(Contract):
         "Windows any readable binary is executable."))
 
 
+FOLDER_ID = r"^[a-z][a-z0-9_.-]{0,63}$"
+
+
+class FolderGrant(Contract):
+    """A folder on the node, from the operator's folder registry (a logical id the operator maps to a path per node).
+    Only runners get folders. [beta]"""
+    id: Annotated[str, Field(pattern=FOLDER_ID)] = Field(description="[beta] Logical folder id, e.g. `inputs`.")
+    access: Literal["read", "write"] = Field(description=(
+        "[beta] `read`: read the folder's files and listings, never write. `write`: an outbox: create files and directories "
+        "and write them, never read, list, rename or delete anything there (files it creates may replace files there)."))
+
+
 class SandboxDevices(Contract):
     gpu: Annotated[str, Field(pattern=r"^[a-z][a-z0-9-]*$")] = Field("none", description=(
         "[beta] Open set: `none` or `compute` (GPU compute through the platform's APIs, no display server; weakens "
@@ -323,10 +335,22 @@ class SandboxSection(Contract):
     exec_writable: bool = Field(False, description=(
         "[beta] Runners may execute files they wrote into the data or work directory (downloaded tools). Not enforceable "
         "as `false` on Windows without application control; nodes report it."))
+    folders: list[FolderGrant] = Field(default_factory=list, description=(
+        "[beta] Folders on the node (registry ids the operator maps to a path per node) the runner may read, or write into "
+        "as an outbox. Needs requires.core >= 2.5."))
+
+    @field_validator("folders")
+    @classmethod
+    def _unique_folders(cls, v):
+        ids = [f.id for f in v]
+        dup = sorted({i for i in ids if ids.count(i) > 1})
+        if dup:
+            raise ValueError(f"sandbox.folders lists {dup} more than once")
+        return v
 
     def requests(self) -> bool:
         return bool(self.net.mode != "none" or self.tools or self.devices.gpu != "none" or self.containers
-                    or self.container_sets or self.exec_writable)
+                    or self.container_sets or self.exec_writable or self.folders)
 
     def runs_containers(self) -> bool:
         return bool(self.containers or self.container_sets)
@@ -436,7 +460,7 @@ class RunnerVariant(Contract):
 
 
 RUNNER_CAPABILITIES = ("cancellable", "freeze_ok", "cooperative_pause", "resumable", "progress_events",
-                       "deterministic_output", "cooperative_throttle")
+                       "deterministic_output", "cooperative_throttle", "checkpoint")
 
 
 class Runner(Contract):
@@ -446,8 +470,12 @@ class Runner(Contract):
     capabilities: list[Capability] = Field(default_factory=list, description=(
         "[stable] By intent: cancellable (honours a stop request within stop_grace_s), freeze_ok (safe to freeze at any "
         "instruction), cooperative_pause (pauses on control.json), resumable (resumes from its own checkpoint after a "
-        "restart), progress_events, deterministic_output, cooperative_throttle."))
+        "restart), progress_events, deterministic_output, cooperative_throttle, checkpoint (writes portable checkpoints, "
+        "honours a checkpoint-then-stop request and resumes from <W>/checkpoint/; needs requires.core >= 2.5)."))
     stop_grace_s: Annotated[float, Field(ge=1, le=600)] = Field(20.0, description="[stable] Seconds between the stop request and forced termination of the process container.")
+    checkpoint_grace_s: Annotated[float, Field(ge=1, le=1800)] = Field(120.0, description=(
+        "[beta] Seconds between a checkpoint-then-stop request and forced termination of the process container. Needs "
+        "requires.core >= 2.5."))
     gpu: GPUNeed = Field(default_factory=GPUNeed)
     bandwidth_class: Literal["low", "medium", "high"] | None = Field(None, description="[experimental] Measured memory-bandwidth appetite relative to the node's memory system (measured on Apple unified memory so far).")
     env: EnvMap = Field(default_factory=dict, description=(
@@ -503,6 +531,14 @@ class StagePlacement(Contract):
 Determinism = Literal["exact", "within_tolerance", "none"]
 
 
+class StageCheckpoint(Contract):
+    """Portable checkpoints for a stage's jobs (spec/runner-protocol.md, "Checkpoints"). [beta]"""
+    max_mb: Annotated[int, Field(ge=1, le=65536)] = Field(description="[beta] The largest checkpoint (all its files) the agent uploads, MB.")
+    min_interval_s: Annotated[float, Field(ge=30, le=86400)] = Field(600.0, description=(
+        "[beta] The agent uploads at most one checkpoint per interval; a checkpoint answering a checkpoint-then-stop "
+        "request is always uploaded."))
+
+
 class Stage(Contract):
     name: Name = Field(description="[stable] Stage name; unique within the manifest.")
     after: Name | None = Field(None, description="[stable] Stage whose output this stage consumes (its artifacts become inputs).")
@@ -521,6 +557,9 @@ class Stage(Contract):
     secrets: list[Name] = Field(default_factory=list, description=(
         "[beta] Declared [[secrets]] this stage's runner receives in OARBANK_SECRETS_FILE (no other stage, service, probe or "
         "doctor does). A job waits until each has a value for its node. Never on a bootstrap stage. Needs requires.core >= 2.5."))
+    checkpoint: StageCheckpoint | None = Field(None, description=(
+        "[beta] The stage keeps portable checkpoints: the latest one a job's runner wrote is uploaded, and the job's next "
+        "attempt, on any node, resumes from it. Needs the runner capability `checkpoint` and requires.core >= 2.5."))
     requires: StageRequires = Field(default_factory=StageRequires)
     timeout_s: Annotated[float, Field(gt=0, le=86400)] = Field(1800.0, description="[stable] Hard wall-clock limit per attempt.")
     retry: Retry = Field(default_factory=Retry)
@@ -802,6 +841,11 @@ class Manifest(Contract):
             ("a stage reserving the gpu pool", any("gpu" in s.requires.pools for s in self.stages)),
             ("services[].endpoint", any(s.endpoint for s in self.services)),
             ("services[].gpu", any(s.gpu.use != "none" or s.gpu.apis_any for s in self.services)),
+            ("sandbox.folders", bool(self.sandbox.folders)),
+            ("stages[].checkpoint", any(s.checkpoint for s in self.stages)),
+            ("runner.checkpoint_grace_s", "checkpoint_grace_s" in self.runner.model_fields_set),
+            ("runner capability checkpoint", "checkpoint" in self.runner.capabilities),
+            ("ui.views.columns[].type artifact_ref", any(c.type == "artifact_ref" for v in self.ui.views.values() for c in v.columns)),
         ]
         return (out + [(k, SDK13_KEYS_CORE) for k, on in sdk13 if on] + [(k, BOOTSTRAP_KEYS_CORE) for k, on in sdk14 if on]
                 + [(k, SDK15_KEYS_CORE) for k, on in sdk15 if on])
@@ -967,6 +1011,7 @@ class Manifest(Contract):
                              "is certified on golden evidence")
         self._bootstrap_rules(chain)
         self._trust_rules()
+        self._checkpoint_rules()
         if len(self.stages) > 1 and "result.merge" not in self.coordinator.capabilities:
             raise ValueError("a multi-stage module must implement result.merge (coordinator.capabilities)")
         if self.goldens and self.goldens.compare == "verb" and "golden.compare" not in self.coordinator.capabilities:
@@ -1106,6 +1151,24 @@ class Manifest(Contract):
             if not gpu.in_container or gpu.use == "none":
                 raise ValueError(f"stage {st.name!r} reserves the gpu pool: declare runner.gpu.in_container = true and "
                                  "runner.gpu.use = 'shared' or 'exclusive' (GPU admission applies to its jobs)")
+
+    def _checkpoint_rules(self):
+        """Portable checkpoints (spec/manifest.md, rule 20)."""
+        stages = [s.name for s in self.stages if s.checkpoint]
+        cap = "checkpoint" in self.runner.capabilities
+        if stages and not cap:
+            raise ValueError(f"stages {stages} keep checkpoints, so runner.capabilities lists `checkpoint` (the runner "
+                             "honours a checkpoint-then-stop request and resumes from <W>/checkpoint/)")
+        if cap and not stages:
+            raise ValueError("runner capability `checkpoint` needs a stage with `checkpoint` (its limits)")
+        for s in self.stages:
+            if s.checkpoint and s.bootstrap:
+                raise ValueError(f"stage {s.name!r}: a bootstrap stage keeps nothing, so it never checkpoints")
+
+    def checkpoint_of(self, stage: str | None) -> "StageCheckpoint | None":
+        """A stage's checkpoint limits (None: the default stage), or None when it keeps no portable checkpoints."""
+        st = self.stage(stage or self.default_stage() or "")
+        return st.checkpoint if st else None
 
     def _platform_rules(self, declared: set):
         """The cross-field rules of the per-platform declarations (spec/manifest.md, rules 9-11 and 13)."""

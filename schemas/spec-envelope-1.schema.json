@@ -20,6 +20,35 @@
       ],
       "title": "InputRef",
       "type": "object"
+    },
+    "Resume": {
+      "additionalProperties": true,
+      "description": "The checkpoint this attempt resumes from (spec/runner-protocol.md, \"Checkpoints\"): its files are under\n<W>/checkpoint/. [beta]",
+      "properties": {
+        "data": {
+          "additionalProperties": true,
+          "description": "[beta] The `data` of the checkpoint event, as the runner wrote it.",
+          "title": "Data",
+          "type": "object"
+        },
+        "digest": {
+          "description": "[beta] sha256 of the canonical JSON list of the checkpoint's {name, digest, size}, sorted by name.",
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Digest",
+          "type": "string"
+        },
+        "from_attempt": {
+          "description": "[beta] The attempt that wrote the checkpoint.",
+          "title": "From Attempt",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "from_attempt",
+        "digest"
+      ],
+      "title": "Resume",
+      "type": "object"
     }
   },
   "$id": "https://codonic.dev/oarbank/schemas/spec-envelope-1.schema.json",
@@ -107,6 +136,18 @@
       "description": "[stable] Resources the job reserves (cpu, mem_gb, pools).",
       "title": "Resources",
       "type": "object"
+    },
+    "resume": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Resume"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "[beta] Present when the job resumes from its latest checkpoint, under <W>/checkpoint/."
     },
     "schema": {
       "description": "[stable] `<module>/spec@N` of the payload.",

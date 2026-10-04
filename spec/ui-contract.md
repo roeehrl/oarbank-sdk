@@ -4,12 +4,12 @@ A module defines its GUI as **data**. The console draws all of it with its own t
 
 - Models: `oarbank_sdk.ui`.
 - Schemas: `schemas/ui-page-1.schema.json`, and the `[ui]` and `[[operations]]` parts of `manifest-1`.
-- Reference module: [examples/toy](../examples/toy).
+- Reference modules: [examples/toy](../examples/toy), and [examples/reel](../examples/reel) for the media components.
 
 ## Versioning
 
 - `requires.ui_contract = ">=1.0,<2"` in the manifest. The installer refuses a module outside the host's range.
-- The host announces the contract version it renders in `initialize` (`host.capabilities` contains `ui_contract:1.<minor>`).
+- The host announces the contract version it renders in `initialize` (`host.capabilities` contains `ui_contract:1.<minor>`). The current minor is 1.1, which adds the media components.
 - Within a major, changes are additive only. A component may declare `requires = "1.<minor>"` plus `fallback` (`placeholder` or `drop`), so a newer page still renders on an older host.
 - An unknown component, or an invalid prop found at render time, renders as a placeholder carrying a developer note. It never breaks the page.
 
@@ -42,11 +42,12 @@ The body holds components, at most 40 per container:
 | Data | `table` (typed columns, paging, sorting, up to 4 row actions), `chart` (`line`, `bar`, `scatter`, `histogram`, `parallel_coords`; a text `summary` is required), `logs`, `json` |
 | Input | `form` (restricted JSON Schema plus hints; `submit` names an operation), `filter_bar` (page variables that are pushed to the URL) |
 | Action | `action` (an operation), `link` (a typed reference: `job`, `node`, `dataset`, `campaign`, `page`, or an allowlisted `https` URL) |
+| Media (1.1) | `media` (one image, video, audio or text artifact), `gallery` (a grid of images or videos), `compare` (two images side by side or with a slider) |
 | Frame | `iframe` (a view from `[[ui.iframes]]`) |
 
 **Values** are raw and typed. The host formats them:
 
-- Cell types: `text`, `number`, `integer`, `percent`, `bytes`, `duration`, `relative_time`, `timestamp`, `bool`, `digest`, `code`, `status`, `job_ref`, `node_ref`, `dataset_ref`, `campaign_ref`, `link`.
+- Cell types: `text`, `number`, `integer`, `percent`, `bytes`, `duration`, `relative_time`, `timestamp`, `bool`, `digest`, `code`, `status`, `job_ref`, `node_ref`, `dataset_ref`, `campaign_ref`, `artifact_ref` (1.1: an artifact reference, see Media), `link`.
 - Formats: `.Nf`, `.Ne`, `.N%`, `d`, `,d`, `s`, `d/d`, with an optional leading `+`.
 - Columns may declare `direction` (`min` or `max`). That is what makes "best" and good/bad colouring generic.
 - A wrongly typed value renders as "—".
@@ -96,6 +97,49 @@ An `object` or `array` property is edited as JSON text (field name `pj.<name>`);
 
 The host validates input before forwarding it. The module returns semantic errors keyed by JSON Pointer.
 
+## Media
+
+Modules whose results are media show them without an iframe: generated images and grids, rendered frames, encoded
+video, transcripts. Each component sets `requires = "1.1"` and a `fallback` (the page check refuses one without), so a
+1.0 host draws the fallback.
+
+```json
+{"type": "gallery", "requires": "1.1", "fallback": "placeholder", "kind": "image", "source": {"view": "frames"},
+ "field": "frame", "caption_field": "seed", "columns": 4}
+{"type": "media", "requires": "1.1", "fallback": "drop", "kind": "video", "source": {"view": "renders"}, "field": "clip"}
+{"type": "compare", "requires": "1.1", "fallback": "placeholder", "source": {"view": "pair"}, "left": "a", "right": "b",
+ "mode": "slider", "labels": ["seed 1", "seed 2"]}
+```
+
+- `media` shows one artifact (`kind`: `image`, `video`, `audio` or `text`) from the first row of its source; `gallery`
+  one image or video per row, each by its thumbnail when it has one and linked to its job; `compare` two images from
+  the first row.
+- **Artifact references.** The named field holds `{"job": <id>, "artifact": <name>, "path": <path>}` (a file of a job's
+  canonical result) or `{"digest": <sha256>, "thumbnail"?: <sha256>}` (a blob the module can see: its files, its
+  datasets and its jobs' artifacts, and the operator's datasets). A view declares such a column with type `artifact_ref`
+  (core 2.5), since only declared columns reach the console; a table shows it as its artifact and path.
+- **Ownership.** The host checks every reference on every render: a job of this module with that artifact file, or a
+  digest the module can see. Anything else renders as a placeholder, and no URL is made.
+- **Bytes come only from the module origin**, never the console's: the host serves each checked reference at a
+  short-lived capability URL on the origin it serves frames from, which carries no session. It sniffs the file's first
+  bytes and serves only an allowed type for the component's kind, with exactly that `Content-Type`,
+  `X-Content-Type-Options: nosniff` and `Content-Security-Policy: sandbox`:
+
+  | Kind | Allowed | Size cap |
+  |---|---|---|
+  | `image` | PNG, JPEG, WebP, AVIF | 64 MiB |
+  | thumbnails | PNG, JPEG, WebP, AVIF | 1 MiB |
+  | `video` | MP4, WebM | 16 GiB |
+  | `audio` | MP3, M4A, Ogg, WAV | 1 GiB |
+  | `text` | UTF-8 text: plain text, VTT, SRT and Markdown, all shown as plain text | 4 MiB |
+
+  SVG, HTML and anything else are refused, whatever the file is called. Video and audio honour `Range` requests.
+  `oarbank_sdk.media` is the allowlist (`sniff`, `problem`), shared by the console and `oarbank-sdk preview`.
+- **Thumbnails come from the module.** A runner names a small preview image for any result file
+  (`artifacts[].files[].thumbnail`, [envelopes.md](envelopes.md#result-envelope)); the host never transcodes module
+  media.
+- Text is shown in a sandboxed frame with no scripts; images, video and audio in the console's own elements.
+
 ## The iframe placement
 
 `[[ui.iframes]]` declares `id`, `entry` (an HTML file in the bundle), `title` and `bridge` capabilities.
@@ -116,4 +160,6 @@ The host validates input before forwarding it. The module returns semantic error
 ## Tooling
 
 - `oarbank-sdk check` validates the manifest, every page file, and the cross-references to views, operations, iframes, form schemas and external URLs.
-- `oarbank-sdk preview` renders the pages with the published console renderer, under the same CSP, against fixture data.
+- `oarbank-sdk preview` renders the pages with the published console renderer, under the same CSP, against fixture data;
+  media references resolve to files in `fixtures/ui/media/` (`{job, artifact, path}` is `<artifact>/<path>` there), served
+  through the same allowlist.

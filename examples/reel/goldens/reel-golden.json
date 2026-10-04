@@ -1,0 +1,7 @@
+{
+ "name": "reel-golden",
+ "key_inputs": {"frames": 12, "seed": 7, "step_ms": 150, "every": 4},
+ "expected": {"digest": "e77eb47fcca20bd6b944f753ad4928be26e093ef679a59611ada4e4ed1b96078", "digest_version": 1},
+ "stages": ["render"],
+ "datasets": []
+}

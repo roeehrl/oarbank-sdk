@@ -4,6 +4,12 @@
   "additionalProperties": true,
   "description": "<workdir>/control.json: written atomically by the agent for every job, at start (`{\"seq\": 0}`) and on every\nchange, each change followed by a nudge: SIGUSR1 to the runner process on POSIX, the inherited event named by\nOARBANK_CONTROL_EVENT on Windows. The runner re-reads the document when nudged and acts at its next safe point; it\nnever re-reads on a timer. Absent fields mean \"no constraint\". [stable]",
   "properties": {
+    "checkpoint": {
+      "default": false,
+      "description": "[beta] Sent only with `stop`: write a checkpoint at the next safe point, then acknowledge the stop, within runner.checkpoint_grace_s (runner capability `checkpoint`).",
+      "title": "Checkpoint",
+      "type": "boolean"
+    },
     "gpu_duty": {
       "anyOf": [
         {

@@ -30,8 +30,18 @@
 {%- endif -%}
 {%- endmacro -%}
 
+{%- macro media_el(m, kind, title, height) -%}
+{%- if kind == 'image' -%}<img class="mod-media-img" src="{{ m.src }}" alt="{{ title }}" loading="lazy" referrerpolicy="no-referrer">
+{%- elif kind == 'video' -%}<video class="mod-media-av" src="{{ m.src }}"{% if m.thumb %} poster="{{ m.thumb }}"{% endif %} controls preload="metadata" title="{{ title }}"></video>
+{%- elif kind == 'audio' -%}<audio class="mod-media-av" src="{{ m.src }}" controls preload="metadata" title="{{ title }}"></audio>
+{%- else -%}<iframe class="mod-media-text" src="{{ m.src }}" sandbox="" referrerpolicy="no-referrer" loading="lazy" title="{{ title }}" height="{{ height }}"></iframe>
+{%- endif -%}
+{%- endmacro -%}
+
 {%- macro component(c) -%}
-{%- if not when_ok(c.when, ctx) -%}{%- elif c.type == 'section' -%}
+{%- if not when_ok(c.when, ctx) -%}
+{%- elif c.requires and minor_of(c.requires) > host.ui_minor -%}{% if c.fallback == 'placeholder' %}{{ placeholder(c, 'needs UI contract ' ~ c.requires) }}{% endif %}
+{%- elif c.type == 'section' -%}
 <section class="mod-section mod-span-{{ c.span }}">{% if c.title %}<h3>{{ c.title }}</h3>{% endif %}{% for ch in c.children %}{{ component(ch) }}{% endfor %}</section>
 {%- elif c.type == 'tabs' -%}
 <div class="mod-tabs">{% for t in c.tabs %}<details{% if loop.first %} open{% endif %}><summary>{{ t.title }}</summary>{% for ch in t.children %}{{ component(ch) }}{% endfor %}</details>{% endfor %}</div>
@@ -74,6 +84,26 @@
 <figure class="mod-chart-fig"><div class="mod-chart" data-kind="{{ c.kind }}" data-series="{{ {'x': rows | map(attribute=c.x) | list, 'y': c.y, 'values': (c.y | map('extract_col', rows) | list)} | tojson_compact }}" role="img" aria-label="{{ c.summary }}"></div>
 <figcaption class="small mut">{{ c.summary }}</figcaption>
 <details class="small"><summary>Show as table</summary><table class="small"><tr><th>{{ c.x }}</th>{% for y in c.y %}<th>{{ y }}</th>{% endfor %}</tr>{% for r in rows[:200] %}<tr><td>{{ r.get(c.x) | fmt('text') }}</td>{% for y in c.y %}<td class="num">{{ r.get(y) | fmt('number') }}</td>{% endfor %}</tr>{% endfor %}</table></details></figure>
+{%- elif c.type == 'media' -%}
+{%- set row = first_row(d) -%}{%- set m = host.media(row.get(c.field), c.kind) -%}
+{%- set cap = (row.get(c.caption_field) if c.caption_field else none) or c.caption or '' -%}
+{%- if m -%}<figure class="mod-media">{{ media_el(m, c.kind, cap or c.kind, c.height) }}{% if cap %}<figcaption class="small mut">{{ cap | fmt('text') }}</figcaption>{% endif %}</figure>
+{%- else -%}{{ placeholder(c, 'no artifact of this module to show') }}{%- endif -%}
+{%- elif c.type == 'gallery' -%}
+{%- set rows = d.rows or [] -%}
+<ul class="mod-gallery mod-gallery-{{ c.columns }}">{% for r in rows %}{%- set m = host.media(r.get(c.field), c.kind) -%}{%- set cap = r.get(c.caption_field) if c.caption_field else none -%}
+<li>{% if m %}<figure>{% if c.kind == 'image' %}<a href="{{ m.src }}" target="_blank" rel="noopener noreferrer"><img class="mod-media-img" src="{{ m.thumb or m.src }}" alt="{{ cap | fmt('text') if cap is not none else 'image ' ~ loop.index }}" loading="lazy" referrerpolicy="no-referrer"></a>{% else %}{{ media_el(m, 'video', cap | fmt('text') if cap is not none else 'video ' ~ loop.index, 0) }}{% endif %}
+<figcaption class="small mut">{% if cap is not none %}{{ cap | fmt('text') }}{% endif %}{% if m.job %} <a href="{{ host.link_url({'job': m.job} | link_obj) }}">job {{ m.job }}</a>{% endif %}</figcaption></figure>
+{%- else %}{{ placeholder(c, 'no artifact of this module to show') }}{% endif %}</li>{% else %}<li class="mut small">no rows</li>{% endfor %}</ul>
+{%- elif c.type == 'compare' -%}
+{%- set row = first_row(d) -%}{%- set a = host.media(row.get(c.left), 'image') -%}{%- set b = host.media(row.get(c.right), 'image') -%}
+{%- set la, lb = (c.labels or [c.left, c.right]) -%}
+{%- if a and b and c.mode == 'slider' -%}
+<figure class="mod-compare" data-compare><div class="mod-compare-stage"><img class="mod-media-img" src="{{ a.src }}" alt="{{ la }}" referrerpolicy="no-referrer"><img class="mod-media-img mod-compare-top" src="{{ b.src }}" alt="{{ lb }}" referrerpolicy="no-referrer"></div>
+<input type="range" min="0" max="100" value="50" aria-label="{{ la }} / {{ lb }}"><figcaption class="small mut">{{ la }} · {{ lb }}</figcaption></figure>
+{%- elif a and b -%}
+<div class="mod-cols mod-cols-2"><figure>{{ media_el(a, 'image', la, 0) }}<figcaption class="small mut">{{ la }}</figcaption></figure><figure>{{ media_el(b, 'image', lb, 0) }}<figcaption class="small mut">{{ lb }}</figcaption></figure></div>
+{%- else -%}{{ placeholder(c, 'no artifacts of this module to compare') }}{%- endif -%}
 {%- elif c.type == 'json' -%}<pre class="mono">{{ (d.rows or d.kv or d) | tojson(indent=1) }}</pre>
 {%- elif c.type == 'form' -%}
 {%- set schema = host.schema(c.schema_) -%}{%- set props = schema.get('properties', {}) -%}{%- set req = schema.get('required', []) -%}

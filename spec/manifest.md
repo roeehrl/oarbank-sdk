@@ -62,8 +62,8 @@ array, never a shell string.
 | `[requires]` | Supported core, agent and OS ranges, node and coordinator platforms, `unsupported` reasons, the protocol majors spoken, and must-understand `features`. `experimental` lists opt-ins. |
 | `[coordinator]` | The module-protocol process: `exec`, `runtime`, optional-verb `capabilities`, `concurrency`, per-verb `timeouts_s`, host-callback `permissions`, the effects `campaign.tick` may request, `env`, and per-platform `variants`. |
 | `[coordinator.move]` | The module's part in a coordinator move: `rules` (a files prefix or a store collection, with class `carry`, `rebuild` or `drop`) and the `effects` the move verbs may request ([module-protocol.md](module-protocol.md#coordinator-moves)). |
-| `[runner]` | The runner-protocol executable: `exec`, `runtime`, `capabilities`, `stop_grace_s`, `gpu`, `bandwidth_class`, `env`, and per-platform `variants`. |
-| `[[stages]]` | At least one. Each has `name`, optional `after`, and `requires` (node capabilities, reserved `pools`, `needs_pools` that must merely exist, and `resources` cpu/mem_gb), plus `timeout_s` and `retry`, per-platform `variants`, a `placement` constraint with its `after` stage, and, for a standalone stage, `default` (the stage a job runs when it names none) and its own `determinism` (`none` for work whose results depend on when it ran, such as ingesting a moving feed: the host never replicates, compares, caches or golden-tests it). |
+| `[runner]` | The runner-protocol executable: `exec`, `runtime`, `capabilities`, `stop_grace_s`, `checkpoint_grace_s`, `gpu`, `bandwidth_class`, `env`, and per-platform `variants`. |
+| `[[stages]]` | At least one. Each has `name`, optional `after`, and `requires` (node capabilities, reserved `pools`, `needs_pools` that must merely exist, and `resources` cpu/mem_gb), plus `timeout_s` and `retry`, per-platform `variants`, a `placement` constraint with its `after` stage, and, for a standalone stage, `default` (the stage a job runs when it names none) and its own `determinism` (`none` for work whose results depend on when it ran, such as ingesting a moving feed: the host never replicates, compares, caches or golden-tests it). A stage's `checkpoint` (`max_mb`, `min_interval_s`) keeps portable checkpoints ([Portable checkpoints](#portable-checkpoints)). |
 | `[[services]]` | Node helpers the agent manages through the [service protocol](service-protocol.md): lifecycle, timeouts, restart policy, which pools and capabilities they `provide`, the memory, yield and pause flags, GPU use (`gpu`), and `endpoint` for a service jobs reach through the agent (a warm model server). |
 | `[[probes]]` | Read-only capability checks (`fingerprint` only), each run every `period_s`. |
 | `[settings]` | The JSON Schema for the module's settings. The core stores settings but never interprets them. Settings are visible to the owner: never put a credential in them. |
@@ -96,7 +96,9 @@ The models enforce these, beyond the per-field types:
     - **2.3:** `stages[].determinism`, `stages[].default`, the coordinator capability `campaign.tick.results`, and the effects `datasets.update` and `datasets.delete` in any effects list (`coordinator.campaign_effects`, `operations[].effects`, `coordinator.move.effects`).
     - **2.4:** `stages[].bootstrap` and `datasets.pinned`.
     - **2.5:** `[[secrets]]`, `stages[].secrets`, the permission `secrets:read:self`, `sandbox.container_sets`, a
-      stage reserving the agent's `gpu` pool, `services[].endpoint` and `services[].gpu`.
+      stage reserving the agent's `gpu` pool, `services[].endpoint`, `services[].gpu`, `sandbox.folders`,
+      `stages[].checkpoint`, `runner.checkpoint_grace_s`, the runner capability `checkpoint` and the view cell type
+      `artifact_ref`.
 
     Every entry of `requires.features` is one this SDK knows.
 13. Every bundle path a node exec names (argv[0], or the script a `python` exec runs) reaches each platform that runs it under `bundle.platform_files`. `datasets.platform_bound` kinds are declared kinds.
@@ -111,7 +113,10 @@ The models enforce these, beyond the per-field types:
 18. An endpoint service (`endpoint = true`) provides at least one pool (a job reaches it through a pool its stage
     reserves) and its `lifecycle` is `on_demand` or `always` (the agent never starts a `manual` service, so it could never
     hand it its channel). A service whose `gpu.use` is not `none` needs `[sandbox].devices.gpu = "compute"`.
-19. **Lint** (warnings, not errors): an unknown `mix`; a stage `placement` on a stage without `after`; an unknown `determinism_scope`; a placement mix coarser than `determinism_scope` while `results.value` is set (values in one campaign would come from classes whose results are not comparable); stages receiving secrets while the network mode is `egress-any`. `oarbank-sdk check` prints them; `oarbank_sdk.manifest.lint` returns them.
+19. `sandbox.folders` ids are unique, each with `access` `read` or `write` ([sandbox.md](sandbox.md#folders)).
+20. A stage with `checkpoint` needs the runner capability `checkpoint`, and the capability needs at least one such
+    stage; a bootstrap stage never sets `checkpoint`.
+21. **Lint** (warnings, not errors): an unknown `mix`; a stage `placement` on a stage without `after`; an unknown `determinism_scope`; a placement mix coarser than `determinism_scope` while `results.value` is set (values in one campaign would come from classes whose results are not comparable); stages receiving secrets while the network mode is `egress-any`. `oarbank-sdk check` prints them; `oarbank_sdk.manifest.lint` returns them.
 
 A module may offer both forms of an evaluation. For example, render declares a single `eval` stage and a `render → score` chain; the operator's pipeline setting picks the form for jobs that name no stage. A module may also declare standalone utility stages (an ingestion `sync`, a `fetch` that provisions tools) and enqueue jobs that name them; it then marks its evaluation stage `default = true`.
 
@@ -177,6 +182,29 @@ secrets = ["llm_api_key"]            # only this stage's runner receives it
   results or artifacts, or pass it on a command line.
 - **Pair it with an egress allowlist** naming only the service the key is for, so a leaked key can reach only that host.
 - Coordinator moves carry secrets re-encrypted for the new coordinator; the move preview lists them by name.
+
+## Portable checkpoints
+
+A long job on a machine people also use may be paused or moved by host protection. A runner that keeps **portable
+checkpoints** loses only the work since its last one:
+
+```toml
+[runner]
+capabilities = ["cooperative_pause", "checkpoint"]
+checkpoint_grace_s = 120          # from a checkpoint-then-stop request to the kill
+
+[[stages]]
+name = "train"
+checkpoint = { max_mb = 4096, min_interval_s = 600 }
+```
+
+- The runner announces each checkpoint with a `checkpoint` event naming its files; the agent takes them away and
+  uploads them (at most `max_mb`, at most one per `min_interval_s`), and the coordinator keeps the job's latest.
+- When protection would evict the job, the agent asks for a checkpoint first (`stop` with `checkpoint` in the control
+  document) and waits `checkpoint_grace_s`.
+- The job's next attempt, on any node, starts with the checkpoint under `<W>/checkpoint/` and `resume` in its spec
+  envelope ([runner-protocol.md](runner-protocol.md#checkpoints)). A resumed attempt must give the same result as an
+  uninterrupted one; the conformance kit replays an interrupted run to check it.
 
 ## Declarative UI: formats and templates
 

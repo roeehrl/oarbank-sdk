@@ -13,7 +13,9 @@ Suites:
   per-platform keys are declared platforms, every golden's stage compares (never determinism `none`), and `spec.build`
   turns every golden into the stage it names;
   `integrity.check` and the move verbs (when advertised) are pure, answer valid results and ask only for the
-  effects `coordinator.move.effects` declares;
+  effects `coordinator.move.effects` declares; each fixture operation (`ops`) is pure through `op.apply`, asks only for
+  its declared effects, and names every `datasets.create` file well (digest and size always; origins https to public
+  names);
 - **runner**: for the first golden whose datasets are available, the real runner runs the golden's
   SpecEnvelope in a fresh workdir with a clean environment, **under the module sandbox** with the grants its
   manifest declares (spec/sandbox.md), and writes a valid ResultEnvelope, which
@@ -25,17 +27,22 @@ Suites:
   `doctor --json` is a valid DoctorOutput whose `attrs.platform`, when present, is OARBANK_PLATFORM. The runner runs
   with this host's runner variant (exec and env), the stage's variant (timeout, resources) and the golden's expected
   value resolved for this host's platform. A stage that reserves an endpoint service's pool runs with that service up
-  and its connector, as on an agent;
+  and its connector, as on an agent. For a stage that keeps checkpoints, the kit replays an interrupted run: a
+  checkpoint-then-stop request once the runner announced its first checkpoint must leave a valid checkpoint, and a run
+  resumed from it in a fresh workdir must give the uninterrupted run's digest. Thumbnails a result declares must be
+  small allowed images;
 - **service**: each endpoint service starts as an agent starts it (with its endpoint channel), says hello, becomes
   ready, answers the fixtures' `service_specs` through connections the kit hands it, drops an attempt that ended, stops,
   and **never listens itself** (no process of it holds a listening socket).
 
 Fixtures (optional `conformance.json` next to the manifest) feed the fake host:
-`{"datasets": {id: {"kind", "attrs", "dir"?}}, "settings": {...}, "node_classes": [{"platform"?, "pools": {...},
+`{"datasets": {id: {"kind", "attrs", "dir"?, "files"?}}, "settings": {...}, "node_classes": [{"platform"?, "pools": {...},
 "capabilities": [...]}], "params": [...examples for params.check...], "store": {"<collection>/<key>": doc},
 "files": {"<path>": "<text content>"}, "runner_specs": [{"name", "stage"?, "payload", "datasets"?, "mounts"?,
 "expect": {"exit"?, "artifacts"?, "reason"?}}], "service_specs": [{"name", "service", "method"?, "path", "body"?,
-"expect": {"status"?}}]}`. Each runner spec (a non-golden task: an ingestion or provisioning job)
+"expect": {"status"?}}], "ops": [{"verb", "target"?, "params"?}], "folders": {"<id>": "<dir>"}}`. A read folder's `dir`
+(relative to the module) is granted read-only; every write folder gets a fresh empty outbox. Each runner spec (a
+non-golden task: an ingestion or provisioning job)
 runs like a golden, sandboxed with the egress proxy, and is checked against `expect`; any connection the proxy refused
 fails its run (goldens too).
 A dataset with a `dir` is mounted (copied) into the runner's workdir under the golden spec's mount name.
@@ -63,7 +70,7 @@ from . import module_protocol as mp
 from .envelopes import ResultEnvelope, SpecEnvelope
 from .keys import job_key
 from ._base import Name, StrictContract
-from .runner_protocol import DoctorOutput, Failure
+from .runner_protocol import DoctorOutput, Failure, checkpoint_digest
 from . import _endpoint_host as EH
 from ._service_run import ServiceRun
 
@@ -136,7 +143,8 @@ class FakeHost:
             ids = p.get("ids") or []
             rows = [(i, d) for i, d in ds.items() if (i in ids if ids else (p.get("kind") in (None, d.get("kind"))))]
             rows = [(i, d) for i, d in rows if all((d.get("attrs") or {}).get(k) == v for k, v in (p.get("attrs") or {}).items())]
-            return {"datasets": [{"id": i, "kind": d.get("kind", "data"), "attrs": d.get("attrs") or {}} for i, d in rows]}
+            return {"datasets": [{"id": i, "kind": d.get("kind", "data"), "attrs": d.get("attrs") or {},
+                                  **({"files": d.get("files") or []} if p.get("with_files") else {})} for i, d in rows]}
 
         def store_get(p):
             return {"doc": (self.fx.get("store") or {}).get(f"{p.get('collection')}/{p.get('key')}")}
@@ -385,6 +393,7 @@ def check_protocol(root: Path, man, fx: dict, r: Report):
                   f"the coordinator side passed on {leaked}: a value in a spec reaches every stage" if leaked else
                   ("host.secrets.get answered" if "secrets:read:self" in c.permissions else
                    "host.secrets.get refused without secrets:read:self"))
+        check_operations(cli, man, fx, r)
     finally:
         cli.close()
     return runs
@@ -422,6 +431,34 @@ def check_lifecycle_verbs(cli, man, adv: set, r: Report):
                   "; ".join(f"{c.name}: {c.detail}" for c in res.checks if not c.ok and c.severity == "error")[:300])
 
 
+def check_operations(cli, man, fx: dict, r: Report):
+    """The fixture operations (`ops`): op.apply is pure, asks only for the operation's declared effects, and every
+    datasets.create effect names its files well (oarbank_sdk.origins: digest and size always, origins https to public
+    names), so an importer that registers datasets by URL is checked before a host relies on it."""
+    from .origins import file_problem
+    decl = {o.verb: o for o in man.operations}
+    for i, op in enumerate(fx.get("ops") or []):
+        verb = op.get("verb")
+        label = f"operation {verb} #{i}"
+        if verb not in decl:
+            r.add("protocol", f"{label}: declared", False, f"{verb!r} is not in [[operations]]")
+            continue
+        params = {"verb": verb, "target": op.get("target"), "params": op.get("params") or {}, "actor": "conform"}
+        try:
+            a, b = cli.call("op.apply", params), cli.call("op.apply", params)
+            res = mp.OpApplyResult.model_validate(a)
+        except Exception as e:                              # noqa: BLE001
+            r.add("protocol", f"{label}: op.apply answers", False, f"{type(e).__name__}: {e}"[:300])
+            continue
+        r.add("protocol", f"{label}: pure", _canon(a) == _canon(b))
+        bad = sorted({e.kind for e in res.effects} - set(decl[verb].effects))
+        r.add("protocol", f"{label}: effects declared", not bad, f"not in the operation's effects: {bad}" if bad else "")
+        creates = [e for e in res.effects if e.kind == "datasets.create"]
+        if creates:
+            probs = [why for e in creates for f in (e.args.get("files") or []) if (why := file_problem(f))]
+            r.add("protocol", f"{label}: datasets.create files", not probs, "; ".join(probs)[:300])
+
+
 def _envelope(man, g, st, built) -> dict:
     return _spec_envelope(man, st.get("stage"), st["payload"], st.get("datasets") or g.get("datasets") or [],
                           st.get("mounts") or {}, built.get("spec_version") or 1,
@@ -445,9 +482,11 @@ class Grants:
     """What the agent would give the runner beyond its directories, from the module's [sandbox] and the fixtures:
     the tool paths (fixtures `tools`: {id: path}, resolved as the agent does), the settings file (fixtures `settings`)
     and, for egress-allowlist, a real allowlist proxy (egress_proxy). A bootstrap stage's jobs get the bootstrap grants
-    instead (spec/sandbox.md, "Bootstrap jobs"): the same proxy, no tools, `{}` as settings, no module data directory."""
+    instead (spec/sandbox.md, "Bootstrap jobs"): the same proxy, no tools, `{}` as settings, no module data directory.
+    Folders: a read folder is the fixtures' `folders` directory (relative to the module), granted read-only; a write
+    folder is a fresh empty outbox."""
 
-    def __init__(self, man, fx: dict):
+    def __init__(self, man, fx: dict, root: Path | None = None):
         self.dir = Path(tempfile.mkdtemp(prefix="conform-grants-"))
         want = [t.id for t in man.sandbox.tools]
         given = fx.get("tools") or {}
@@ -455,8 +494,20 @@ class Grants:
         self.tools = {t: [os.path.realpath(given[t])] for t in want if t in given}
         (self.dir / "tools.json").write_text(json.dumps(self.tools), encoding="utf-8")
         (self.dir / "settings.json").write_text(json.dumps(fx.get("settings") or {}), encoding="utf-8")
+        self.folders, given_f = {}, fx.get("folders") or {}
+        for fg in man.sandbox.folders:
+            if fg.access == "write":
+                d = self.dir / "outboxes" / fg.id
+                d.mkdir(parents=True)
+                self.folders[fg.id] = {"path": os.path.realpath(d), "access": "write"}
+            elif fg.id in given_f:
+                d = Path(given_f[fg.id])
+                self.folders[fg.id] = {"path": os.path.realpath(d if d.is_absolute() else (root or Path.cwd()) / d), "access": "read"}
+            else:
+                self.missing.append(f"folder {fg.id}")
+        (self.dir / "folders.json").write_text(json.dumps(self.folders), encoding="utf-8")
         (self.dir / "bootstrap").mkdir()
-        for name in ("tools.json", "settings.json"):
+        for name in ("tools.json", "settings.json", "folders.json"):
             (self.dir / "bootstrap" / name).write_text("{}", encoding="utf-8")
         self.proxy = None
         if man.sandbox.net.mode == "egress-allowlist":
@@ -465,7 +516,8 @@ class Grants:
 
     def env(self, bootstrap: bool = False) -> dict:
         files = self.dir / "bootstrap" if bootstrap else self.dir
-        e = {"OARBANK_TOOLS_FILE": str(files / "tools.json"), "OARBANK_SETTINGS_FILE": str(files / "settings.json")}
+        e = {"OARBANK_TOOLS_FILE": str(files / "tools.json"), "OARBANK_SETTINGS_FILE": str(files / "settings.json"),
+             "OARBANK_FOLDERS_FILE": str(files / "folders.json")}
         if self.proxy:
             url = f"http://127.0.0.1:{self.proxy.port}"
             e.update({"HTTPS_PROXY": url, "HTTP_PROXY": url, "ALL_PROXY": url, "https_proxy": url, "http_proxy": url,
@@ -482,7 +534,7 @@ class Grants:
                                  tool_paths=[str(self.dir / "bootstrap"), sdk], proxy_port=self.proxy.port if self.proxy else None)
         return S.node_policy(man.module.id, root, ws, data, sandbox=man.sandbox, kind=kind,
                              tool_paths=[p for ps in self.tools.values() for p in ps] + [str(self.dir), sdk],
-                             proxy_port=self.proxy.port if self.proxy else None)
+                             proxy_port=self.proxy.port if self.proxy else None, folders=self.folders)
 
     def close(self):
         if self.proxy:
@@ -597,6 +649,7 @@ class Outcome:
     ws: Path
     refused: list = field(default_factory=list)
     leaks: list = field(default_factory=list)
+    events: list = field(default_factory=list)
     stop: str | None = None
     ack_s: float | None = None
     exit_s: float | None = None
@@ -609,13 +662,24 @@ def _read_json(path: Path) -> dict | None:
         return None
 
 
-def _run(root: Path, man, env_doc: dict, fx: dict, locale: str = "C", stop: bool = False, bootstrap: bool = False) -> Outcome:
+def _run(root: Path, man, env_doc: dict, fx: dict, locale: str = "C", stop: bool = False, bootstrap: bool = False,
+         checkpoint: bool = False, resume: tuple | None = None) -> Outcome:
+    """One runner run. `stop`: a stop request once the runner wrote its first phase (`checkpoint`: checkpoint, then stop,
+    within checkpoint_grace_s). `resume`: (a directory holding a checkpoint by name, the envelope's `resume`): the files
+    go read-only under <W>/checkpoint/ and the envelope names it."""
     ws = Path(tempfile.mkdtemp(prefix="conform-"))
+    if resume is not None:
+        src, doc = resume
+        shutil.copytree(src, ws / "checkpoint")
+        for f in (ws / "checkpoint").rglob("*"):
+            if f.is_file():
+                f.chmod(0o444)
+        env_doc = {**env_doc, "resume": doc}
     for did in env_doc["datasets"]:
         src = (fx.get("datasets") or {}).get(did, {}).get("dir")
         mount = env_doc["mounts"].get(did, did.replace(":", "_"))
         if src:
-            shutil.copytree(src, ws / mount)
+            shutil.copytree(root / src, ws / mount)              # relative to the module (an absolute dir stays as is)
     (ws / "spec.json").write_text(json.dumps(env_doc), encoding="utf-8", newline="\n")
     (ws / "tmp").mkdir()
     data = Path(tempfile.mkdtemp(prefix="conform-data-"))
@@ -641,6 +705,8 @@ def _run(root: Path, man, env_doc: dict, fx: dict, locale: str = "C", stop: bool
         return Outcome("service", None, None, why, ws)
     for c in conns:
         env.update(c.env)
+    if {"progress_events", "checkpoint"} & set(run.capabilities):
+        argv += ["--events", str(ws / "events.ndjson")]
     if SANDBOX["on"]:
         from . import sandbox as S
         text, params = S.render(g.policy(man, root, ws, data, bootstrap=bootstrap))
@@ -660,7 +726,7 @@ def _run(root: Path, man, env_doc: dict, fx: dict, locale: str = "C", stop: bool
         limit = float(env_doc.get("timeout_s") or 1800)
         o = Outcome("timeout", None, None, "", ws)
         if stop:
-            _stop(p, ws, nudge, exited, run.stop_grace_s, limit, o)
+            _stop(p, ws, nudge, exited, run.checkpoint_grace_s if checkpoint else run.stop_grace_s, limit, o, checkpoint)
         elif not exited.wait(limit):
             _kill_tree(p)
             o.stop = "timeout"
@@ -675,6 +741,7 @@ def _run(root: Path, man, env_doc: dict, fx: dict, locale: str = "C", stop: bool
     o.stderr = (out.get("err") or b"").decode(errors="replace")[-400:] if p.returncode else ""
     o.result = _read_json(ws / "result.json") if p.returncode == 0 else None
     o.failure = _read_json(ws / "failure.json") if p.returncode not in (0, None) else None
+    o.events = _events(ws / "events.ndjson")
     if every:
         written = [f.read_bytes() for f in ws.rglob("*") if f.is_file() and ".grants" not in f.relative_to(ws).parts
                    and f.name != "spec.json"]
@@ -689,26 +756,51 @@ def _secret_leaks(r: Report, label: str, man, o: Outcome):
               f"{o.leaks} appear in what the runner wrote (results, artifacts, logs)" if o.leaks else "")
 
 
+def _events(path: Path) -> list[dict]:
+    """The complete, valid JSON lines of a runner's events file."""
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return []
+    out = []
+    for line in text.split("\n")[:-1]:                   # the last piece has no newline yet
+        try:
+            out.append(json.loads(line))
+        except ValueError:
+            continue
+    return [e for e in out if isinstance(e, dict)]
+
+
+def _read_bytes(path: Path) -> bytes:
+    try:
+        return path.read_bytes()
+    except OSError:
+        return b""
+
+
 def _acknowledged(ws: Path) -> bool:
     """The runner's own reaction to a stop: failure.json with fault transient, or the result if it was finishing."""
     f = _read_json(ws / "failure.json")
     return (f is not None and f.get("fault") == "transient") or (ws / "result.json").exists()
 
 
-def _stop(p, ws: Path, nudge: "_Nudge", exited: threading.Event, grace: float, limit: float, o: Outcome):
+def _stop(p, ws: Path, nudge: "_Nudge", exited: threading.Event, grace: float, limit: float, o: Outcome,
+          checkpoint: bool = False):
     """The agent's stop, timed on the runner's acknowledgement rather than on the OS tearing the process down: wait for
     the runner's first `phase` write (its sign that work is underway, so start-up is never timed), send the stop, then
     watch for the acknowledgement and the exit until stop_grace_s has passed (the agent kills the container then).
     `exited` is set by the thread that owns the process's wait; nothing here polls the process itself."""
     t0 = time.monotonic()
-    while not exited.is_set() and not (ws / "phase").exists() and time.monotonic() - t0 < limit:
+    # a checkpoint-then-stop waits for the runner's first own checkpoint, so the one it writes on request holds progress
+    ready = (lambda: b'"checkpoint"' in _read_bytes(ws / "events.ndjson")) if checkpoint else (lambda: (ws / "phase").exists())
+    while not exited.is_set() and not ready() and time.monotonic() - t0 < limit:
         exited.wait(0.005)
-    if not (ws / "phase").exists():
+    if not ready():
         o.stop = "no_phase"
     elif exited.is_set() or _acknowledged(ws):
         o.stop = "finished_first"
     else:
-        t = _request_stop(p, ws, nudge)                  # control.json stop and the nudge, nothing else
+        t = _request_stop(p, ws, nudge, checkpoint)      # control.json stop and the nudge, nothing else
         while not exited.is_set() and time.monotonic() - t < grace:
             if o.ack_s is None and _acknowledged(ws):
                 o.ack_s = time.monotonic() - t
@@ -750,11 +842,13 @@ def _spawn(argv, cwd, env, kwargs: dict):
                             **kwargs)
 
 
-def _request_stop(p, ws: Path, nudge: _Nudge) -> float:
-    """Replace control.json with a stop request and nudge the runner; returns when (monotonic) it was nudged."""
+def _request_stop(p, ws: Path, nudge: _Nudge, checkpoint: bool = False) -> float:
+    """Replace control.json with a stop request (with `checkpoint`: checkpoint, then stop) and nudge the runner; returns
+    when (monotonic) it was nudged."""
     doc = json.loads((ws / "control.json").read_text(encoding="utf-8"))
     tmp = ws / "control.json.tmp"
-    tmp.write_text(json.dumps({**doc, "seq": int(doc.get("seq", 0)) + 1, "stop": True}), encoding="utf-8")
+    req = {**doc, "seq": int(doc.get("seq", 0)) + 1, "stop": True, **({"checkpoint": True} if checkpoint else {})}
+    tmp.write_text(json.dumps(req), encoding="utf-8")
     os.replace(tmp, ws / "control.json")
     t = time.monotonic()
     nudge.send(p)
@@ -810,8 +904,102 @@ def _check_stop(r: Report, label: str, o: Outcome):
           "still running at stop_grace_s; the agent kills the container then")
 
 
+def _take_checkpoint(o: Outcome, man, stage_name) -> tuple:
+    """The last checkpoint a run's runner announced, checked as the agent checks it (regular files in the workdir, unique
+    names, within the stage's max_mb, `data` within 4 KiB) and copied by name into a fresh directory: (directory, the
+    envelope's `resume`, problem)."""
+    from .runner_protocol import CHECKPOINT_DATA_MAX, Event
+    cp = man.checkpoint_of(stage_name)
+    events = [e for e in o.events if e.get("kind") == "checkpoint"]
+    if not events:
+        return None, None, "no checkpoint event in the events file"
+    try:
+        ev = Event.model_validate(events[-1])
+    except ValidationError as e:
+        return None, None, f"not a checkpoint event: {str(e).splitlines()[0]}"
+    if not ev.files:
+        return None, None, "a checkpoint event lists no files"
+    if len(json.dumps(ev.data, separators=(",", ":")).encode()) > CHECKPOINT_DATA_MAX:
+        return None, None, f"its data is over {CHECKPOINT_DATA_MAX} bytes"
+    names = [f.checkpoint_name() for f in ev.files]
+    if len(set(names)) != len(names):
+        return None, None, "checkpoint names are not unique"
+    out = Path(tempfile.mkdtemp(prefix="conform-ckpt-"))
+    entries, total = [], 0
+    for f in ev.files:
+        src = o.ws / f.path
+        if src.is_symlink() or not src.is_file() or o.ws.resolve() not in src.resolve().parents:
+            return None, None, f"{f.path} is not a regular file in the workdir"
+        dst = out / f.checkpoint_name()
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(src, dst)
+        size = dst.stat().st_size
+        total += size
+        entries.append({"name": f.checkpoint_name(), "digest": hashlib.sha256(dst.read_bytes()).hexdigest(), "size": size})
+    if cp and total > cp.max_mb * (1 << 20):
+        return None, None, f"{total} bytes is over the stage's checkpoint.max_mb ({cp.max_mb})"
+    return out, {"from_attempt": 1, "digest": checkpoint_digest(entries), "data": ev.data}, ""
+
+
+def _check_resume(root: Path, man, fx: dict, env_doc: dict, stage_name, digest, cli, r: Report, label: str):
+    """A stage that keeps checkpoints: a checkpoint-then-stop leaves a valid checkpoint and exits 75, and a run resumed from
+    it in a fresh workdir gives the uninterrupted run's digest (`results.determinism` still holds for resumed attempts)."""
+    o = _run(root, man, env_doc, fx, stop=True, checkpoint=True)
+    if o.stop in ("no_phase", "finished_first"):
+        r.add("runner", f"{label}: checkpoint, then stop", None, "the run finished before the kit could ask for a checkpoint; "
+              "make the golden run longer")
+        return
+    ckpt, resume, why = _take_checkpoint(o, man, stage_name)
+    stopped = o.stop == "stopped" and o.code == 75 and (o.failure or {}).get("fault") == "transient"
+    if not r.add("runner", f"{label}: checkpoint, then stop", stopped and ckpt is not None,
+                 why or ("" if stopped else f"exit {o.code} ({o.stop}); a checkpoint-then-stop ends like an acknowledged "
+                                            "stop: failure.json fault transient, exit 75, within checkpoint_grace_s")):
+        return
+    o2 = _run(root, man, env_doc, fx, resume=(ckpt, resume))
+    v2 = cli.call("result.evaluate", {"spec": {**env_doc, "resume": resume}, "result": o2.result, "stage": stage_name}) \
+        if o2.result else {}
+    same = bool(o2.result) and v2.get("digest") == digest
+    r.add("runner", f"{label}: resumes from a checkpoint with the same digest", same,
+          "" if same else o2.stderr or f"resumed digest {v2.get('digest')}, uninterrupted {digest}")
+    if o2.result:
+        missing = _missing_locals(o2.ws, ResultEnvelope.model_validate(o2.result))
+        r.add("runner", f"{label}: a resumed result's files are all there", not missing,
+              f"missing after resuming (keep them in the checkpoint): {missing[:5]}" if missing else "")
+
+
+def _missing_locals(ws: Path, res: ResultEnvelope) -> list[str]:
+    """The `local` files (thumbnails included) a result names that its workdir lacks: the agent would fail the upload."""
+    out = []
+    for a in res.artifacts:
+        for f in a.files:
+            for local in (f.local, f.thumbnail.local if f.thumbnail else None):
+                if local and not (ws / local).is_file():
+                    out.append(local)
+    return out
+
+
+def _thumbnails(ws: Path, res: ResultEnvelope) -> list[str] | None:
+    """Problems with the thumbnails a result declares (None: it declares none): each a small allowed image."""
+    from . import media
+    probs, seen = [], False
+    for a in res.artifacts:
+        for f in a.files:
+            if f.thumbnail is None or not f.thumbnail.local:
+                continue
+            seen = True
+            t = ws / f.thumbnail.local
+            if not t.is_file():
+                probs.append(f"{f.thumbnail.local}: missing")
+                continue
+            why = media.problem(media.THUMBNAIL, t.read_bytes()[:media.HEAD_BYTES], t.stat().st_size)
+            if why:
+                probs.append(f"{f.thumbnail.local}: {why}")
+    return probs if seen else None
+
+
 def check_runner(root: Path, man, fx: dict, runs: list, r: Report):
-    g = GRANTS["g"] = Grants(man, fx)
+    g = GRANTS["g"] = Grants(man, fx, root)
+    GRANTS["resumed"] = set()
     try:
         _check_runner(root, man, fx, runs, r, g)
         check_services(root, man, fx, r, g)
@@ -827,7 +1015,8 @@ def _needs_broker(man, stage_name) -> bool:
 
 def _check_runner(root: Path, man, fx: dict, runs: list, r: Report, g: "Grants"):
     if g.missing:
-        r.add("runner", "host tools", None, f"fixtures `tools` do not map {g.missing}: the runner may fail without them")
+        r.add("runner", "host tools and folders", None, f"fixtures `tools` and `folders` do not map {g.missing}: the runner "
+              "may fail without them")
     data = Path(tempfile.mkdtemp(prefix="conform-data-"))
     (data / "tmp").mkdir()
     host = portable.host_platform()
@@ -897,6 +1086,9 @@ def _check_goldens(root: Path, man, fx: dict, runs: list, r: Report):
             else:
                 ok = bool(v.get("digest")) and v.get("digest") == expected.get("digest")
             r.add("runner", f"{label}: matches the golden", ok)
+            thumbs = _thumbnails(o.ws, ResultEnvelope.model_validate(res))
+            if thumbs is not None:
+                r.add("runner", f"{label}: thumbnails are small allowed images", not thumbs, "; ".join(thumbs)[:300])
             if man.determinism_of(st.get("stage")) == "exact":
                 o2 = _run(root, man, env_doc, fx, locale="en_US.UTF-8")
                 v2 = cli.call("result.evaluate", {"spec": env_doc, "result": o2.result, "stage": st.get("stage")}) if o2.result else {}
@@ -904,6 +1096,10 @@ def _check_goldens(root: Path, man, fx: dict, runs: list, r: Report):
                       bool(o2.result) and v2.get("digest") == v.get("digest"), o2.stderr)
             if "cancellable" in man.runner.capabilities:
                 _check_stop(r, label, _run(root, man, env_doc, fx, stop=True))
+            if man.checkpoint_of(st.get("stage")):
+                _check_resume(root, man, fx, env_doc, st.get("stage"), v.get("digest"), cli, r, label)
+                checked = GRANTS.setdefault("resumed", set())
+                checked.add(st.get("stage") or man.default_stage())
             break                                           # one golden per module is enough for the runner suite
     finally:
         cli.close()
@@ -993,6 +1189,18 @@ def _check_runner_specs(root: Path, man, fx: dict, r: Report):
             if boot:
                 problem = man.bootstrap_problem(res.payload, _uploaded(o.ws, res))
                 r.add("runner", f"{label}: artifacts match the pinned datasets", problem is None, problem or "")
+            thumbs = _thumbnails(o.ws, res)
+            if thumbs is not None:
+                r.add("runner", f"{label}: thumbnails are small allowed images", not thumbs, "; ".join(thumbs)[:300])
+            if stage is not None and stage.checkpoint and stage.name not in GRANTS.setdefault("resumed", set()):
+                GRANTS["resumed"].add(stage.name)
+                cli = spawn_coordinator(root, man, fx)
+                try:
+                    cli.initialize(settings=fx.get("settings") or {})
+                    v = cli.call("result.evaluate", {"spec": env_doc, "result": o.result, "stage": sent})
+                    _check_resume(root, man, fx, env_doc, sent, v.get("digest"), cli, r, label)
+                finally:
+                    cli.close()
         elif isinstance(o.code, int):
             try:
                 f = Failure.model_validate(o.failure)

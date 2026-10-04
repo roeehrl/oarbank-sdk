@@ -18,6 +18,7 @@ The coordinator stores one spec envelope per job stage. The agent writes it to `
 | `inputs` | `name → {dataset, mount}`: artifacts from the upstream stage. |
 | `resources` | What the job reserves: `cpu`, `mem_gb`, `pools`, `needs_pools` (the stage's variant for the node's platform applied). |
 | `timeout_s` | The hard wall-clock limit for the attempt (likewise per platform). |
+| `resume` | [beta] Present when the attempt resumes from the job's latest checkpoint, whose files are under `<W>/checkpoint/`: `{from_attempt, digest, data}` ([runner-protocol.md](runner-protocol.md#checkpoints)). |
 | `platform` | [beta] The token of the node the spec was written for (also `OARBANK_PLATFORM`). |
 | `payload` | Module-owned. |
 
@@ -32,7 +33,7 @@ The runner writes `<W>/result.json`. The core stores it exactly as written (afte
 | `module_version`, `protocol` | What produced the result. |
 | `effective` | The modes and parameters the runner actually honoured. The module compares them with what the spec requested in `result.evaluate`, for example to reject a job that fell back to a slower code path. |
 | `provenance` | `argv` per tool, `tool_versions` and `host`. |
-| `artifacts` | `[{name, files: [{path, local | digest+size}]}]`. The downstream stage receives each one as `inputs.<name>`. |
+| `artifacts` | `[{name, files: [{path, local | digest+size, thumbnail?}]}]`. The downstream stage receives each one as `inputs.<name>`. [beta] A file's `thumbnail: {local}` is a small preview image the runner made (PNG, JPEG, WebP or AVIF, at most 1 MiB); the agent uploads it too, and galleries and video posters show it, so the host never transcodes module media. |
 | `payload` | Module-owned, up to `results.max_inline_kb` in size. Larger data goes in artifacts. |
 
 ## Rules

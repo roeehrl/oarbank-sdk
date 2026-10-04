@@ -1,4 +1,35 @@
 {
+  "$defs": {
+    "CheckpointFile": {
+      "additionalProperties": true,
+      "description": "One file of a checkpoint: a regular file in the workdir, and where it appears in the checkpoint. [beta]",
+      "properties": {
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "[beta] Where it appears under <W>/checkpoint/ on resume (a PortablePath; default: `path`).",
+          "title": "Name"
+        },
+        "path": {
+          "description": "[beta] The workdir file (a PortablePath). Once the event is written it belongs to the agent, which moves it away.",
+          "title": "Path",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "title": "CheckpointFile",
+      "type": "object"
+    }
+  },
   "$id": "https://codonic.dev/oarbank/schemas/runner-event-1.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": true,
@@ -8,6 +39,14 @@
       "additionalProperties": true,
       "title": "Data",
       "type": "object"
+    },
+    "files": {
+      "description": "[beta] checkpoint: the checkpoint's files (runner capability `checkpoint`, a stage with `checkpoint`); `data` (at most 4 KiB) comes back in the resumed attempt's spec envelope.",
+      "items": {
+        "$ref": "#/$defs/CheckpointFile"
+      },
+      "title": "Files",
+      "type": "array"
     },
     "fraction": {
       "anyOf": [

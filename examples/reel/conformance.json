@@ -1,0 +1,19 @@
+{
+ "datasets": {
+  "asset:clip": {"kind": "asset", "dir": "assets"},
+  "inputs:shots-1": {"kind": "inputs", "files": [{"path": "shot-01.png", "size": 2048,
+                                                    "digest": "1111111111111111111111111111111111111111111111111111111111111111"}]}
+ },
+ "ops": [
+  {"verb": "adopt_upload", "target": "inputs:shots-1", "params": {}},
+  {"verb": "import_asset", "params": {"dataset_id": "asset:clip-1", "url": "https://assets.example.org/reel/clip.webm",
+                                       "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+                                       "size": 9673, "name": "clip.webm"}},
+  {"verb": "queue_render", "params": {"renders": [{"frames": 3, "seed": 2}]}}
+ ],
+ "runner_specs": [
+  {"name": "with an asset", "payload": {"frames": 2, "seed": 1, "asset": "asset:clip"}, "datasets": ["asset:clip"],
+   "mounts": {"asset:clip": "asset"}, "expect": {"exit": 0, "artifacts": ["asset", "frames", "clip", "log"]}},
+  {"name": "too many frames", "payload": {"frames": 999, "seed": 1}, "expect": {"exit": 2, "reason": "reel/bad_spec"}}
+ ]
+}

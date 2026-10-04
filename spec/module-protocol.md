@@ -71,7 +71,7 @@ A module can make requests back to the host while it is handling a verb, if the 
 
 | Method | Permission | Returns |
 |---|---|---|
-| `host.datasets.query {kind?, ids?, attrs, limit}` | `datasets:read` | Datasets matching the query (by kind and equality on attributes, or by id), each `{id, kind, attrs}`: the module's own datasets and the operator's unowned ones. `kind` is the short kind, as in `[datasets].kinds` and `datasets.create`: a dataset's owning module scopes its kind, so kinds are never namespaced. `attrs` are the dataset's `meta`. |
+| `host.datasets.query {kind?, ids?, attrs, limit, with_files?}` | `datasets:read` | Datasets matching the query (by kind and equality on attributes, or by id), each `{id, kind, attrs}` (with `with_files`, also `files`: `{path, digest, size}` and, when it has any, `origins`): the module's own datasets and the operator's unowned ones. `kind` is the short kind, as in `[datasets].kinds` and `datasets.create`: a dataset's owning module scopes its kind, so kinds are never namespaced. `attrs` are the dataset's `meta`. |
 | `host.blobs.stat {digest}` | `blobs:stat` | Whether the coordinator holds a blob, and its size. |
 | `host.settings.get {key}` | `settings:read:self` | A value from this module's own settings. |
 | `host.secrets.get {name}` | `secrets:read:self` | `{set, value?}`: the module's value of a declared secret ([manifest.md](manifest.md#secrets)); node values never reach the coordinator side. Core 2.5. Never log it, return it from a verb or put it in a spec: a spec reaches every stage, and the conformance kit fails a verb whose answer holds one. `Host.secret(name)`. |
@@ -95,7 +95,7 @@ A module can make requests back to the host while it is handling a verb, if the 
 | `jobs.enqueue` | `campaign_id`, `jobs[]` of `{job_key (exactly what `keys.job_key` returns: 64 lowercase hex characters, optionally `:<stage>`; anything else is 422 `bad_job_key` and nothing is enqueued), spec, stage, spec_version (default 1), labels (your grouping: shown in views and returned by `host.jobs.query`; part of the no-op check), dataset_id, datasets, mounts, resources (what the job reserves; default: the stage's manifest resources; it must fit a node), timeout_s, priority, subpriority, target_node, name, group, platforms}` (at most 5000; [beta] `stage`: run exactly this standalone stage, never the chain (host capability `jobs.stage`; 422 `bad_stage` for an unknown or chain stage); [beta] `group`: at most 64 characters, the unit of a `group` placement; `platforms`: tokens or OSes the job may run on, at least one of which its stage runs on; [beta] `images`: at most 16 digest-pinned container images its runner may run, each one of the module's `containers` or inside one of its `container_sets`, for a stage that reserves the `containers` pool (422 `image_not_approved`, `bad_images`; core 2.5); a job runs set images only if it lists them) | Adds jobs. Without `stage`, a job runs the default stage, or the chain head → tail when the module's pipeline is split. With `stage`, it reserves that stage's resources and runs only where that stage may run. `spec` is the stage payload; see "Jobs on the wire" below. The same `(job_key, labels)` twice in a campaign is a no-op. An untargeted job whose key already has a canonical result of this module is done at once (result cache). A `done` campaign runs again. |
 | `jobs.cancel` | `job_ids[]` | Cancels the module's open jobs. |
 | `store.write` / `store.delete` | `collection`, `key`, `doc` (an object, at most 256 KiB) | Upserts or removes a module document. |
-| `datasets.create` | `dataset_id`, `kind` (a short kind from `[datasets].kinds`; 422 `undeclared_kind` otherwise), `meta`, `files[]` of `{path, digest, size}`, [beta] `platform` (a token; required for kinds in `[datasets].platform_bound`) | Registers a dataset whose blobs the coordinator already holds. A dataset with a `platform` is used only by jobs on that platform. An id that already exists: with the same kind, meta, files and platform, the effect is skipped (a repeat is harmless); with anything else it is an error (409 `dataset_exists`) and the whole operation fails; another owner's id is 409 `dataset_owned`. A pinned id (`[[datasets.pinned]]`) is registered only with its pinned kind, files, platform and (when the pin sets it) meta, else 422 `pin_mismatch`. |
+| `datasets.create` | `dataset_id`, `kind` (a short kind from `[datasets].kinds`; 422 `undeclared_kind` otherwise), `meta`, `files[]` of `{path, digest, size, origins?}` (digest and size always), [beta] `platform` (a token; required for kinds in `[datasets].platform_bound`) | Registers a dataset. A file without `origins` names a blob the coordinator holds and the module can see, at exactly `size`. [beta] A file with `origins` (1 to 8 https URLs on public host names; host capability `datasets.origins`) may name a blob the coordinator does not hold: nodes fetch it from an origin and check its digest, and the coordinator fetches it only when every origin failed for a node (see "Datasets by origin"). An origin the URL rule or the operator's origin host policy refuses is 422 `origin_refused`. A dataset with a `platform` is used only by jobs on that platform. An id that already exists: with the same kind, meta, files and platform, the effect is skipped (a repeat is harmless); with anything else it is an error (409 `dataset_exists`) and the whole operation fails; another owner's id is 409 `dataset_owned`. A pinned id (`[[datasets.pinned]]`) is registered only with its pinned kind, files, platform and (when the pin sets it) meta, else 422 `pin_mismatch`. |
 | `datasets.update` | `dataset_id`, `meta` | Merges `meta` into one of the module's datasets key by key at the top level; a key set to `null` is removed. `kind`, `files` and `platform` never change (422 `dataset_immutable`): nodes stage a dataset's files by id, so new files need a new id. Another owner's dataset is 403 `not_owner`, an unknown id 404 `unknown_dataset`. Core 2.3. |
 | `datasets.delete` | `dataset_id` | Removes one of the module's datasets; an unknown id is a no-op. Refused while a pending or leased job names it (409 `dataset_in_use`) and for the host's artifact datasets (`art:…`, 422 `host_dataset`). Blobs stay. Another owner's dataset is 403 `not_owner`. Core 2.3. |
 | `files.write` | `path`, `content_b64` (at most 1 MiB decoded) | Stores a small file in the module's files. |
@@ -106,8 +106,33 @@ A module can make requests back to the host while it is handling a verb, if the 
 `oarbank_sdk.effects` builds them: `fx.campaign_create(cid, name, priority=0, weight=1, labels=None, placement=None)`,
 `fx.placement(mix, unit=None, pin=None, bind=None)`, `fx.jobs_enqueue(cid, jobs)` with
 `fx.job(job_key, spec, *, stage=None, group=None, platforms=None, target_node=None, ...)` items, and
-`fx.datasets_create(dataset_id, kind, files, meta=None, platform=None)`, `fx.datasets_update(dataset_id, meta)` and
-`fx.datasets_delete(dataset_id)`. Unset fields are left out.
+`fx.datasets_create(dataset_id, kind, files, meta=None, platform=None)` (it checks each file with
+`oarbank_sdk.origins.file_problem`), `fx.datasets_update(dataset_id, meta)` and `fx.datasets_delete(dataset_id)`. Unset
+fields are left out.
+
+### Datasets by origin
+
+Most batch work starts from a public download (model weights, reference data) or the user's own files. A dataset names
+every file by sha256 and size, so where its bytes come from never changes what it is:
+
+```python
+fx.datasets_create("model:llama-3-8b", "model", [
+    {"path": "model.safetensors", "digest": "<sha256>", "size": 16_060_000_000,
+     "origins": ["https://huggingface.co/<org>/<repo>/resolve/<rev>/model.safetensors"]}])
+```
+
+- Each node downloads from an origin straight into its blob cache (resumable, digest-checked) and keeps it for every
+  job that mounts it. No byte passes through the coordinator unless every origin fails for that node; the coordinator
+  then fetches the blob from the origins itself, once, and serves it.
+- Origins are `https` URLs on public host names (never IP literals or local names; `oarbank_sdk.origins.url_problem`),
+  and whoever fetches refuses a name that resolves to a non-public address. The operator may restrict origin hosts
+  (`settings.origins.update`), which applies when a dataset is registered and whenever its files are served.
+- Files the user has rather than an origin arrive by upload (`oarbank dataset upload <dir> --kind <kind>`, or the
+  console), as the operator's dataset or a module's (`--module`). A module's **importer** is an operation with
+  `target = "dataset"` that reads the uploaded dataset with `host.datasets.query {ids, with_files: true}` and registers
+  its own datasets naming the same blobs.
+- A dataset's files and a campaign's artifacts come back as files with `oarbank dataset download` and `oarbank campaign
+  download` (resumable, digest-checked) or the console's download links: modules need no export step of their own.
 
 ## Host capabilities
 
@@ -122,6 +147,7 @@ them needs `requires.core >= 2.2` instead.
 | `goldens.by_platform` | Passes the node's `platform` and `os_version` in `golden.list`'s node class, drops goldens whose `platforms` exclude the node, and resolves `expected_by_platform`. |
 | `coordinator.variants` | Starts the coordinator side with its variant for the host's platform, sets `OARBANK_PLATFORM` and `coordinator.env`, and sends `host.platform`. |
 | `jobs.stage` | Honours `jobs.enqueue` items' `stage` (core 2.3). A 2.2 host ignores it and runs the default form. |
+| `datasets.origins` | Accepts `datasets.create` files with `origins` for blobs it does not hold (core 2.5). An older host refuses them (422 `unknown_blob`). |
 
 `host.platform` [beta] is the coordinator host's platform token (`ctx.host_platform`). Verbs keep job keys
 platform-independent: never put it in `key_inputs`.

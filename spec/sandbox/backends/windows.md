@@ -18,6 +18,8 @@ authors and normative for agent implementers. It needs Windows 10 1809 or later.
 |---|---|
 | read and execute the bundle, runtime and tools | an inheritable allow entry for the container's SID; system directories are readable by every AppContainer already |
 | work, data and temporary directories | an inheritable full-access entry for the container's SID |
+| a runner's input folders | an inheritable `FILE_GENERIC_READ` entry for a capability SID only runner tokens of the module carry (`DeriveCapabilitySidsFromName("oarbank.runner.<module>")`); doctor, services and probes run without it |
+| a runner's outboxes | an inheritable entry for the same capability SID: `FILE_ADD_FILE`, `FILE_ADD_SUBDIRECTORY` (write data and append data on the files created), `FILE_WRITE_EA`, `FILE_WRITE_ATTRIBUTES`, `SYNCHRONIZE`; no `FILE_LIST_DIRECTORY`/`FILE_READ_DATA`, `DELETE`, `FILE_DELETE_CHILD`, `READ_CONTROL` or `WRITE_DAC`. An AppContainer token holds no symbolic-link privilege. The agent removes entries no accepted folder statement or release grants any more, and at start |
 | no local IPC except the broker | AppContainer object isolation: named pipes, sections and other objects outside the container are denied |
 | `net = none` | no network capability |
 | `net = egress-allowlist` | the elevated helper (a LocalSystem service) exempts the container from loopback isolation for the job, and Windows Filtering Platform filters block every loopback port but the agent's proxy |
@@ -32,9 +34,10 @@ authors and normative for agent implementers. It needs Windows 10 1809 or later.
 | `net.egress-allowlist` | enforced where the elevated helper runs; unavailable otherwise |
 | no link-local under `egress-any` | unavailable |
 | `exec_writable` deny | unavailable: any readable binary is executable without application control |
+| `folders.read`, `folders.write` | enforced (a read folder's binaries are executable, as above) |
+| containers | unavailable until the agent-owned WSL2 distribution ships |
 
 Some Windows builds (seen on Windows Server 2025) refuse an AppContainer the null device: opening `NUL`
 (`os.devnull`, `subprocess.DEVNULL`) fails with access denied. The agent gives every module process standard handles
 it opened itself, so a module that starts a child passes those on (Python's `subprocess` does when `stdin`, `stdout` or
 `stderr` is left as it is) or a file in its own directories, never a new `NUL`.
-| containers | unavailable until the agent-owned WSL2 distribution ships |

@@ -68,8 +68,9 @@ Cross-field rules are in [manifest.md](manifest.md).
 | `runner.runtime.kind` | str | required | [stable] Open set. `python`: the host's managed CPython with the SDK (plus the bundle's requirements, installed from wheels); `uv`: a locked uv project (wheels only, resolvable for every declared platform) built offline into a per-module environment; `native`: argv[0] is a native executable in the bundle (Mach-O, ELF or PE, or a POSIX shebang script in darwin/linux variants). An unknown kind means the entry point cannot run on this node. |
 | `runner.runtime.lock` | str (optional) |  | [stable] Path of uv.lock inside the bundle (kind=uv). |
 | `runner.runtime.python` | str (optional) |  | [stable] Exact Python version for the venv (kind=uv), e.g. 3.12.14. |
-| `runner.capabilities` | list of str | `[]` | [stable] By intent: cancellable (honours a stop request within stop_grace_s), freeze_ok (safe to freeze at any instruction), cooperative_pause (pauses on control.json), resumable (resumes from its own checkpoint after a restart), progress_events, deterministic_output, cooperative_throttle. |
+| `runner.capabilities` | list of str | `[]` | [stable] By intent: cancellable (honours a stop request within stop_grace_s), freeze_ok (safe to freeze at any instruction), cooperative_pause (pauses on control.json), resumable (resumes from its own checkpoint after a restart), progress_events, deterministic_output, cooperative_throttle, checkpoint (writes portable checkpoints, honours a checkpoint-then-stop request and resumes from <W>/checkpoint/; needs requires.core >= 2.5). |
 | `runner.stop_grace_s` | float | `20.0` | [stable] Seconds between the stop request and forced termination of the process container. |
+| `runner.checkpoint_grace_s` | float | `120.0` | [beta] Seconds between a checkpoint-then-stop request and forced termination of the process container. Needs requires.core >= 2.5. |
 | `runner.gpu` | GPUNeed | `"use='none' apis_any=[] min_vram_gb=None in_container=False"` |  |
 | `runner.gpu.use` | `"none"` \| `"shared"` \| `"exclusive"` | `"none"` | [beta] `shared`/`exclusive` jobs are not admitted while a protected process group uses that GPU. |
 | `runner.gpu.apis_any` | list of str | `[]` | [beta] Any of these GPU APIs (open set: metal, cuda, rocm, directml, vulkan). |
@@ -98,6 +99,9 @@ Cross-field rules are in [manifest.md](manifest.md).
 | `stages[].default` | bool | `false` | [beta] The default stage: what a job runs when it names no stage (the single-stage form). Only a standalone stage sets it; exactly one does when several stages are standalone. Needs requires.core >= 2.3. |
 | `stages[].bootstrap` | bool | `false` | [beta] A bootstrap stage: its jobs run on nodes whose module doctor is healthy before the goldens pass, with only the module's egress allowlist (no tools, GPU, containers, module data or settings), and the host registers their output only when it is exactly datasets of [[datasets.pinned]]. A standalone stage, not the default one, with determinism none and no pools. Needs requires.core >= 2.4. |
 | `stages[].secrets` | list of str | `[]` | [beta] Declared [[secrets]] this stage's runner receives in OARBANK_SECRETS_FILE (no other stage, service, probe or doctor does). A job waits until each has a value for its node. Never on a bootstrap stage. Needs requires.core >= 2.5. |
+| `stages[].checkpoint` | StageCheckpoint (optional) |  | [beta] The stage keeps portable checkpoints: the latest one a job's runner wrote is uploaded, and the job's next attempt, on any node, resumes from it. Needs the runner capability `checkpoint` and requires.core >= 2.5. |
+| `stages[].checkpoint.max_mb` | int | required | [beta] The largest checkpoint (all its files) the agent uploads, MB. |
+| `stages[].checkpoint.min_interval_s` | float | `600.0` | [beta] The agent uploads at most one checkpoint per interval; a checkpoint answering a checkpoint-then-stop request is always uploaded. |
 | `stages[].requires` | StageRequires | `"capabilities=[] pools={} needs_pools=[] platforms=[] resources=Resources(cpu=1.0, mem_gb=1.0)"` |  |
 | `stages[].requires.capabilities` | list of str | `[]` | [stable] Node capabilities that must be healthy (from probes/services). |
 | `stages[].requires.pools` | table str → int | `{}` | [stable] Countable pool tokens reserved for the job's lifetime. |
@@ -213,7 +217,7 @@ Cross-field rules are in [manifest.md](manifest.md).
 | `ui.views.columns` | list of Column | `[]` |  |
 | `ui.views.columns[].key` | str | required |  |
 | `ui.views.columns[].label` | str (optional) |  |  |
-| `ui.views.columns[].type` | `"text"` \| `"number"` \| `"integer"` \| `"percent"` \| `"bytes"` \| `"duration"` \| `"relative_time"` \| `"timestamp"` \| `"bool"` \| `"digest"` \| `"code"` \| `"status"` \| `"job_ref"` \| `"node_ref"` \| `"dataset_ref"` \| `"campaign_ref"` \| `"link"` | `"text"` |  |
+| `ui.views.columns[].type` | `"text"` \| `"number"` \| `"integer"` \| `"percent"` \| `"bytes"` \| `"duration"` \| `"relative_time"` \| `"timestamp"` \| `"bool"` \| `"digest"` \| `"code"` \| `"status"` \| `"job_ref"` \| `"node_ref"` \| `"dataset_ref"` \| `"campaign_ref"` \| `"artifact_ref"` \| `"link"` | `"text"` |  |
 | `ui.views.columns[].format` | str (optional) |  |  |
 | `ui.views.columns[].unit` | str (optional) |  |  |
 | `ui.views.columns[].direction` | `"min"` \| `"max"` (optional) |  | Which way is better; enables best/colouring generically. |
@@ -238,7 +242,7 @@ Cross-field rules are in [manifest.md](manifest.md).
 | `operations[].preview` | bool | `false` | Implements op.plan (required when the effective tier is T2/T3). |
 | `cli` | CLI (optional) |  |  |
 | `cli.exec` | list of str | required | [beta] Module CLI; `oarbank cli <module> ...` runs it on the coordinator, sandboxed, with a token scoped to the module (OARBANKD_URL, OARBANK_TOKEN). |
-| `sandbox` | SandboxSection | `"contract=1 net=SandboxNet(mode='none', allow=[]) tools=[] devices=SandboxDevices(gpu='none') containers=[] container_sets=[] exec_writable=False"` |  |
+| `sandbox` | SandboxSection | `"contract=1 net=SandboxNet(mode='none', allow=[]) tools=[] devices=SandboxDevices(gpu='none') containers=[] container_sets=[] exec_writable=False folders=[]"` |  |
 | `sandbox.contract` | `1` | `1` | [beta] Sandbox contract version. |
 | `sandbox.net` | SandboxNet | `"mode='none' allow=[]"` |  |
 | `sandbox.net.mode` | str | `"none"` | [beta] Open set. `none`; `egress-allowlist`: only the `allow` hosts, through the agent's local proxy (the SDK sets HTTPS_PROXY/ALL_PROXY); `egress-any`: any public address, a separately approved full-trust grant. Never loopback or link-local, never listening. |
@@ -259,6 +263,9 @@ Cross-field rules are in [manifest.md](manifest.md).
 | `sandbox.container_sets[].key` | str | required | [beta] Bundle path of the cosign public key: one ECDSA P-256 key, PEM `PUBLIC KEY` (SPKI), as `cosign generate-key-pair` writes `cosign.pub`. |
 | `sandbox.container_sets[].index` | str (optional) |  | [beta] A tagged reference of a signed image index (artifact type application/vnd.oarbank.image-set.v1+json): only the digests it lists are members. Absent: every image signed by the key is. |
 | `sandbox.exec_writable` | bool | `false` | [beta] Runners may execute files they wrote into the data or work directory (downloaded tools). Not enforceable as `false` on Windows without application control; nodes report it. |
+| `sandbox.folders` | list of FolderGrant | `[]` | [beta] Folders on the node (registry ids the operator maps to a path per node) the runner may read, or write into as an outbox. Needs requires.core >= 2.5. |
+| `sandbox.folders[].id` | str | required | [beta] Logical folder id, e.g. `inputs`. |
+| `sandbox.folders[].access` | `"read"` \| `"write"` | required | [beta] `read`: read the folder's files and listings, never write. `write`: an outbox: create files and directories and write them, never read, list, rename or delete anything there (files it creates may replace files there). |
 | `bundle` | BundleSection | `"executables=[] platform_files={}"` |  |
 | `bundle.executables` | list of str | `[]` | [stable] Globs (bundle paths) of files that get mode 755; every other file is 644. The argv[0] of every native exec is executable too. Modes never come from the build host's filesystem. |
 | `bundle.platform_files` | table str → list of str | `{}` | [beta] Glob (bundle path) -> the platforms or OSes whose nodes receive the matching files; a file matched by several globs goes to each one's platforms, and unmatched files go everywhere. The coordinator and the CLI always have the whole bundle. Needs requires.core >= 2.2. |

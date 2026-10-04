@@ -1,5 +1,5 @@
 (version 1)
-;; oarbank module sandbox, profile 3 (service)
+;; oarbank module sandbox, profile 4 (service)
 (deny default (with message (param "MODULE_ID")))
 
 ;; process
