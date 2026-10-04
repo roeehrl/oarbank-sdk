@@ -77,7 +77,7 @@ class LayoutWriter:
     def __init__(self, root):
         self.root = Path(root)
         (self.root / "blobs" / "sha256").mkdir(parents=True, exist_ok=True)
-        (self.root / "oci-layout").write_text('{"imageLayoutVersion":"1.0.0"}')
+        (self.root / "oci-layout").write_text('{"imageLayoutVersion":"1.0.0"}', encoding="utf-8", newline="\n")
         p = self.root / "index.json"
         self.index = json.loads(p.read_text()) if p.exists() else {"schemaVersion": 2, "manifests": []}
 
@@ -91,7 +91,7 @@ class LayoutWriter:
         self.index["manifests"] = [m for m in self.index["manifests"]
                                    if (m.get("annotations") or {}).get("org.opencontainers.image.ref.name") != name]
         self.index["manifests"].append({**desc, "annotations": {"org.opencontainers.image.ref.name": name}})
-        (self.root / "index.json").write_text(json.dumps(self.index, indent=1))
+        (self.root / "index.json").write_text(json.dumps(self.index, indent=1), encoding="utf-8", newline="\n")
 
     def manifest(self, doc: dict, repository: str | None = None, tag: str | None = None) -> str:
         desc = {"mediaType": doc.get("mediaType", I.OCI_MANIFEST), **self.put(_json(doc))}

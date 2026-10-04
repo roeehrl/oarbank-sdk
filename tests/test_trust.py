@@ -253,7 +253,8 @@ PROBE = '''
         else:
             mode = os.stat(p).st_mode & 0o777
             inside = Path(p).resolve().is_relative_to(workdir.resolve())
-            state = "ok" if mode == 0o600 and inside and list(json.load(open(p))) == ["api_key"] else "wrong"
+            private = mode == 0o600 or os.name != "posix"       # Windows: the work directory's DACL, not a mode
+            state = "ok" if private and inside and list(json.load(open(p))) == ["api_key"] else "wrong"
             if spec["payload"].get("leak"):
                 sys.stderr.write("calling with key " + json.load(open(p))["api_key"] + "\\n")
         atomic_write(workdir / "failure.json", {"reason": "toy/secret_" + state})
@@ -271,7 +272,7 @@ def secret_toy(tmp_path, listed: bool, permission: bool = False, leak_spec: bool
     shutil.copytree(TOY, d, ignore=shutil.ignore_patterns("__pycache__", "dist"))
     r = (d / "toy_runner.py").read_text(encoding="utf-8")
     (d / "toy_runner.py").write_text(r.replace('    n = spec.get("payload", {}).get("n")\n',
-                                               PROBE + '    n = spec.get("payload", {}).get("n")\n'), encoding="utf-8")
+                                               PROBE + '    n = spec.get("payload", {}).get("n")\n'), encoding="utf-8", newline="\n")
     m = (d / "oarbank-module.toml").read_text(encoding="utf-8").replace('core = ">=2.1,<3"', 'core = ">=2.5,<3"')
     if permission:
         m = m.replace('permissions = ["files:read:self", "store:read:self"]',
@@ -279,12 +280,12 @@ def secret_toy(tmp_path, listed: bool, permission: bool = False, leak_spec: bool
     if listed:
         m = m.replace('name = "run"\n', 'name = "run"\nsecrets = ["api_key"]\n')
     m += '\n[[secrets]]\nname = "api_key"\ndescription = "provider key"\n'
-    (d / "oarbank-module.toml").write_text(m, encoding="utf-8")
+    (d / "oarbank-module.toml").write_text(m, encoding="utf-8", newline="\n")
     if leak_spec:
         c = (d / "toy_module.py").read_text(encoding="utf-8")
         c = c.replace('def spec_build(p: mp.SpecBuildParams, ctx) -> mp.SpecBuildResult:\n',
                       'def spec_build(p: mp.SpecBuildParams, ctx) -> mp.SpecBuildResult:\n' + LEAKY_SPEC)
-        (d / "toy_module.py").write_text(c, encoding="utf-8")
+        (d / "toy_module.py").write_text(c, encoding="utf-8", newline="\n")
     return d
 
 
@@ -326,9 +327,9 @@ def set_toy(tmp_path, key, index: str | None = None) -> Path:
     m = (d / "oarbank-module.toml").read_text(encoding="utf-8").replace('core = ">=2.1,<3"', 'core = ">=2.5,<3"')
     m += ('\n[[sandbox.container_sets]]\nname = "tasks"\nregistry = "ghcr.io"\nrepository = "org/tasks/"\n'
           'platform = "linux/amd64"\nkey = "keys/tasks.pub"\n' + (f'index = "{index}"\n' if index else ""))
-    (d / "oarbank-module.toml").write_text(m, encoding="utf-8")
+    (d / "oarbank-module.toml").write_text(m, encoding="utf-8", newline="\n")
     (d / "keys").mkdir()
-    (d / "keys" / "tasks.pub").write_text(key.public_pem())
+    (d / "keys" / "tasks.pub").write_text(key.public_pem(), encoding="utf-8", newline="\n")
     return d
 
 
