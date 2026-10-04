@@ -218,6 +218,16 @@ def _safe(name: str) -> str:
         raise BundleError(f"unsafe path in bundle: {e}")
 
 
+def _manifest(text: str) -> mf.Manifest:
+    """A bundle's manifest; one that does not parse or validate makes the bundle invalid (BundleError), never an error of
+    another kind for whoever installs it."""
+    import tomllib
+    try:
+        return mf.Manifest.model_validate(tomllib.loads(text))
+    except ValueError as e:                              # TOMLDecodeError and pydantic's ValidationError
+        raise BundleError(f"{MANIFEST_FILE}: {e}") from e
+
+
 def verify(path, dest=None) -> BundleInfo:
     """Verify a bundle end to end (safe paths, regular files only, every hash, the file list, the digest,
     the manifest) and optionally unpack it into `dest` (which must not exist yet)."""
@@ -260,8 +270,7 @@ def _verify(path: Path, dest) -> BundleInfo:
             raise BundleError("content digest mismatch")
     if MANIFEST_FILE not in data:
         raise BundleError(f"no {MANIFEST_FILE}")
-    import tomllib
-    man = mf.Manifest.model_validate(tomllib.loads(data[MANIFEST_FILE].decode()))
+    man = _manifest(data[MANIFEST_FILE].decode())
     if (man.module.id, man.module.version, man.module.compat) != (meta["module_id"], meta["version"], meta["compat"]):
         raise BundleError("bundle.json disagrees with the manifest (id, version or compat)")
     if dest is not None:
@@ -292,4 +301,4 @@ def verify_dir(root) -> BundleInfo:
             raise BundleError(f"{f['path']}: mode changed")      # exact bits: 0o600 is not "644"
     if content_digest(meta["files"]) != meta["content_digest"]:
         raise BundleError("content digest mismatch")
-    return _info(meta, mf.load(root / MANIFEST_FILE))
+    return _info(meta, _manifest((root / MANIFEST_FILE).read_text(encoding="utf-8")))

@@ -101,3 +101,21 @@ def test_a_git_worktree_pointer_file_is_not_bundled(tmp_path):
     (src / ".git").write_text("gitdir: /somewhere/.git/worktrees/toy\n", encoding="utf-8", newline="\n")
     assert ".git" not in {f["path"] for f in B.list_files(src)}
     assert B.content_digest(B.list_files(src)) == plain
+
+
+def test_a_manifest_that_does_not_validate_makes_the_bundle_invalid(tmp_path, monkeypatch):
+    """A bundle made by a tool that skipped the manifest rules is refused as a bundle (BundleError), so an installer
+    reports it as such, not as a crash."""
+    from oarbank_sdk import manifest as mf
+    src = tmp_path / "toy"
+    shutil.copytree(TOY, src, ignore=shutil.ignore_patterns("__pycache__", "dist"))
+    m = src / "oarbank-module.toml"
+    m.write_text(m.read_text(encoding="utf-8").replace('name = "run"\n', 'name = "run"\ndefault = true\n'), encoding="utf-8")
+    with monkeypatch.context() as p:
+        p.setattr(mf.Manifest, "core_keys_used", lambda self: [])
+        out, _ = B.build(src, tmp_path / "t.mfb")
+        B.verify(out, tmp_path / "unpacked")
+    with pytest.raises(B.BundleError, match=r"(?s)oarbank-module.toml: .*stages\[\]\.default need requires.core >= 2.3"):
+        B.verify(out)
+    with pytest.raises(B.BundleError, match="oarbank-module.toml: "):
+        B.verify_dir(tmp_path / "unpacked")
