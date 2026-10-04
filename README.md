@@ -32,9 +32,11 @@ The Python package `oarbank_sdk` implements these contracts:
 - **`oarbank_sdk.control.Control`**, the runner side of Control: stop, pause and thread limits at safe points, nudged
   by the agent (a signal on POSIX, an event on Windows), never polled. It is stdlib only, so a runner can vendor it.
 - **The conformance kit** (`oarbank-sdk conform`): it checks the manifest, builds and verifies the bundle, drives the
-  coordinator side over the module protocol and runs the runner on its goldens as this host's platform would.
+  coordinator side over the module protocol and runs the runner on its goldens, and on any other runner specs its
+  fixtures list, as this host's platform would (sandboxed, through the egress proxy).
 - **Bundles** (`oarbank-sdk bundle build|verify|wheels`): digest-addressed `.mfb` files, with per-platform wheels and
-  files.
+  files. `oarbank-sdk deps compile` resolves a `requirements.in` into one hash-pinned, marker-free requirements file
+  for every platform that installs it.
 - **A preview server** (`oarbank-sdk preview`) that renders a module's pages as the console will, from fixtures.
 - **Shared test vectors** in [`spec/vectors/`](spec/vectors/) (canonical JSON, job keys, portable paths, platform
   tokens, variant resolution, placement classes) that every implementation reproduces exactly.
