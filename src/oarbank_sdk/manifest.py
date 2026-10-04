@@ -1299,6 +1299,13 @@ def lint(man: Manifest) -> list[str]:
         if unknown:
             out.append(f"{where}.apis_any {unknown}: no core detects {'it' if len(unknown) == 1 else 'them'} yet, so a node "
                        "is never found to provide " + ("it" if len(unknown) == 1 else "them"))
+    # a Windows node's container runtime runs its own architecture only (spec/sandbox.md, "Containers")
+    images = {c.platform for c in man.sandbox.containers} | {c.platform for c in man.sandbox.container_sets}
+    for plat in man.requires.platforms:
+        os_, arch = plat.split("-", 1) if "-" in plat else (plat, "")
+        if images and os_ == "windows" and f"linux/{arch}" not in images:
+            out.append(f"requires.platforms lists {plat}, but no container image or set is for linux/{arch}: Windows nodes run "
+                       f"containers of their own architecture only, so its containers cannot run there")
     scope = man.results.determinism_scope
     if scope not in pf.SCOPE_MIX:
         out.append(f"results.determinism_scope {scope!r} is not known to this SDK; replicas compare within one platform")

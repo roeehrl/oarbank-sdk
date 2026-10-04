@@ -21,6 +21,7 @@ authors and normative for agent implementers. It needs Windows 10 1809 or later.
 | a runner's input folders | an inheritable `FILE_GENERIC_READ` entry for a capability SID only runner tokens of the module carry (`DeriveCapabilitySidsFromName("oarbank.runner.<module>")`); doctor, services and probes run without it |
 | a runner's outboxes | an inheritable entry for the same capability SID: `FILE_ADD_FILE`, `FILE_ADD_SUBDIRECTORY` (write data and append data on the files created), `FILE_WRITE_EA`, `FILE_WRITE_ATTRIBUTES`, `SYNCHRONIZE`; no `FILE_LIST_DIRECTORY`/`FILE_READ_DATA`, `DELETE`, `FILE_DELETE_CHILD`, `READ_CONTROL` or `WRITE_DAC`. An AppContainer token holds no symbolic-link privilege. The agent removes entries no accepted folder statement or release grants any more, and at start |
 | no local IPC except the broker | AppContainer object isolation: named pipes, sections and other objects outside the container are denied |
+| the job's broker | a named pipe (`OARBANK_BROKER=npipe://./pipe/<name>`, a random name created exclusively) whose DACL allows only the agent's account and the module's AppContainer, with a low mandatory label so the runner's token may write; remote clients are refused |
 | `net = none` | no network capability |
 | `net = egress-allowlist` | the elevated helper (a LocalSystem service) exempts the container from loopback isolation for the job, and Windows Filtering Platform filters block every loopback port but the agent's proxy |
 | `net = egress-any` | the `internetClient` capability; loopback isolation keeps it off loopback |
@@ -35,7 +36,7 @@ authors and normative for agent implementers. It needs Windows 10 1809 or later.
 | no link-local under `egress-any` | unavailable |
 | `exec_writable` deny | unavailable: any readable binary is executable without application control |
 | `folders.read`, `folders.write` | enforced (a read folder's binaries are executable, as above) |
-| containers | unavailable until the agent-owned WSL2 distribution ships |
+| containers | the agent's WSL containers session: enforced once it is ready (WSL 2.9.3 or later and the Virtual Machine Platform; the node's facts `containers` say what is missing otherwise) |
 
 Some Windows builds (seen on Windows Server 2025) refuse an AppContainer the null device: opening `NUL`
 (`os.devnull`, `subprocess.DEVNULL`) fails with access denied. The agent gives every module process standard handles

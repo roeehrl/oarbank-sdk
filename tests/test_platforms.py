@@ -434,3 +434,19 @@ def test_lint_warns_about_runner_capabilities_the_agent_does_not_know():
     assert "runner.capabilities 'cancel_signal' is not known to this SDK; the agent ignores it" in w
     assert "runner.variants.windows.capabilities 'pausable' is not known to this SDK; the agent ignores it" in w
     assert not any("'cancellable'" in x for x in w)
+
+
+def test_windows_platforms_need_container_images_of_their_architecture():
+    """A Windows node's container runtime runs its own architecture only (spec/sandbox.md, "Containers"): a module that
+    runs containers on windows-arm64 without a linux/arm64 image or set gets a warning (not a refusal: its containers
+    may run only in stages that never go there)."""
+    doc = tomllib.loads((TOY / "oarbank-module.toml").read_text(encoding="utf-8"))
+    doc["requires"]["platforms"] = ["linux-amd64", "windows-amd64", "windows-arm64"]
+    doc["sandbox"] = {"containers": [{"image": "docker.io/o/t:1@sha256:" + "b" * 64, "platform": "linux/amd64"}]}
+    warned = [w for w in mf.lint(mf.Manifest.model_validate(doc)) if "container" in w]
+    assert warned == ["requires.platforms lists windows-arm64, but no container image or set is for linux/arm64: Windows nodes "
+                      "run containers of their own architecture only, so its containers cannot run there"]
+    doc["sandbox"]["containers"].append({"image": "docker.io/o/t:1@sha256:" + "c" * 64, "platform": "linux/arm64"})
+    assert not [w for w in mf.lint(mf.Manifest.model_validate(doc)) if "container" in w]
+    del doc["sandbox"]
+    assert not [w for w in mf.lint(mf.Manifest.model_validate(doc)) if "container" in w]
