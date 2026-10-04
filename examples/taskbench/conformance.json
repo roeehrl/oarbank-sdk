@@ -1,0 +1,41 @@
+{
+ "params": [
+  {
+   "log": "x PASSED\n"
+  }
+ ],
+ "secrets": {
+  "provider_key": "sk-example-not-a-real-key"
+ },
+ "images": {
+  "tasks": {
+   "layout": "fixtures/images",
+   "members": [
+    "ghcr.io/example/taskbench/task-0@sha256:2812c5bc89455c0438967cf1271db9270b671a9d172c5498eacb17a93bcd4bd3",
+    "ghcr.io/example/taskbench/task-1@sha256:87f087e0d922a31e88f3e71f5c322d0220730754907d2c68529da9d5d77366c2",
+    "ghcr.io/example/taskbench/task-2@sha256:b1c9bee43e4ea65f65d72a99491cbe70104f5f4f2ef5bc78ac0829e323befafd"
+   ]
+  }
+ },
+ "runner_specs": [
+  {
+   "name": "score-empty",
+   "payload": {
+    "log": ""
+   },
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "name": "score-bad",
+   "payload": {
+    "log": 7
+   },
+   "expect": {
+    "exit": 2,
+    "reason": "taskbench/bad_spec"
+   }
+  }
+ ]
+}

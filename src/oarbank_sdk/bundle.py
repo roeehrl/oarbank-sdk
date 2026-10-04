@@ -273,6 +273,12 @@ def _verify(path: Path, dest) -> BundleInfo:
     man = _manifest(data[MANIFEST_FILE].decode())
     if (man.module.id, man.module.version, man.module.compat) != (meta["module_id"], meta["version"], meta["compat"]):
         raise BundleError("bundle.json disagrees with the manifest (id, version or compat)")
+    for cs in man.sandbox.container_sets:
+        from . import images
+        try:
+            images.public_key(data.get(cs.key, b"").decode("utf-8", "replace"))
+        except images.ImageError as e:
+            raise BundleError(f"container set {cs.name}: key {cs.key}: {e}") from None
     if dest is not None:
         dest = Path(dest)
         tmp = dest.with_name(dest.name + ".partial")

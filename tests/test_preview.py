@@ -1,6 +1,5 @@
 """`oarbank-sdk preview`: the toy module's pages rendered by the published renderer against fixtures."""
 import json
-import socket
 import threading
 import urllib.parse
 import urllib.request
@@ -13,16 +12,9 @@ from oarbank_sdk.preview import Preview
 TOY = Path(__file__).parents[1] / "examples" / "toy"
 
 
-def free_port():
-    with socket.socket() as s:
-        s.bind(("127.0.0.1", 0))
-        p = s.getsockname()[1]
-    return p if p < 65000 else free_port()
-
-
 @pytest.fixture
 def pv():
-    p = Preview(str(TOY / "oarbank-module.toml"), port=free_port())
+    p = Preview(str(TOY / "oarbank-module.toml"), port=0)
     srv = p.serve()
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     yield p

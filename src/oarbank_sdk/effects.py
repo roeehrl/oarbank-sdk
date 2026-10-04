@@ -28,6 +28,7 @@ FILE_WRITE_MAX = 1 << 20
 CAMPAIGN_ID = re.compile(r"^[a-z][a-z0-9_]{3,40}$")
 STAGE = re.compile(r"[a-z][a-z0-9_]{0,63}")
 GROUP_MAX = 64
+IMAGES_MAX = 16                  # container images one job may list (jobs.enqueue `images`)
 ENQUEUE_MAX = 5000
 
 
@@ -97,10 +98,13 @@ def job(job_key: str, spec: dict, *, stage: str | None = None, group: str | None
         target_node: str | None = None, labels: dict | None = None, dataset_id: str | None = None,
         datasets: list[str] | None = None, mounts: dict | None = None, resources: dict | None = None,
         timeout_s: float | None = None, priority: int | None = None, subpriority: int | None = None,
-        spec_version: int | None = None, name: str | None = None) -> dict:
+        spec_version: int | None = None, name: str | None = None, images: list[str] | None = None) -> dict:
     """One jobs.enqueue item; unset fields are left out (the host's defaults apply). `stage` runs exactly that standalone
     stage, never the chain (host capability jobs.stage; key it with keys.job_key(..., stage)). `group` (at most 64
-    characters) and `platforms` (tokens or OSes) need the placement.v1 host capability."""
+    characters) and `platforms` (tokens or OSes) need the placement.v1 host capability. `images` (at most 16
+    digest-pinned references) are the container set images the job's runner may run (core 2.5)."""
+    if images is not None and (len(images) > IMAGES_MAX or not all(isinstance(i, str) and "@sha256:" in i for i in images)):
+        raise ValueError(f"images: at most {IMAGES_MAX} digest-pinned references")
     if stage is not None and not STAGE.fullmatch(stage):
         raise ValueError(f"stage {stage!r}: a stage name ([a-z][a-z0-9_]*)")
     if group is not None and not (isinstance(group, str) and 0 < len(group) <= GROUP_MAX):
@@ -111,7 +115,8 @@ def job(job_key: str, spec: dict, *, stage: str | None = None, group: str | None
     item: dict[str, Any] = {"job_key": job_key, "spec": spec}
     opt = {"stage": stage, "group": group, "platforms": list(platforms) if platforms else None, "target_node": target_node, "labels": labels,
            "dataset_id": dataset_id, "datasets": datasets, "mounts": mounts, "resources": resources, "timeout_s": timeout_s,
-           "priority": priority, "subpriority": subpriority, "spec_version": spec_version, "name": name}
+           "priority": priority, "subpriority": subpriority, "spec_version": spec_version, "name": name,
+           "images": list(images) if images else None}
     item.update({k: v for k, v in opt.items() if v is not None})
     return item
 

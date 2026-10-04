@@ -9,7 +9,7 @@ import hashlib
 import json
 from pathlib import Path
 
-from oarbank_sdk import keys, platform as pf, portable
+from oarbank_sdk import images as I, imagetest as T, keys, platform as pf, portable
 
 OUT = Path(__file__).resolve().parents[1] / "spec" / "vectors"
 
@@ -85,6 +85,101 @@ FEASIBLE = [
 ]
 
 
+def image_vectors() -> dict:
+    """spec/vectors/image-signatures.json: what images.py and oarbank-core images.rs decide for container sets. Signatures
+    come from imagetest's deterministic test keys, so the file is reproducible."""
+    import base64
+    b64 = lambda b: base64.b64encode(b).decode()
+    key, other = T.Key.from_seed(b"vector-key"), T.Key.from_seed(b"other-key")
+    d1 = "sha256:" + hashlib.sha256(b"image one").hexdigest()
+    d2 = "sha256:" + hashlib.sha256(b"image two").hexdigest()
+    ref = f"ghcr.io/org/tasks/t1@{d1}"
+    sset = {"registry": "ghcr.io", "repository": "org/tasks/"}
+    simple = []
+
+    def sc(name, payload, sig, digest=d1):
+        q = I.public_key(key.public_pem())
+        ok = I.check_simple_signing(q, payload, b64(sig), digest, lambda r: r.startswith("ghcr.io/org/tasks/")) is None
+        simple.append({"name": name, "payload_b64": b64(payload), "signature_b64": b64(sig), "digest": digest, "ok": ok})
+    good = T.simple_payload(ref, d1)
+    sc("valid", good, key.sign(good))
+    sc("signed by another key", good, other.sign(good))
+    sc("payload names another digest", T.simple_payload(ref, d2), key.sign(T.simple_payload(ref, d2)))
+    tampered = good.replace(b"cosign container", b"cosign Container")
+    sc("payload changed after signing", tampered, key.sign(good))
+    wrong_type = good.replace(b"cosign container image signature", b"atomic container signature")
+    sc("not a cosign signature type", wrong_type, key.sign(wrong_type))
+    outside = T.simple_payload(f"ghcr.io/org/other/t1@{d1}", d1)
+    sc("docker-reference outside the set", outside, key.sign(outside))
+    sig = key.sign(good)                              # SEQUENCE { INTEGER r, INTEGER s }: pad r with a needless zero
+    r_len = sig[3]
+    padded = b"\x02" + bytes([r_len + 1]) + b"\0" + sig[4:4 + r_len] + sig[4 + r_len:]
+    sc("signature not minimal DER", good, b"\x30" + bytes([len(padded)]) + padded)
+    sc("valid, request for another digest", good, key.sign(good), d2)
+    bundles = []
+
+    def bc(name, b, digest=d1):
+        ok = I.check_bundle(I.public_key(key.public_pem()), b, digest) is None
+        bundles.append({"name": name, "bundle_b64": b64(b), "digest": digest, "ok": ok})
+    bc("valid", T.bundle(key, ref, d1))
+    bc("signed by another key", T.bundle(other, ref, d1))
+    bc("another digest", T.bundle(key, ref, d2))
+    bc("an attestation, not a signature", T.bundle(key, ref, d1, predicate="https://slsa.dev/provenance/v1"))
+    env = json.loads(T.bundle(key, ref, d1))
+    env["dsseEnvelope"]["payloadType"] = "application/json"
+    bc("not an in-toto payload", json.dumps(env).encode())
+    env = json.loads(T.bundle(key, ref, d1))
+    st = json.loads(base64.b64decode(env["dsseEnvelope"]["payload"]))
+    st["subject"][0]["digest"]["sha256"] = d2.split(":", 1)[1]
+    env["dsseEnvelope"]["payload"] = b64(json.dumps(st).encode())
+    bc("statement changed after signing", json.dumps(env).encode(), d2)
+    bc("no DSSE envelope", b'{"messageSignature": {}}')
+    index = []
+
+    def ic(name, doc, reg="ghcr.io", repo="org/tasks/"):
+        try:
+            seq, imgs = I.parse_index(doc, reg, repo)
+            index.append({"name": name, "doc_b64": b64(doc), "registry": reg, "repository": repo, "ok": True,
+                          "seq": seq, "images": sorted(imgs)})
+        except I.ImageError:
+            index.append({"name": name, "doc_b64": b64(doc), "registry": reg, "repository": repo, "ok": False})
+    ic("valid", I.index_document("ghcr.io", "org/tasks/", 7, [d2, d1]))
+    ic("another set's index", I.index_document("ghcr.io", "org/other/", 7, [d1]))
+    ic("another registry", I.index_document("docker.io", "org/tasks/", 7, [d1]))
+    ic("negative seq", json.dumps({"type": I.INDEX_DOC_TYPE, "registry": "ghcr.io", "repository": "org/tasks/", "seq": -1,
+                                   "images": [d1]}).encode())
+    ic("not a digest", json.dumps({"type": I.INDEX_DOC_TYPE, "registry": "ghcr.io", "repository": "org/tasks/", "seq": 1,
+                                   "images": ["sha256:abc"]}).encode())
+    ic("wrong type", json.dumps({"type": "something/v1", "registry": "ghcr.io", "repository": "org/tasks/", "seq": 1,
+                                 "images": [d1]}).encode())
+    norm = []
+    for r in ("ghcr.io/org/tasks/t1@" + d1, "org/tool:1.2@" + d1, "busybox@" + d1, "index.docker.io/org/x@" + d1,
+              "localhost:5000/a/b:v1@" + d1, "registry.example.org:8443/x", "Upper/case@" + d1, "ghcr.io/org/t@sha256:abc"):
+        try:
+            repo, tag, dig = I.normalize(r)
+            norm.append({"ref": r, "repository": repo, "tag": tag, "digest": dig})
+        except I.ImageError:
+            norm.append({"ref": r, "error": True})
+    from oarbank_sdk.manifest import ContainerSet
+    covers = [{"set": {"registry": reg, "repository": prefix}, "repository": repo,
+               "covers": ContainerSet(name="s", registry=reg, repository=prefix, key="k.pub").covers(repo)}
+              for reg, prefix, repo in [("ghcr.io", "org/tasks/", "ghcr.io/org/tasks/t1"),
+                                        ("ghcr.io", "org/tasks/", "ghcr.io/org/tasks-extra/t1"),
+                                        ("ghcr.io", "org/tasks/", "docker.io/org/tasks/t1"),
+                                        ("ghcr.io", "org/tasks", "ghcr.io/org/tasks"),
+                                        ("ghcr.io", "org/tasks", "ghcr.io/org/tasks/t1"),
+                                        ("localhost:5000", "a/", "localhost:5000/a/b")]]
+    keys_ = [{"pem": key.public_pem(), "sha256": I.key_sha256(key.public_pem())},
+             {"pem": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAGb9ECWmEzf6FQbrBZ9w7lshQhqowtrbLDFw4rXAxZuE=\n-----END PUBLIC KEY-----\n",
+              "error": "an Ed25519 key"},
+             {"pem": "not a key", "error": "no PEM"}]
+    return {"set": sset, "keys": keys_, "simple": simple, "bundle": bundles, "index": index, "normalize": norm, "covers": covers,
+            "note": "A set member's digest carries a cosign signature by the pinned ECDSA P-256 key: a simple-signing payload "
+                    "(its digest, type and an in-set docker-reference) or a Sigstore bundle (a DSSE envelope over an in-toto "
+                    "statement with predicate " + I.COSIGN_PREDICATE + " naming the digest). Implementations agree on `ok`; "
+                    "their reasons may differ. Index documents belong to exactly one set."}
+
+
 def main():
     OUT.mkdir(parents=True, exist_ok=True)
     canon = {"cases": [{"input": c, "canonical": keys.canonical_json(c),
@@ -127,6 +222,8 @@ def main():
                   "module's platforms where every stage the unit runs and the job's platforms (tokens or OSes) allow, "
                   "grouped by class; an empty list allows every platform."}
     (OUT / "placement-class.json").write_text(json.dumps(pc, indent=1) + "\n", encoding="utf-8", newline="\n")
+    iv = image_vectors()
+    (OUT / "image-signatures.json").write_text(json.dumps(iv, indent=1) + "\n", encoding="utf-8", newline="\n")
     print("vectors written to", OUT)
 
 

@@ -96,6 +96,25 @@ class Report:
                                    + (f", {n['warn']} warning{'s' if n['warn'] > 1 else ''}" if n["warn"] else "")])
 
 
+CANARIES = "_canaries"         # the fixtures key the kit keeps its secret canaries under (never read from a file)
+
+
+def canaries(man, fx: dict) -> dict:
+    """A value per declared secret: the fixtures' `secrets`, else a random canary. The kit delivers them as a host would
+    and fails any run or verb that lets one out."""
+    given = fx.get("secrets") or {}
+    return {s.name: str(given.get(s.name) or f"conform-secret-{s.name}-{os.urandom(12).hex()}") for s in man.secrets}
+
+
+def _leaked(texts, canaries: dict) -> list[str]:
+    """The names of the secrets whose value appears in any of `texts` (str or bytes)."""
+    out = set()
+    for t in texts:
+        b = t if isinstance(t, bytes) else str(t).encode()
+        out |= {n for n, v in canaries.items() if v.encode() in b}
+    return sorted(out)
+
+
 class FakeHost:
     """The host callbacks, answered from fixtures (every callback the module is permitted)."""
 
@@ -142,6 +161,13 @@ class FakeHost:
         def nodes_query(p):
             return {"nodes": [node] if pf.matches(self.platform, p.get("platforms") or []) else []}
 
+        canaries = self.fx.get(CANARIES) or {}
+
+        def secrets_get(p):
+            if p.get("name") not in canaries:
+                raise ValueError(f"secret {p.get('name')!r} is not declared in [[secrets]]")
+            return {"set": True, "value": canaries[p["name"]]}
+
         return {"host.files.list": lambda p: {"files": [entry(k) for k in sorted(files) if k.startswith(p.get("prefix") or "")]},
                 "host.files.stat": lambda p: ({"exists": True, "file": entry(p["path"])} if p.get("path") in files
                                               else {"exists": False, "file": None}),
@@ -149,7 +175,8 @@ class FakeHost:
                 "host.datasets.query": datasets_query, "host.settings.get": lambda p: {"value": (self.fx.get("settings") or {}).get(p.get("key"))},
                 "host.store.get": store_get, "host.store.query": store_query,
                 "host.nodes.query": nodes_query,
-                "host.jobs.query": lambda p: {"jobs": []}, "host.blobs.stat": lambda p: {"exists": False, "size": None}}
+                "host.jobs.query": lambda p: {"jobs": []}, "host.blobs.stat": lambda p: {"exists": False, "size": None},
+                "host.secrets.get": secrets_get}
 
 
 def _argv(exec_: list[str], root: Path) -> list[str]:
@@ -177,6 +204,12 @@ def check_manifest(root: Path, r: Report):
                if rt.kind == "uv" and rt.lock and not (root / rt.lock).is_file()]
     if man.results.schema_ and not (root / man.results.schema_).is_file():
         missing.append(f"results.schema {man.results.schema_}")
+    for cs in man.sandbox.container_sets:
+        from . import images
+        try:
+            images.load_key(root, cs)
+        except images.ImageError as e:
+            missing.append(str(e))
     r.add("manifest", "referenced files exist", not missing, ", ".join(missing))
     issues = portability_issues(root, man)
     r.add("manifest", "portable on every declared platform", not issues, "; ".join(issues[:5]))
@@ -279,7 +312,14 @@ def check_protocol(root: Path, man, fx: dict, r: Report):
     except Exception as e:                                  # noqa: BLE001 (a module that cannot start fails the suite)
         r.add("protocol", "initialize", False, f"{type(e).__name__}: {e}")
         return []
-    runs = []
+    runs, answers = [], []
+    call = cli.call
+
+    def recorded(method, params):
+        out = call(method, params)
+        answers.append(out)
+        return out
+    cli.call = recorded
     try:
         r.add("protocol", "initialize", True, f"protocol {info.protocol_version}")
         adv = set(info.capabilities)
@@ -332,6 +372,12 @@ def check_protocol(root: Path, man, fx: dict, r: Report):
                 if good:
                     runs.append((nc, g, st, b1["specs"][0]))
         check_lifecycle_verbs(cli, man, adv, r)
+        if man.secrets:
+            leaked = _leaked([_canon(a) for a in answers], fx.get(CANARIES) or {})
+            r.add("protocol", "no secret in any verb's answer (specs, goldens, plans)", not leaked,
+                  f"the coordinator side passed on {leaked}: a value in a spec reaches every stage" if leaked else
+                  ("host.secrets.get answered" if "secrets:read:self" in c.permissions else
+                   "host.secrets.get refused without secrets:read:self"))
     finally:
         cli.close()
     return runs
@@ -496,6 +542,7 @@ class Outcome:
     stderr: str
     ws: Path
     refused: list = field(default_factory=list)
+    leaks: list = field(default_factory=list)
     stop: str | None = None
     ack_s: float | None = None
     exit_s: float | None = None
@@ -524,6 +571,14 @@ def _run(root: Path, man, env_doc: dict, fx: dict, locale: str = "C", stop: bool
     env = {**job_env(man, ws, data, locale), **run.env, **g.env(bootstrap), **nudge.env()}
     if bootstrap:
         env.pop("OARBANK_MODULE_DATA")                   # a bootstrap job keeps nothing on the node
+    every = fx.get(CANARIES) or {}
+    mine = {n: every[n] for n in man.secrets_of(env_doc.get("stage")) if n in every}
+    if mine:                                             # only the declaring stage's runner, as the agent delivers them
+        (ws / ".grants").mkdir(mode=0o700)
+        fd = os.open(ws / ".grants" / "secrets.json", os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(mine, f)
+        env["OARBANK_SECRETS_FILE"] = str(ws / ".grants" / "secrets.json")
     (ws / "control.json").write_text(json.dumps({"seq": 0}), encoding="utf-8")
     argv = _argv(run.exec, root) + ["run", "--spec", str(ws / "spec.json"), "--workdir", str(ws), "--out", str(ws / "result.json")]
     if SANDBOX["on"]:
@@ -536,7 +591,7 @@ def _run(root: Path, man, env_doc: dict, fx: dict, locale: str = "C", stop: bool
         p = _spawn(nudge.argv(argv), ws, env, nudge.popen_kwargs())
 
         def reap():                                      # the one owner of the wait: drains the pipes, records the exit
-            out["err"] = p.communicate()[1]
+            out["out"], out["err"] = p.communicate()
             exited.set()
         reader = threading.Thread(target=reap, daemon=True)
         reader.start()
@@ -556,7 +611,18 @@ def _run(root: Path, man, env_doc: dict, fx: dict, locale: str = "C", stop: bool
     o.stderr = (out.get("err") or b"").decode(errors="replace")[-400:] if p.returncode else ""
     o.result = _read_json(ws / "result.json") if p.returncode == 0 else None
     o.failure = _read_json(ws / "failure.json") if p.returncode not in (0, None) else None
+    if every:
+        written = [f.read_bytes() for f in ws.rglob("*") if f.is_file() and ".grants" not in f.relative_to(ws).parts
+                   and f.name != "spec.json"]
+        o.leaks = _leaked([out.get("out") or b"", out.get("err") or b"", *written], every)
     return o
+
+
+def _secret_leaks(r: Report, label: str, man, o: Outcome):
+    """No secret value in anything a run leaves: its output, result, failure.json, events or any file it wrote."""
+    if man.secrets:
+        r.add("runner", f"{label}: no secret in its output or files", not o.leaks,
+              f"{o.leaks} appear in what the runner wrote (results, artifacts, logs)" if o.leaks else "")
 
 
 def _acknowledged(ws: Path) -> bool:
@@ -749,6 +815,7 @@ def _check_goldens(root: Path, man, fx: dict, runs: list, r: Report):
             ran = True
             o = _run(root, man, env_doc, fx)
             _egress(r, label, o)
+            _secret_leaks(r, label, man, o)
             res = o.result
             if not r.add("runner", f"{label}: result envelope", res is not None, o.stderr or f"exit {o.code}"):
                 continue
@@ -844,6 +911,7 @@ def _check_runner_specs(root: Path, man, fx: dict, r: Report):
         boot = stage is not None and stage.bootstrap
         o = _run(root, man, env_doc, fx, bootstrap=boot)
         _egress(r, label, o)
+        _secret_leaks(r, label, man, o)
         r.add("runner", f"{label}: exit {spec.expect.exit}", o.code == spec.expect.exit,
               f"exit {o.code}" + (f": {o.stderr}" if o.stderr else ""))
         if o.code == 0:
@@ -870,6 +938,39 @@ def _check_runner_specs(root: Path, man, fx: dict, r: Report):
                       f"{f.reason!r}" + (f" ({f.detail[:200]})" if f.detail else ""))
 
 
+def check_images(root: Path, man, fx: dict, r: Report):
+    """Container sets (spec/sandbox.md, "Image sets"), with the reference policy the agent shares: each member the
+    fixtures name verifies (fixtures `images`: {set: {"layout"?: OCI image layout dir, "members": [refs]}}; without a
+    layout the set's registry is asked), and the two refusals hold: an image outside the set's prefix and an unsigned
+    image inside it are both `image_not_approved`."""
+    from . import images
+    for cs in man.sandbox.container_sets:
+        label = f"container set {cs.name}"
+        try:
+            pol = images.SetPolicy(cs, images.load_key(root, cs))
+        except images.ImageError as e:
+            r.add("images", f"{label}: key", False, str(e))
+            continue
+        conf = (fx.get("images") or {}).get(cs.name) or {}
+        src = images.source_for(root / conf["layout"] if conf.get("layout") else None)
+        highest = None
+        for ref in conf.get("members") or []:
+            v = pol.verify(ref, cs.platform, src)
+            r.add("images", f"{label}: {ref} verifies", v.ok, v.reason)
+            highest = v.seq if v.seq is not None and (highest is None or v.seq > highest) else highest
+        if not conf.get("members"):
+            r.add("images", f"{label}: members verify", None, "fixtures `images` name no members of this set")
+        stray = "sha256:" + hashlib.sha256(os.urandom(32)).hexdigest()
+        base = cs.repository.rstrip("/")
+        outside = f"{cs.registry}/{base}-outside/conformance@{stray}"
+        inside = f"{cs.registry}/{cs.repository}conformance-unsigned@{stray}" if cs.repository.endswith("/") else \
+            f"{cs.registry}/{cs.repository}@{stray}"
+        for what, ref in (("an image outside the set", outside), ("an unsigned image inside the set", inside)):
+            v = pol.verify(ref, cs.platform, src, highest)
+            r.add("images", f"{label}: {what} is refused (image_not_approved)", v.code == "image_not_approved",
+                  v.reason if not v.ok else f"{ref} was approved")
+
+
 SANDBOX = {"on": sys.platform == "darwin"}
 
 
@@ -885,6 +986,9 @@ def conform(root, fixtures: dict | None = None, runner: bool = True, sandbox: bo
     if man is None:
         return r
     check_bundle(root, r)
+    fx = {**fx, CANARIES: canaries(man, fx)}
+    if man.sandbox.container_sets:
+        check_images(root, man, fx, r)
     runs = check_protocol(root, man, fx, r)
     if runner:
         check_runner(root, man, fx, runs, r)

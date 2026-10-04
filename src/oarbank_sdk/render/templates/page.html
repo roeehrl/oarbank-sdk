@@ -86,7 +86,7 @@
 {%- elif pr.get('type') == 'boolean' %}<input type="checkbox" name="p.{{ name }}" value="true"{% if pr.get('default') %} checked{% endif %}>
 {%- elif pr.get('type') in ('object', 'array') %}<textarea class="mono" rows="{{ c.hints.get('rows', {}).get(name, 4) }}" name="pj.{{ name }}"{% if name in req %} required{% endif %} spellcheck="false">{{ pr.get('default') | tojson if pr.get('default') is not none else '' }}</textarea>
 {%- elif pr.get('type') in ('integer', 'number') %}<input type="number" name="p.{{ name }}"{% if pr.get('type') == 'number' %} step="any"{% endif %}{% if pr.get('minimum') is not none %} min="{{ pr.minimum }}"{% endif %}{% if pr.get('maximum') is not none %} max="{{ pr.maximum }}"{% endif %} value="{{ pr.get('default', '') }}"{% if name in req %} required{% endif %}>
-{%- else %}<input type="{{ 'password' if pr.get('x-secret') else 'text' }}" name="p.{{ name }}" value="{{ '' if pr.get('x-secret') else pr.get('default', '') }}"{% if pr.get('pattern') %} pattern="{{ pr.pattern }}"{% endif %}{% if name in req %} required{% endif %}>{% endif %}
+{%- else %}<input type="text" name="p.{{ name }}" value="{{ pr.get('default', '') }}"{% if pr.get('pattern') %} pattern="{{ pr.pattern }}"{% endif %}{% if name in req %} required{% endif %}>{% endif %}
 {%- if pr.get('description') %} <span class="mut">{{ pr.description }}</span>{% endif %}</label>
 {%- endfor %}
 <button class="{{ TIER_CLASS[meta.tier] if meta else '' }}">{{ meta.title if meta else op_id }}</button></form>

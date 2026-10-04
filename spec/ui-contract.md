@@ -84,8 +84,11 @@ Buttons, row actions and form submits name an **operation**. That is either a co
 Form schemas are restricted JSON Schema:
 
 - `type`, `enum`, `const`, bounds, `pattern`, and `format` ∈ `date-time`, `duration`, `uri`, `hostname`;
-- `default`, `description`, `oneOf`, local refs only;
-- `x-secret` marks values the host never echoes or stores in plans.
+- `default`, `description`, `oneOf`, local refs only.
+
+A form never takes a credential: a value handed to an operation reaches module code and the plan. Declare it in
+`[[secrets]]` instead ([manifest.md](manifest.md#secrets)); the owner sets it through the core, and `oarbank-sdk check`
+refuses `x-secret` in a form schema.
 
 **Hints** set order, grouping, help and a widget from the host registry. An unknown widget falls back to the default widget for the type.
 

@@ -1,0 +1,3 @@
+{"type": "object", "required": ["images"],
+ "properties": {"images": {"type": "array", "items": {"type": "string", "pattern": "@sha256:[0-9a-f]{64}$"}, "maxItems": 5000,
+                           "description": "Digest-pinned task images of the set ghcr.io/example/taskbench/"}}}

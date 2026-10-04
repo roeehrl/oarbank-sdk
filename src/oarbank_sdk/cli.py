@@ -12,6 +12,7 @@
 """
 import argparse
 import sys
+from pathlib import Path
 
 from pydantic import ValidationError
 
@@ -46,6 +47,9 @@ def check_ui(path: str, man) -> list[str]:
     for o in man.operations:
         if o.params_schema and o.params_schema not in files:
             errs.append(f"operation {o.verb}: params_schema {o.params_schema} not found in the bundle")
+        elif o.params_schema and '"x-secret"' in (root / o.params_schema).read_text(encoding="utf-8"):
+            errs.append(f"operation {o.verb}: params_schema uses x-secret; a form never takes a credential: declare it in "
+                        "[[secrets]] and the owner sets it (oarbank secret set)")
     return errs
 
 
@@ -64,6 +68,18 @@ def cmd_check(path: str) -> int:
     if ui_errors:
         print(f"{path}: INVALID (UI contract)")
         for e in ui_errors:
+            print(f"  {e}")
+        return 1
+    from . import images
+    key_errors = []
+    for cs in man.sandbox.container_sets:
+        try:
+            images.load_key(Path(path).parent, cs)
+        except images.ImageError as e:
+            key_errors.append(str(e))
+    if key_errors:
+        print(f"{path}: INVALID (container set keys)")
+        for e in key_errors:
             print(f"  {e}")
         return 1
     extra = m.unknown_fields(man)
