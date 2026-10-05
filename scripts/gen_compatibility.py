@@ -10,7 +10,7 @@ page is stale. docs/compatibility/README.md says how a report becomes a row.
 import json
 import re
 import sys
-from datetime import date
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 import jsonschema
@@ -59,7 +59,7 @@ def problems(data: dict, today: date | None = None) -> list[str]:
              for e in sorted(validator.iter_errors(data), key=lambda e: list(map(str, e.absolute_path)))]
     if found:
         return found
-    today = today or date.today()
+    today = today or datetime.now(timezone.utc).date()   # report dates are UTC (GitHub's createdAt)
     seen = set()
     for r in data["reports"]:
         where = f"reports/{r['id']}"
