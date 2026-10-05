@@ -67,11 +67,19 @@ ones derived per OS:
 | Purpose | darwin, linux | windows |
 |---|---|---|
 | search path | module environment `bin` + `/usr/bin:/bin:/usr/sbin:/sbin` | environment `Scripts` + `%SystemRoot%\System32;%SystemRoot%;%SystemRoot%\System32\Wbem`, `PATHEXT=.COM;.EXE` |
-| home | `HOME` | `USERPROFILE`, `HOMEDRIVE`/`HOMEPATH`; `APPDATA` under it; `LOCALAPPDATA` the host account's (an AppContainer start points it at the container's own profile folder, which exists only there) |
-| temporary files | `TMPDIR` | `TEMP`, `TMP` (an AppContainer start points them into the container's profile folder) |
+| home | `HOME`, with `XDG_CONFIG_HOME`, `XDG_CACHE_HOME`, `XDG_DATA_HOME` and `XDG_STATE_HOME` in it (`.config`, `.cache`, `.local/share`, `.local/state`) | `USERPROFILE`, with `APPDATA` (`AppData\Roaming`) and `LOCALAPPDATA` (`AppData\Local`) in it; an AppContainer start points `LOCALAPPDATA` at `<LOCALAPPDATA>\Packages\<container>\AC`, which the agent creates first |
+| temporary files | `TMPDIR` | `TEMP`, `TMP`; an AppContainer start points them at `<LOCALAPPDATA>\Packages\<container>\AC\Temp`, also created first |
 | system | none | `SystemRoot`, `SystemDrive`, `windir`, `ComSpec`, `PROCESSOR_ARCHITECTURE`, `NUMBER_OF_PROCESSORS` |
 | text | `LANG=C.UTF-8` (Linux), `en_US.UTF-8` (macOS) | none |
 | Python | `PYTHONUTF8=1` | `PYTHONUTF8=1` |
+
+**What the home is.** A job's home is its work directory `<W>`, and its temporary directory `<W>/tmp`: everything a
+runner and the tools it starts keep in per-user locations (caches, configuration, history, temporary files) exists for
+that attempt only and is deleted with the work directory ([runner-protocol.md](runner-protocol.md#workdir)). Nothing
+carries over between attempts or jobs, so an attempt's outcome never depends on what an earlier one left. State a
+module means to keep on a node goes in `OARBANK_MODULE_DATA`, explicitly (a runner may point a tool's cache there, such
+as `UV_CACHE_DIR`). A doctor, a service, a probe and the coordinator side's processes have the module's data directory
+as their home.
 
 Module environments put interpreters in `bin/` on POSIX and in `Scripts\` on Windows. The `python` exec token resolves
 to the right one ([manifest.md](manifest.md#exec)).
@@ -127,7 +135,8 @@ Resolution, pinned by [vectors/variant-resolution.json](vectors/variant-resoluti
 **Environment.** `[runner].env`, `[coordinator].env` and the variants' `env` add variables after the host's own (for
 example `MKL_CBWR` or `OMP_NUM_THREADS`, which decide whether BLAS results are reproducible). Names match
 `^[A-Z][A-Z0-9_]*$`. Never allowed (compared case-insensitively): `OARBANK_*`, `PATH`, `PATHEXT`, `HOME`, `USERPROFILE`,
-`HOMEDRIVE`, `HOMEPATH`, `APPDATA`, `LOCALAPPDATA`, `TMPDIR`, `TEMP`, `TMP`, `SYSTEMROOT`, `SYSTEMDRIVE`, `WINDIR`, `COMSPEC`,
+`HOMEDRIVE`, `HOMEPATH`, `APPDATA`, `LOCALAPPDATA`, `TMPDIR`, `TEMP`, `TMP`, `XDG_CONFIG_HOME`, `XDG_CACHE_HOME`,
+`XDG_DATA_HOME`, `XDG_STATE_HOME`, `SYSTEMROOT`, `SYSTEMDRIVE`, `WINDIR`, `COMSPEC`,
 `PROCESSOR_ARCHITECTURE`, `NUMBER_OF_PROCESSORS`, `LANG`, `LC_ALL`, `PYTHONUTF8` and the proxy variables
 (`oarbank_sdk.manifest.RESERVED_ENV`).
 

@@ -25,12 +25,14 @@ So a runner can be written in any language, for any platform ([platforms.md](pla
 
 The agent passes exactly these variables, plus the conventional ones derived per OS ([platforms.md](platforms.md#environment-per-os)),
 then the manifest's `[runner].env` with the platform variant's `env` merged over it (never a reserved name:
-[platforms.md](platforms.md#per-platform-declarations)). Nothing is inherited.
+[platforms.md](platforms.md#per-platform-declarations)). Nothing is inherited. The runner's home and every per-user
+location (`HOME` and the XDG directories; `USERPROFILE`, `APPDATA`, `LOCALAPPDATA`) point into its work directory, so
+they are discarded with it: [platforms.md](platforms.md#environment-per-os), "What the home is".
 
 | Variable | Stability | Meaning |
 |---|---|---|
 | `OARBANK_WORKDIR` | stable | The job's work directory `<W>`. |
-| `OARBANK_TMP` | stable | `<W>/tmp`, private to the job (also `TMPDIR`, or `TEMP`/`TMP` on Windows). |
+| `OARBANK_TMP` | stable | `<W>/tmp`, private to the job (also `TMPDIR`, or `TEMP`/`TMP` on Windows, which the AppContainer start moves into the work directory's container folder: [platforms.md](platforms.md#environment-per-os)). |
 | `OARBANK_MODULE_DATA` | stable | The module's data directory on this node, kept across jobs (caches, locks). Besides the work directory, the only place a runner may write. Executing files from it needs the `exec_writable` grant ([sandbox.md](sandbox.md)). |
 | `OARBANK_PLATFORM` | stable | The node's platform token, e.g. `linux-amd64`. |
 | `OARBANK_MODULE` | stable | The module's short name (the last part of `module.id`). |
