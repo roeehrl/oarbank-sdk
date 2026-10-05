@@ -1,0 +1,107 @@
+{
+ "ui_contract": "1.2",
+ "title": "Model server",
+ "body": [
+  {
+   "type": "section",
+   "title": "The model service on each node",
+   "children": [
+    {
+     "type": "text",
+     "text": "One warm model server per node: on demand, started by the first job that reserves a model token, stopped when idle or when host protection needs its memory."
+    },
+    {
+     "type": "table",
+     "requires": "1.2",
+     "fallback": "placeholder",
+     "source": {
+      "query": "services"
+     },
+     "columns": [
+      {
+       "key": "hostname",
+       "label": "node"
+      },
+      {
+       "key": "service"
+      },
+      {
+       "key": "state",
+       "type": "status"
+      },
+      {
+       "key": "health",
+       "type": "status"
+      },
+      {
+       "key": "stopped_reason",
+       "label": "why stopped"
+      },
+      {
+       "key": "users",
+       "label": "jobs using it",
+       "type": "integer"
+      },
+      {
+       "key": "error",
+       "type": "code"
+      }
+     ]
+    },
+    {
+     "type": "link",
+     "requires": "1.2",
+     "fallback": "drop",
+     "text": "Module health and logs",
+     "to": {
+      "tab": "health"
+     }
+    }
+   ]
+  },
+  {
+   "type": "section",
+   "title": "Prompt campaigns",
+   "children": [
+    {
+     "type": "table",
+     "source": {
+      "query": "campaigns",
+      "fields": [
+       "campaign_id",
+       "name",
+       "state",
+       "created_at"
+      ]
+     },
+     "columns": [
+      {
+       "key": "campaign_id",
+       "label": "campaign",
+       "type": "campaign_ref"
+      },
+      {
+       "key": "name"
+      },
+      {
+       "key": "state",
+       "type": "status"
+      },
+      {
+       "key": "created_at",
+       "label": "created",
+       "type": "relative_time"
+      }
+     ]
+    },
+    {
+     "type": "form",
+     "schema": "schemas/queue_prompts.json",
+     "submit": {
+      "op": "self.queue_prompts"
+     }
+    }
+   ]
+  }
+ ]
+}

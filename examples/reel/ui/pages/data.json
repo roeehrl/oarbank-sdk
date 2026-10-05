@@ -1,0 +1,199 @@
+{
+ "ui_contract": "1.2",
+ "title": "Reel data",
+ "body": [
+  {
+   "type": "section",
+   "title": "Datasets",
+   "children": [
+    {
+     "type": "table",
+     "requires": "1.2",
+     "fallback": "placeholder",
+     "source": {
+      "query": "datasets",
+      "order_by": "created_at"
+     },
+     "columns": [
+      {
+       "key": "dataset_id",
+       "label": "dataset",
+       "type": "dataset_ref"
+      },
+      {
+       "key": "kind"
+      },
+      {
+       "key": "owner"
+      },
+      {
+       "key": "files",
+       "type": "integer"
+      },
+      {
+       "key": "size",
+       "type": "bytes"
+      },
+      {
+       "key": "origins",
+       "label": "origin hosts"
+      },
+      {
+       "key": "dataset_id",
+       "label": "download",
+       "type": "dataset_ref",
+       "download": true
+      }
+     ]
+    },
+    {
+     "type": "link",
+     "requires": "1.2",
+     "fallback": "drop",
+     "text": "Upload a folder, then use it as an asset",
+     "to": {
+      "upload": {
+       "kind": "upload",
+       "then": "self.adopt_upload"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "type": "section",
+   "title": "Checkpoints",
+   "children": [
+    {
+     "type": "text",
+     "text": "The latest portable checkpoint of each open render: a render paused past its node's limit, or evicted, resumes from it on any node."
+    },
+    {
+     "type": "table",
+     "requires": "1.2",
+     "fallback": "placeholder",
+     "source": {
+      "query": "checkpoints"
+     },
+     "columns": [
+      {
+       "key": "job_id",
+       "label": "job",
+       "type": "job_ref"
+      },
+      {
+       "key": "node_id",
+       "label": "written on",
+       "type": "node_ref"
+      },
+      {
+       "key": "seq",
+       "label": "checkpoint",
+       "type": "integer"
+      },
+      {
+       "key": "files",
+       "type": "integer"
+      },
+      {
+       "key": "size",
+       "type": "bytes"
+      },
+      {
+       "key": "at",
+       "label": "when",
+       "type": "relative_time"
+      }
+     ]
+    },
+    {
+     "type": "table",
+     "requires": "1.2",
+     "fallback": "drop",
+     "source": {
+      "query": "attempts",
+      "fields": [
+       "attempt_id",
+       "job_id",
+       "node_id",
+       "state",
+       "resumed_from_attempt",
+       "resumed_from_node"
+      ],
+      "limit": 50
+     },
+     "columns": [
+      {
+       "key": "attempt_id",
+       "label": "attempt",
+       "type": "integer"
+      },
+      {
+       "key": "job_id",
+       "label": "job",
+       "type": "job_ref"
+      },
+      {
+       "key": "node_id",
+       "label": "node",
+       "type": "node_ref"
+      },
+      {
+       "key": "state",
+       "type": "status"
+      },
+      {
+       "key": "resumed_from_attempt",
+       "label": "resumed from attempt",
+       "type": "integer"
+      },
+      {
+       "key": "resumed_from_node",
+       "label": "checkpoint from",
+       "type": "node_ref"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "type": "section",
+   "title": "Campaigns",
+   "children": [
+    {
+     "type": "table",
+     "requires": "1.2",
+     "fallback": "placeholder",
+     "source": {
+      "query": "campaigns",
+      "fields": [
+       "campaign_id",
+       "name",
+       "state"
+      ]
+     },
+     "columns": [
+      {
+       "key": "campaign_id",
+       "label": "campaign",
+       "type": "campaign_ref"
+      },
+      {
+       "key": "name"
+      },
+      {
+       "key": "state",
+       "type": "status"
+      },
+      {
+       "key": "campaign_id",
+       "label": "artifacts",
+       "type": "campaign_ref",
+       "download": true
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

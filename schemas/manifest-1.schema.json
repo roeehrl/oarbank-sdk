@@ -75,6 +75,12 @@
           "description": "Which way is better; enables best/colouring generically.",
           "title": "Direction"
         },
+        "download": {
+          "default": false,
+          "description": "A dataset_ref or campaign_ref cell links to its download. [UI contract 1.2]",
+          "title": "Download",
+          "type": "boolean"
+        },
         "format": {
           "anyOf": [
             {
@@ -723,6 +729,7 @@
             "enum": [
               "read.query",
               "read.view",
+              "read.media",
               "request.operation",
               "resize",
               "navigate"

@@ -300,16 +300,20 @@ def test_broker_client_waits_while_every_pipe_instance_is_busy(monkeypatch):
     mode = _winapi.PIPE_WAIT                             # byte type and read mode (both 0)
 
     def instance():
-        return _winapi.CreateNamedPipe(name, _winapi.PIPE_ACCESS_DUPLEX, mode, 1, 65536, 65536, 0, _winapi.NULL)
+        # two instances at most, the second made only once the first is taken: a client never sees no pipe at all (which
+        # is ERROR_FILE_NOT_FOUND, not busy), as with the agent, which makes the next instance while one is connected
+        return _winapi.CreateNamedPipe(name, _winapi.PIPE_ACCESS_DUPLEX, mode, 2, 65536, 65536, 0, _winapi.NULL)
     first = instance()
     holder = broker._open_pipe(name, 5)                  # takes the only instance (connected before any ConnectNamedPipe)
 
     def serve():
         time.sleep(0.5)
-        holder.close()
-        _winapi.CloseHandle(first)
         h = instance()
-        _winapi.ConnectNamedPipe(h, False)
+        try:
+            _winapi.ConnectNamedPipe(h, False)
+        except OSError as e:                             # the waiting client took it before this call: connected already
+            if e.winerror != _winapi.ERROR_PIPE_CONNECTED:
+                raise
         data = b""
         while not data.endswith(b"\n"):
             data += _winapi.ReadFile(h, 65536)[0]
@@ -322,6 +326,8 @@ def test_broker_client_waits_while_every_pipe_instance_is_busy(monkeypatch):
     assert broker.status()["running"] is True
     assert time.monotonic() - started >= 0.4             # it waited for the instance instead of failing
     t.join(5)
+    holder.close()
+    _winapi.CloseHandle(first)
 
 
 def _layout(prefix, exe, paths, base=None):

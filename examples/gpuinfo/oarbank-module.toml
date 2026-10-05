@@ -2,7 +2,7 @@
 # can use per platform: CUDA, ROCm, Vulkan or OpenCL on Linux, DirectML besides them on Windows, Metal on macOS. The core
 # grants its jobs only to nodes whose agent reports one of them, and its doctor says `undetected` where none is
 # reachable. The work itself (a sum of squares) runs on the CPU, so it needs no GPU libraries; the result records the
-# API the runner found.
+# API the runner found. Its pages show the GPU APIs each node reports and the module's platform matrix.
 manifest = 1
 
 [module]
@@ -20,6 +20,7 @@ core = ">=2.5,<3"
 platforms = ["darwin-arm64", "darwin-amd64", "linux-arm64", "linux-amd64", "windows-arm64", "windows-amd64"]
 module_protocol = [1]
 runner_protocol = [1]
+ui_contract = ">=1.2,<2"
 
 [coordinator]
 exec = ["python", "-I", "{bundle}/gpuinfo_module.py"]
@@ -54,3 +55,8 @@ fields = [{ name = "total", type = "integer", ui = { column = "Sum of squares", 
 
 [goldens]
 fixtures = "goldens/*.json"
+
+[ui]
+icon = "gpu"
+pages = [{ id = "overview", title = "GPU info", slot = "module.overview", file = "ui/pages/overview.json" }]
+panels = [{ id = "node_gpu", title = "GPU APIs", slot = "node.detail.panel", file = "ui/panels/node.json" }]

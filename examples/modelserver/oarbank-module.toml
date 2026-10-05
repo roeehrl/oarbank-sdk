@@ -1,6 +1,7 @@
 # modelserver: the reference module for service endpoints (spec/service-protocol.md, "Endpoints"). One warm "model"
 # server per node, an on-demand endpoint service; every `generate` job sends it prompts through its connector. The model
 # is a stand-in: loading it takes a moment and appends a line to <module data>/model.loads, so tests can count loads.
+# Its pages show the model service on each node, as the agents report it: ready, starting, or stopped and why.
 manifest = 1
 
 [module]
@@ -19,6 +20,7 @@ platforms = ["darwin-arm64", "darwin-amd64", "linux-arm64", "linux-amd64", "wind
 module_protocol = [1]
 runner_protocol = [1]
 service_protocol = [1]
+ui_contract = ">=1.2,<2"
 
 [coordinator]
 exec = ["python", "-I", "{bundle}/model_module.py"]
@@ -57,6 +59,10 @@ fields = [{ name = "prompts", type = "integer", ui = { column = "Prompts", forma
 
 [goldens]
 fixtures = "goldens/*.json"
+
+[ui]
+pages = [{ id = "overview", title = "Model server", slot = "module.overview", file = "ui/pages/overview.json" }]
+panels = [{ id = "node_model", title = "Model server", slot = "node.detail.panel", file = "ui/panels/node.json" }]
 
 [[operations]]
 verb = "queue_prompts"
