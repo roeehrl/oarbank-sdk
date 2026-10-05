@@ -241,10 +241,10 @@ def test_artifact_references_have_two_forms():
 def test_media_components_need_requires_1_1():
     page = U.Page.model_validate(json.loads((REEL / "ui" / "pages" / "overview.json").read_text()))
     man = manifest()
-    assert U.check_page(page, man.ui, man.operations) == []
+    assert U.check_page(page, man) == []
     bare = U.Page.model_validate({"body": [{"type": "media", "kind": "image", "source": {"view": "frames"}, "field": "frame"}]})
-    assert any("requires" in e for e in U.check_page(bare, man.ui, man.operations))
-    assert U.UI_CONTRACT == "1.1" and {"media", "gallery", "compare"} <= set(U.COMPONENT_TYPES)
+    assert any("requires" in e for e in U.check_page(bare, man))
+    assert U.minor_of(U.UI_CONTRACT) >= 1 and {"media", "gallery", "compare"} <= set(U.COMPONENT_TYPES)
 
 
 def test_artifact_ref_columns_reach_the_page_and_need_1_1_and_core_2_5():
@@ -252,9 +252,9 @@ def test_artifact_ref_columns_reach_the_page_and_need_1_1_and_core_2_5():
     assert [c.type for c in man.ui.views["frames"].columns] == ["artifact_ref", "integer"]   # declared, so not projected away
     assert ("ui.views.columns[].type artifact_ref", (2, 5)) in man.core_keys_used()
     table = {"type": "table", "source": {"view": "renders"}, "columns": [{"key": "clip", "type": "artifact_ref"}]}
-    assert any("requires" in e for e in U.check_page(U.Page.model_validate({"body": [table]}), man.ui, man.operations))
+    assert any("requires" in e for e in U.check_page(U.Page.model_validate({"body": [table]}), man))
     ok = U.Page.model_validate({"body": [{**table, "requires": "1.1", "fallback": "drop"}]})
-    assert U.check_page(ok, man.ui, man.operations) == []
+    assert U.check_page(ok, man) == []
     from oarbank_sdk.render import fmt_value
     assert fmt_value({"job": 7, "artifact": "clip", "path": "clip.webm"}, "artifact_ref") == "clip/clip.webm"
     assert fmt_value({"digest": D}, "artifact_ref") == D[:12] and fmt_value("<b>", "artifact_ref") == "—"
@@ -262,7 +262,7 @@ def test_artifact_ref_columns_reach_the_page_and_need_1_1_and_core_2_5():
 
 def _host(rows, media_fn, ui_minor=1):
     return Host(resolve=lambda src, ctx: {"rows": rows}, operation=lambda op: None, op_url=lambda op: "/do/" + op,
-                link_url=lambda l: f"/jobs/{l.job}" if l.job else "#", frame_url=lambda v: "/f/" + v, media=media_fn,
+                link_url=lambda l: f"/jobs/{l.job}" if l.job else None, frame=lambda v: None, media=media_fn,
                 module="reel", ui_minor=ui_minor)
 
 

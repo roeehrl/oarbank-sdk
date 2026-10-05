@@ -1,0 +1,130 @@
+{
+ "ui_contract": "1.2",
+ "title": "GPU info",
+ "body": [
+  {
+   "type": "section",
+   "title": "GPU APIs per node",
+   "children": [
+    {
+     "type": "text",
+     "text": "gpuinfo runs only where a node provides one of the GPU APIs its runner names for the node's platform: Metal on macOS; CUDA, ROCm, Vulkan or OpenCL on Linux; DirectML besides them on Windows."
+    },
+    {
+     "type": "table",
+     "requires": "1.2",
+     "fallback": "placeholder",
+     "source": {
+      "query": "nodes"
+     },
+     "columns": [
+      {
+       "key": "hostname",
+       "label": "node"
+      },
+      {
+       "key": "platform"
+      },
+      {
+       "key": "gpu_apis_host",
+       "label": "GPU APIs"
+      },
+      {
+       "key": "gpu_apis_containers",
+       "label": "in containers"
+      },
+      {
+       "key": "container_gpu",
+       "label": "container GPU"
+      },
+      {
+       "key": "module_state",
+       "label": "gpuinfo",
+       "type": "status"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "type": "section",
+   "title": "Platforms",
+   "children": [
+    {
+     "type": "table",
+     "requires": "1.2",
+     "fallback": "placeholder",
+     "source": {
+      "query": "platforms"
+     },
+     "columns": [
+      {
+       "key": "platform"
+      },
+      {
+       "key": "runner",
+       "type": "status"
+      },
+      {
+       "key": "reason"
+      },
+      {
+       "key": "nodes",
+       "type": "integer"
+      },
+      {
+       "key": "online",
+       "type": "integer"
+      },
+      {
+       "key": "certified",
+       "type": "integer"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "type": "section",
+   "title": "Results",
+   "children": [
+    {
+     "type": "table",
+     "source": {
+      "query": "results",
+      "fields": [
+       "job_id",
+       "node_id",
+       "total",
+       "at"
+      ],
+      "order_by": "at"
+     },
+     "columns": [
+      {
+       "key": "job_id",
+       "label": "job",
+       "type": "job_ref"
+      },
+      {
+       "key": "node_id",
+       "label": "node",
+       "type": "node_ref"
+      },
+      {
+       "key": "total",
+       "label": "sum of squares",
+       "type": "integer",
+       "format": ",d"
+      },
+      {
+       "key": "at",
+       "label": "when",
+       "type": "relative_time"
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

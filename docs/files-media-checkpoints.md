@@ -88,6 +88,25 @@ reel's overview page ([`ui/pages/overview.json`](../examples/reel/ui/pages/overv
 preview` serves `fixtures/ui/media/` through the same sniffer, so a page that previews well behaves the same on the
 console. The rules are in [spec/ui-contract.md](../spec/ui-contract.md#media).
 
+## Datasets, downloads and uploads on module pages
+
+The `datasets` host query (UI contract 1.2) lists your datasets and the operator's of your kinds, never another
+module's, with `owner`, `files`, `size`, the `origins` hosts and `pinned`. A `dataset_ref` or `campaign_ref` column links
+to the console's page for it, or with `"download": true` to its download; an upload link brings the operator to the
+folder upload with your module and kind filled in, then offers your importer on the new dataset. reel's Data page
+([`ui/pages/data.json`](../examples/reel/ui/pages/data.json)) has all of it:
+
+```json
+{"type": "table", "requires": "1.2", "fallback": "placeholder", "source": {"query": "datasets"},
+ "columns": [{"key": "dataset_id", "type": "dataset_ref"}, {"key": "owner"}, {"key": "size", "type": "bytes"},
+             {"key": "dataset_id", "label": "download", "type": "dataset_ref", "download": true}]},
+{"type": "link", "requires": "1.2", "fallback": "drop", "text": "Upload a folder", "to": {"upload": {"kind": "upload", "then": "self.adopt_upload"}}}
+```
+
+A module with bootstrap stages shows its pinned datasets with the `pins` query: each one `registered` exactly as pinned,
+`missing` (no bootstrap job has brought it yet) or `conflict` (another dataset holds the id: `conflict` says whose, and
+`alert` whether the conflict alert is open).
+
 ## Portable checkpoints
 
 A long job need not start over when a node has to let it go. Declare the capability and the stage's limits:
@@ -126,3 +145,8 @@ except Stopped:
 
 The protocol is in [spec/runner-protocol.md](../spec/runner-protocol.md#checkpoints); reel's runner
 ([`reel_runner.py`](../examples/reel/reel_runner.py)) is a complete example.
+
+A page shows them with the `checkpoints` host query (the latest checkpoint of each open job: who wrote it, its
+sequence number, files and size) and the resume fields of `attempts` (`resumed_from_attempt`, `resumed_from_node`):
+reel's Data page and its job panel ([`ui/panels/job.json`](../examples/reel/ui/panels/job.json)), which reads the
+job's own with `"params": {"job_id": "$job"}`.

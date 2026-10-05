@@ -77,6 +77,20 @@ connection for several requests. A runner's child process reaches the service on
 {"service_specs": [{"name": "generate", "service": "model", "path": "/v1/generate", "body": {"prompt": "hello"}}]}
 ```
 
+## Show it on your module's pages
+
+Every agent reports its services in each heartbeat; the `services` host query (UI contract 1.2) gives your page one row
+per node and service, with its `state` (`ready`, `starting`, `stopped`), `health`, `stopped_reason` (held by host
+protection, disabled, withdrawn after failures, a GPU API missing, or idle) and the jobs using it. modelserver's
+overview ([`ui/pages/overview.json`](../examples/modelserver/ui/pages/overview.json)) is a table of them, and its node
+panel shows the one service on that node (`"params": {"node_id": "$node", "service": "model"}`):
+
+```json
+{"type": "table", "requires": "1.2", "fallback": "placeholder", "source": {"query": "services"},
+ "columns": [{"key": "hostname", "label": "node"}, {"key": "service"}, {"key": "state", "type": "status"},
+             {"key": "health", "type": "status"}, {"key": "stopped_reason", "label": "why stopped"}]}
+```
+
 ## On each operating system
 
 The same code runs everywhere. On macOS and Linux the handles are file descriptors passed over a socket; on Windows the

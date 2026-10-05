@@ -1,6 +1,7 @@
 # reel: the reference module for files and media (oarbank-sdk 1.5). It renders deterministic frames with thumbnails,
 # keeps portable checkpoints so a render paused or moved on one node finishes on another, shows its artifacts with the
-# media components (no iframe), and registers datasets by URL and digest (origins).
+# media components (no iframe), registers datasets by URL and digest (origins), and shows its datasets, checkpoints and
+# campaigns with their downloads and an upload link to its importer (UI contract 1.2).
 # params: {"frames": int, "seed": int, "step_ms": int, "every": int, "asset"?: dataset id}; result: {"frames": int, "digest": str}.
 manifest = 1
 
@@ -51,12 +52,14 @@ fields = [{ name = "frames", type = "integer", ui = { column = "Frames", format 
 fixtures = "goldens/*.json"
 
 [datasets]
-kinds = ["asset"]
+kinds = ["asset", "upload"]          # upload: folders uploaded from the Reel data page, adopted as assets by adopt_upload
 
 [ui]
 icon = "cube"
 digest_line = "{frames:d} frames"
-pages = [{ id = "overview", title = "Reel", slot = "module.overview", file = "ui/pages/overview.json" }]
+pages = [{ id = "overview", title = "Reel", slot = "module.overview", file = "ui/pages/overview.json" },
+         { id = "data", title = "Data", slot = "module.page", file = "ui/pages/data.json" }]
+panels = [{ id = "job_checkpoint", title = "Checkpoints", slot = "job.detail.panel", file = "ui/panels/job.json", when = "job.module == self" }]
 
 [ui.views.frames]
 shape = "rows"

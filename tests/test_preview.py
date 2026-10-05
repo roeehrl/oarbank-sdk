@@ -35,8 +35,8 @@ def test_preview_renders_the_overview_with_the_console_csp(pv):
 
 
 def test_bridge_and_operation_preview(pv):
-    assert json.loads(get(f"http://127.0.0.1:{pv.port}/bridge/view/sums")[2])["rows"][0]["n"] == 1000
-    data = urllib.parse.urlencode({"p.n": "42", "return_to": "/"}).encode()
+    assert json.loads(get(f"http://127.0.0.1:{pv.port}/bridge/explorer/view/sums")[2])["rows"][0]["n"] == 1000
+    data = urllib.parse.urlencode({"p.n": "42", "return_to": "/", "csrf": pv.csrf}).encode()
     with urllib.request.urlopen(urllib.request.Request(f"http://127.0.0.1:{pv.port}/op/mod.toy.set_favorite", data=data)) as r:
         body = r.read().decode()
     assert "nothing is executed" in body and "favorite_n" in body and "42" in body

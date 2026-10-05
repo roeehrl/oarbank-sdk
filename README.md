@@ -20,7 +20,7 @@ through the versioned contracts in this repository.
 | Envelopes | Spec and result documents | [spec/envelopes.md](spec/envelopes.md) |
 | Platforms | Platform tokens, per-platform declarations, placement | [spec/platforms.md](spec/platforms.md) |
 | Sandbox | What a module process may touch, and the grants an operator approves | [spec/sandbox.md](spec/sandbox.md) |
-| UI contract 1 | Pages, panels and views the console renders for a module, media components among them | [spec/ui-contract.md](spec/ui-contract.md) |
+| UI contract 1 | Pages, panels and views the console renders for a module, media components among them, and sandboxed frames with a bridge | [spec/ui-contract.md](spec/ui-contract.md) |
 | Bundles and lifecycle | The `.mfb` file, its digest, install, canary, promote, rollback | [spec/bundles.md](spec/bundles.md) |
 | Conformance kit | What a module must pass (`oarbank-sdk conform`) | [spec/conformance.md](spec/conformance.md) |
 
@@ -52,7 +52,8 @@ The Python package `oarbank_sdk` implements these contracts:
   files. `oarbank-sdk deps compile` resolves a `requirements.in` into one hash-pinned, marker-free requirements file
   for every platform that installs it.
 - **A preview server** (`oarbank-sdk preview`) that renders a module's pages as the console will, from fixtures, media
-  served through the same type sniffer the console uses (`oarbank_sdk.media`).
+  served through the same type sniffer the console uses (`oarbank_sdk.media`), with the console's query shaper, CSP,
+  CSRF and bridge checks; `--check` runs axe over every page and panel.
 - **Shared test vectors** in [`spec/vectors/`](spec/vectors/) (canonical JSON, job keys, portable paths, platform
   tokens, variant resolution, placement classes, container image signatures) that every implementation reproduces
   exactly.
@@ -82,7 +83,8 @@ approved by their signing key ([Use secrets and signed container images](docs/se
 [`examples/reel`](examples/reel) shows datasets by URL, folders on the node, media on module pages and portable
 checkpoints ([Files, media and checkpoints](docs/files-media-checkpoints.md)).
 [`examples/gpuinfo`](examples/gpuinfo) runs only where a node provides one of its GPU APIs, a different set per platform
-([Place work by GPU API](docs/gpu-placement.md)).
+([Place work by GPU API](docs/gpu-placement.md)). Every example has pages; [Build your module's GUI](docs/module-gui.md)
+explains them, and toy's frame is a complete bridge client.
 
 ## Developing the SDK
 

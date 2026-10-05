@@ -37,7 +37,11 @@ Suites:
   `gpu_apis`, so golden lists that differ per API are exercised;
 - **service**: each endpoint service starts as an agent starts it (with its endpoint channel), says hello, becomes
   ready, answers the fixtures' `service_specs` through connections the kit hands it, drops an attempt that ended, stops,
-  and **never listens itself** (no process of it holds a listening socket).
+  and **never listens itself** (no process of it holds a listening socket);
+- **ui**: every declared view is computed from `fixtures/ui/inputs.json` and validated against its declaration as the
+  host validates it (shape, row limit, declared columns, artifact references); every page and panel renders with the
+  fixtures and `fixtures/ui/context.json` (a placeholder is a warning); axe finds no serious or critical violation
+  (skipped, with the reason, without Node, axe-core and jsdom: OARBANK_SDK_NODE_MODULES).
 
 Fixtures (optional `conformance.json` next to the manifest) feed the fake host:
 `{"datasets": {id: {"kind", "attrs", "dir"?, "files"?}}, "settings": {...}, "node_classes": [{"platform"?, "pools": {...},
@@ -1396,6 +1400,41 @@ def conform(root, fixtures: dict | None = None, runner: bool = True, sandbox: bo
     if man.sandbox.container_sets:
         check_images(root, man, fx, r)
     runs = check_protocol(root, man, fx, r)
+    check_ui_suite(root, man, r)
     if runner:
         check_runner(root, man, fx, runs, r)
     return r
+
+
+def check_ui_suite(root: Path, man, r: Report):
+    """The ui suite: every declared view computed from fixtures/ui/inputs.json and validated as oarbankd validates it
+    (ui.validate_view, artifact references included); every page and panel rendered with the fixtures and the panel
+    context; axe over them when Node with axe-core and jsdom is available."""
+    if not (man.ui.pages or man.ui.panels or man.ui.views):
+        return
+    from .preview import Preview
+    try:
+        pv = Preview(str(root / B.MANIFEST_FILE), port=0)
+    except Exception as e:                                  # noqa: BLE001 (a module that cannot start fails the suite)
+        r.add("ui", "coordinator starts for the preview", False, str(e))
+        return
+    try:
+        for vid, problems in pv.view_problems.items():
+            r.add("ui", f"view {vid} matches its declaration", not problems, "; ".join(problems[:3]))
+        rendered = True
+        for d in [*man.ui.pages, *man.ui.panels]:
+            try:
+                html = pv.page_html(d)
+            except Exception as e:                          # noqa: BLE001 - a page that cannot render fails
+                r.add("ui", f"{d.slot} {d.id} renders", False, f"{type(e).__name__}: {e}")
+                rendered = False
+                continue
+            r.add("ui", f"{d.slot} {d.id} renders", True)
+            if "mod-placeholder" in html:
+                r.warn("ui", f"{d.slot} {d.id}", "a component shows a placeholder with the fixtures (add rows or inputs)")
+        if rendered:
+            found, ran = pv.axe()
+            r.add("ui", "accessibility (axe)", None if found is None else not found,
+                  ran if found is None else "; ".join(found[:3]) or ran)
+    finally:
+        pv.close()

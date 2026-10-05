@@ -26,7 +26,7 @@ from pydantic import Field, field_validator, model_validator
 
 from ._base import Contract, Name, StrictContract
 
-UI_CONTRACT = "1.1"
+UI_CONTRACT = "1.2"
 UI_CONTRACT_MAJOR = 1
 
 Text = Annotated[str, Field(max_length=3000)]
@@ -42,7 +42,30 @@ FORMAT_RE = re.compile(r"^([+]?\.\d{1,2}[fe%]|d|,d|s|\.\d{1,2}s|d/d)?$")
 
 # Closed, host-published catalogue of core queries (always filtered to the module's own rows).
 SOURCES = ("results", "jobs", "attempts", "campaigns", "datasets", "module_settings", "module_events", "nodes",
-           "node_metrics", "store")
+           "node_metrics", "store", "secrets", "checkpoints", "services", "pins", "images", "platforms")
+QueryName = Literal["results", "jobs", "attempts", "campaigns", "datasets", "module_settings", "module_events", "nodes",
+                    "node_metrics", "store", "secrets", "checkpoints", "services", "pins", "images", "platforms"]
+# The params each host query filters on (anything else is ignored); `store` needs `collection`, `node_metrics` `node_id`.
+QUERY_PARAMS = {"results": ("job_id", "node_id"), "jobs": ("job_id", "state", "kind", "dataset_id", "campaign"),
+                "attempts": ("attempt_id", "job_id", "node_id", "state"), "campaigns": ("campaign", "state"),
+                "datasets": ("dataset_id", "kind"), "module_settings": (), "module_events": ("kind", "job_id", "campaign"),
+                "nodes": ("node_id",), "node_metrics": ("node_id",), "store": ("collection", "campaign"),
+                "secrets": ("name",), "checkpoints": ("job_id", "node_id"), "services": ("node_id", "service"),
+                "pins": ("dataset_id",), "images": ("set_name",), "platforms": ("platform",)}
+CONTEXT_MINOR = "1.2"              # owner-scoped sources and fields for what cores 2.2 to 2.5 added, frame context, links
+# Host queries new in UI contract 1.2, and fields 1.2 added to older ones: a component that reads them sets
+# requires = "1.2" (check_page), so a 1.1 host draws its fallback.
+SOURCE_MINOR = {q: CONTEXT_MINOR for q in ("secrets", "checkpoints", "services", "pins", "images", "platforms")}
+SOURCE_FIELDS_1_2 = {
+    "attempts": {"resumed_from_attempt", "resumed_from_node", "resume_digest", "module_version", "rss_gb"},
+    "nodes": {"platform", "os", "arch", "os_version", "gpu_apis_host", "gpu_apis_containers", "container_gpu",
+              "container_runtime", "container_state", "container_platforms", "container_detail", "container_missing",
+              "container_fixes", "services", "service_health",
+              "folders", "folders_ok", "enforcement", "sandbox_gaps"},
+    "campaigns": {"placement_mix", "placement_unit", "placement_pin", "bound_class", "binding_state", "binding_source",
+                  "stranded_since"},
+    "datasets": {"owner", "module", "platform", "files", "size", "origins", "pinned"},
+}
 PLACEMENT_SLOTS = ("module.overview", "module.page", "job.detail.panel", "node.detail.panel", "campaign.panel")
 SLOT_LIMITS = {"module.overview": 1, "module.page": 6, "job.detail.panel": 2, "node.detail.panel": 1, "campaign.panel": 1}
 EFFECTS = ("jobs.enqueue", "jobs.cancel", "campaigns.create", "campaigns.update", "campaigns.cancel",
@@ -57,8 +80,7 @@ EFFECT_TIER_FLOOR = {"jobs.cancel": "T1", "campaigns.cancel": "T2", "datasets.de
 
 class Source(StrictContract):
     """Where a component's rows come from. Exactly one of `query` or `view`."""
-    query: Literal["results", "jobs", "attempts", "campaigns", "datasets", "module_settings", "module_events", "nodes",
-                   "node_metrics", "store"] | None = None
+    query: QueryName | None = None
     view: Ident | None = Field(None, description="A module view declared in the manifest ([ui.views.<id>]).")
     params: dict[str, Any] = Field(default_factory=dict,
                                    description="Literals, or $route / $var interpolations only (e.g. '$node', '$var.region').")
@@ -88,6 +110,7 @@ class Column(StrictContract):
     direction: Literal["min", "max"] | None = Field(None, description="Which way is better; enables best/colouring generically.")
     tone_by_sign: bool = False
     sortable: bool = True
+    download: bool = Field(False, description="A dataset_ref or campaign_ref cell links to its download. [UI contract 1.2]")
 
     @field_validator("format")
     @classmethod
@@ -95,6 +118,20 @@ class Column(StrictContract):
         if v is not None and not FORMAT_RE.match(v):
             raise ValueError(f"format {v!r} not in the whitelist")
         return v
+
+    @model_validator(mode="after")
+    def _download(self):
+        if self.download and self.type not in ("dataset_ref", "campaign_ref"):
+            raise ValueError("download goes with a dataset_ref or campaign_ref column")
+        return self
+
+
+class Upload(StrictContract):
+    """The console's folder upload with this module and `kind` filled in; with `then`, the module's importer operation
+    (target "dataset") is offered on the new dataset once it is registered. [beta, UI contract 1.2]"""
+    kind: Annotated[str, Field(pattern=r"^[a-z][a-z0-9_-]{0,40}$")] = Field(description="One of the module's [datasets].kinds.")
+    then: Annotated[str, Field(pattern=r"^self\.[a-z][a-z0-9_]{0,40}$")] | None = Field(
+        None, description="self.<verb>: an operation of this module with target = \"dataset\".")
 
 
 class Link(StrictContract):
@@ -105,12 +142,22 @@ class Link(StrictContract):
     campaign: str | None = None
     page: Ident | None = None
     url: Annotated[str, Field(pattern=r"^https://[^\s\"'<>]+$")] | None = Field(None, description="Must match manifest ui.external_urls.")
+    tab: Literal["secrets", "health"] | None = Field(None, description="The module's own core tab. [UI contract 1.2]")
+    upload: Upload | None = Field(None, description="Upload a folder as this module's dataset. [UI contract 1.2]")
+    download: bool = Field(False, description="With `dataset` or `campaign`: its download instead of its page. [UI contract 1.2]")
 
     @model_validator(mode="after")
     def _one(self):
-        if sum(v is not None for v in (self.job, self.node, self.dataset, self.campaign, self.page, self.url)) != 1:
+        if sum(v is not None for v in (self.job, self.node, self.dataset, self.campaign, self.page, self.url, self.tab,
+                                       self.upload)) != 1:
             raise ValueError("a link names exactly one target")
+        if self.download and self.dataset is None and self.campaign is None:
+            raise ValueError("download goes with a dataset or a campaign")
         return self
+
+    def minor(self) -> str | None:
+        """The UI contract minor this link needs beyond 1.0 (None: any)."""
+        return CONTEXT_MINOR if (self.tab or self.upload or self.download) else None
 
 
 class ActionRef(StrictContract):
@@ -392,7 +439,7 @@ class IframeDecl(Contract):
     id: Ident
     entry: str = Field(description="Bundle path of the HTML entry (served from the module origin with its own CSP).")
     title: Label
-    bridge: list[Literal["read.query", "read.view", "request.operation", "resize", "navigate"]] = Field(
+    bridge: list[Literal["read.query", "read.view", "read.media", "request.operation", "resize", "navigate"]] = Field(
         default_factory=lambda: ["read.view", "resize"], description="Bridge capabilities the frame may use.")
 
 
@@ -464,10 +511,48 @@ def walk(components):
             yield from walk(tab.children)
 
 
-def check_page(page: Page, ui: UISection, operations: list[OperationDecl], bundle_files: set[str] | None = None) -> list[str]:
-    """Cross-references a page must satisfy (the installer runs this; so does oarbank-sdk check)."""
+def _names_read(c) -> set[str]:
+    """The row fields a component reads from its source (what decides whether it reads a 1.2 field)."""
+    out = set(getattr(getattr(c, "source", None), "fields", None) or [])
+    for col in getattr(c, "columns", None) or []:
+        if isinstance(col, Column):
+            out.add(col.key)
+    for it in getattr(c, "items", None) or []:
+        if isinstance(it, KVItem) and it.field:
+            out.add(it.field)
+    for attr in ("field", "value", "total", "x", "caption_field", "left", "right"):
+        v = getattr(c, attr, None)
+        if isinstance(v, str):
+            out.add(v)
+    out.update(getattr(c, "y", None) or [])
+    return out
+
+
+def needed_minor(c) -> str | None:
+    """The UI contract minor a component needs beyond 1.0, from its type, cell types, source, fields and links."""
+    need = [COMPONENT_MINOR.get(c.type)]
+    cols = getattr(c, "columns", None)
+    if isinstance(cols, list) and any(col.type == "artifact_ref" for col in cols if isinstance(col, Column)):
+        need.append(MEDIA_MINOR)                             # a cell type new in 1.1
+    if isinstance(cols, list) and any(col.download for col in cols if isinstance(col, Column)):
+        need.append(CONTEXT_MINOR)
+    src = getattr(c, "source", None)
+    if src is not None and src.query:
+        need.append(SOURCE_MINOR.get(src.query))
+        if _names_read(c) & SOURCE_FIELDS_1_2.get(src.query, set()):
+            need.append(CONTEXT_MINOR)
+    for link in (getattr(c, "to", None), getattr(c, "row_link", None)):
+        if isinstance(link, Link):
+            need.append(link.minor())
+    need = [n for n in need if n]
+    return max(need, key=minor_of) if need else None
+
+
+def check_page(page: Page, man, bundle_files: set[str] | None = None) -> list[str]:
+    """Cross-references a page of manifest `man` must satisfy (the installer runs this; so does oarbank-sdk check)."""
+    ui, operations, kinds = man.ui, man.operations, set(man.datasets.kinds)
     errs = []
-    verbs = {o.verb for o in operations}
+    ops = {o.verb: o for o in operations}
     frames = {f.id for f in ui.iframes}
     for c in walk(page.body):
         src = getattr(c, "source", None)
@@ -477,18 +562,63 @@ def check_page(page: Page, ui: UISection, operations: list[OperationDecl], bundl
         if isinstance(c, Empty) and c.action:
             refs.append(c.action)
         for a in [r for r in refs if r is not None]:
-            if a.op.startswith("self.") and a.op[5:] not in verbs:
+            if a.op.startswith("self.") and a.op[5:] not in ops:
                 errs.append(f"{c.type}: operation {a.op!r} is not declared in [[operations]]")
         if isinstance(c, Frame) and c.view not in frames:
             errs.append(f"iframe: view {c.view!r} is not declared in [[ui.iframes]]")
-        if isinstance(c, LinkC) and c.to.url and not any(c.to.url.startswith(u) for u in ui.external_urls):
-            errs.append(f"link: {c.to.url!r} is not in ui.external_urls")
+        for link in (getattr(c, "to", None), getattr(c, "row_link", None)):
+            if not isinstance(link, Link):
+                continue
+            if link.url and not any(link.url.startswith(u) for u in ui.external_urls):
+                errs.append(f"{c.type}: {link.url!r} is not in ui.external_urls")
+            if link.upload and link.upload.kind not in kinds:
+                errs.append(f"{c.type}: upload kind {link.upload.kind!r} is not one of [datasets].kinds {sorted(kinds)}")
+            if link.upload and link.upload.then:
+                o = ops.get(link.upload.then[5:])
+                if o is None or o.target != "dataset":
+                    errs.append(f"{c.type}: upload then {link.upload.then!r} must be an operation with target = \"dataset\"")
         if isinstance(c, Form) and bundle_files is not None and c.schema_ not in bundle_files:
             errs.append(f"form: schema file {c.schema_!r} is not in the bundle")
-        need = COMPONENT_MINOR.get(c.type)
-        cols = getattr(c, "columns", None)
-        if isinstance(cols, list) and any(col.type == "artifact_ref" for col in cols):
-            need = MEDIA_MINOR                               # a cell type new in 1.1
+        need = needed_minor(c)
         if need and minor_of(c.requires) < minor_of(need):
-            errs.append(f"{c.type}: new in UI contract {need}, so it sets requires = \"{need}\" and a fallback for older hosts")
+            errs.append(f"{c.type}: needs UI contract {need}, so it sets requires = \"{need}\" and a fallback for older hosts")
     return errs
+
+
+def validate_view(decl: ViewDecl, doc: dict) -> dict:
+    """A module's `ui.view.compute` answer checked against its declaration, reduced to what the console may read (the
+    shape's value; for rows only the declared columns). Raises ValueError. oarbankd stores what this returns; the
+    conformance kit runs the same check."""
+    shape = decl.shape
+    val = doc.get(shape)
+    if val is None:
+        raise ValueError(f"view returned no {shape!r}")
+    if shape == "rows":
+        if not isinstance(val, list) or not all(isinstance(r, dict) for r in val):
+            raise ValueError("rows must be a list of objects")
+        if len(val) > decl.max_rows:
+            raise ValueError(f"{len(val)} rows > max_rows {decl.max_rows}")
+        keys = {c.key for c in decl.columns}
+        if keys:
+            val = [{k: r.get(k) for k in keys} for r in val]      # only declared columns reach the console
+    elif shape in ("kv", "stat") and not isinstance(val, dict):
+        raise ValueError(f"{shape} must be an object")
+    elif shape == "series" and not isinstance(val, dict):
+        raise ValueError("series must be an object of lists")
+    return {shape: val}
+
+
+def view_ref_problems(decl: ViewDecl, doc: dict) -> list[str]:
+    """`artifact_ref` cells of a validated rows view that are not artifact references (the console shows a placeholder
+    for each; the conformance kit fails them)."""
+    cols = [c.key for c in decl.columns if c.type == "artifact_ref"]
+    out = []
+    for i, row in enumerate(doc.get("rows") or [] if decl.shape == "rows" else []):
+        for k in cols:
+            if row.get(k) is None:
+                continue
+            try:
+                ArtifactRef.model_validate(row[k])
+            except ValueError as e:
+                out.append(f"row {i} {k}: {str(e).splitlines()[-1]}")
+    return out

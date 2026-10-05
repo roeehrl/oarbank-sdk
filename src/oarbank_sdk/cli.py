@@ -3,6 +3,7 @@
     oarbank-sdk check <oarbank-module.toml>      validate a manifest strictly (typos are errors)
     oarbank-sdk export-schemas                     regenerate schemas/ from the models
     oarbank-sdk preview <oarbank-module.toml>     render the module's pages as the console will (fixtures)
+    oarbank-sdk preview <manifest> --check        render every page and panel, check the views, run axe (no server)
     oarbank-sdk bundle build <module-dir> [-o F]   build a digest-addressed bundle (.mfb)
     oarbank-sdk bundle verify <file.mfb>           verify a bundle's files, digest and manifest
     oarbank-sdk bundle wheels <module-dir>         download the wheels for the declared platforms into wheels/
@@ -42,7 +43,7 @@ def check_ui(path: str, man) -> list[str]:
             if isinstance(e, ValidationError):
                 errs += [f"  {'.'.join(str(x) for x in err['loc'])}: {err['msg']}" for err in e.errors()[:10]]
             continue
-        errs += [f"{d.id}: {x}" for x in ui.check_page(page, man.ui, man.operations, files)]
+        errs += [f"{d.id}: {x}" for x in ui.check_page(page, man, files)]
     for fr in man.ui.iframes:
         if fr.entry not in files:
             errs.append(f"iframe {fr.id}: entry {fr.entry} not found in the bundle")
@@ -108,6 +109,8 @@ def main(argv=None) -> int:
     pv = sub.add_parser("preview", help="render the module's pages as the console will, against fixtures")
     pv.add_argument("manifest")
     pv.add_argument("--port", type=int, default=8700)
+    pv.add_argument("--check", action="store_true", help="render every page and panel and run axe, then exit (no server)")
+    pv.add_argument("--node-modules", help="node_modules with axe-core and jsdom (default $OARBANK_SDK_NODE_MODULES)")
     b = sub.add_parser("bundle", help="build or verify module bundles")
     bs = b.add_subparsers(dest="bcmd", required=True)
     bb = bs.add_parser("build")
@@ -185,8 +188,8 @@ def main(argv=None) -> int:
     if a.cmd == "check":
         return max(cmd_check(p) for p in a.paths)
     if a.cmd == "preview":
-        from .preview import main as preview_main
-        return preview_main(a.manifest, a.port)
+        from .preview import check as preview_check, main as preview_main
+        return preview_check(a.manifest, a.node_modules) if a.check else preview_main(a.manifest, a.port)
     if a.cmd == "export-schemas":
         w = export()
         print(f"{len(w)} schema(s) updated" + (": " + ", ".join(w) if w else ""))

@@ -2,7 +2,9 @@
 {%- macro op_button(ref, row=None, label=None) -%}
 {%- set op_id = ref.op if not ref.op.startswith('self.') else 'mod.' ~ host.module | replace('-', '_') ~ '.' ~ ref.op[5:] -%}
 {%- set meta = host.operation(op_id) -%}
-{%- if meta and when_ok(ref.when, ctx, row) -%}
+{%- if meta and when_ok(ref.when, ctx, row) and not role_ok(meta, ctx) -%}
+<button type="button" disabled title="needs the {{ meta.min_role }} role">{{ label or meta.title }}</button>
+{%- elif meta and when_ok(ref.when, ctx, row) -%}
 <form class="inline mod-op" method="post" action="{{ host.op_url(op_id) }}"{% if meta.tier == 'T1' %} data-confirm="{{ meta.title }}{% if ref.target %} ({{ interpolate(ref.target, ctx, row) }}){% endif %}?"{% endif %}>
 <input type="hidden" name="target" value="{{ interpolate(ref.target, ctx, row) if ref.target else '' }}">
 {%- for k, v in ref.params.items() %}<input type="hidden" name="p.{{ k }}" value="{{ interpolate(v, ctx, row) }}">{% endfor %}
@@ -20,7 +22,9 @@
 {%- macro cell(row, col) -%}
 {%- set v = row.get(col.key) -%}
 {%- if col.type in ('job_ref', 'node_ref', 'dataset_ref', 'campaign_ref') and v is not none -%}
-<a href="{{ host.link_url({'job_ref': {'job': v}, 'node_ref': {'node': v}, 'dataset_ref': {'dataset': v}, 'campaign_ref': {'campaign': v}}[col.type] | link_obj) }}">{{ v }}</a>
+{%- set l = {'job_ref': {'job': v}, 'node_ref': {'node': v | string}, 'dataset_ref': {'dataset': v | string, 'download': col.download}, 'campaign_ref': {'campaign': v | string, 'download': col.download}}[col.type] | link_obj -%}
+{%- set href = host.link_url(l) if l else none -%}
+{%- if href %}<a href="{{ href }}">{{ 'download' if col.download else v }}</a>{% else %}{{ v }}{% endif %}
 {%- elif col.type == 'status' -%}<span class="chip">{{ v | fmt('text') }}</span>
 {%- elif col.type == 'code' -%}<code>{{ v | fmt('code') }}</code>
 {%- else -%}
@@ -52,10 +56,13 @@
 {%- elif c.type == 'callout' -%}<div class="mod-callout tone-{{ c.tone }}" role="note">{{ c.text }}</div>
 {%- elif c.type == 'empty' -%}<div class="mod-empty mut">{{ c.text }}{% if c.action %} {{ op_button(c.action) }}{% endif %}</div>
 {%- elif c.type == 'action' -%}<div class="mod-action">{{ op_button(c.action) }}</div>
-{%- elif c.type == 'link' -%}<a href="{{ host.link_url(c.to) }}"{% if c.to.url %} rel="noopener noreferrer" target="_blank"{% endif %}>{{ c.text }}</a>
+{%- elif c.type == 'link' -%}{%- set href = host.link_url(c.to) -%}
+{%- if href %}<a href="{{ href }}"{% if c.to.url %} rel="noopener noreferrer" target="_blank"{% endif %}{% if c.to.download %} download{% endif %}>{{ c.text }}</a>{% else %}<span>{{ c.text }}</span>{% endif %}
 {%- elif c.type == 'logs' -%}<p class="small mut">Logs: see the module's Health tab.</p>
-{%- elif c.type == 'iframe' -%}
-<iframe class="mod-frame" src="{{ host.frame_url(c.view) }}" title="{{ c.title }}" height="{{ c.height }}" sandbox="allow-scripts allow-forms" referrerpolicy="no-referrer" loading="lazy" data-bridge-module="{{ host.module }}" data-bridge-view="{{ c.view }}" data-max-height="{{ c.height * 2 }}"></iframe>
+{%- elif c.type == 'iframe' -%}{%- set f = host.frame(c.view) -%}
+{%- if f -%}
+<iframe class="mod-frame" src="{{ f.src }}" title="{{ c.title }}" height="{{ c.height }}" sandbox="allow-scripts allow-forms" referrerpolicy="no-referrer" loading="lazy" data-bridge-module="{{ host.module }}" data-bridge-view="{{ c.view }}" data-bridge-base="{{ f.base }}" data-bridge-caps="{{ f.bridge | join(' ') }}" data-context="{{ frame_context(ctx) | tojson_compact }}" data-max-height="{{ c.height * 2 }}"></iframe>
+{%- else -%}{{ placeholder(c, 'no such frame in this module') }}{%- endif -%}
 {%- else -%}
 {#- data components -#}
 {%- set d = resolve(host, c.source, ctx) if c.source else {} -%}
@@ -93,7 +100,7 @@
 {%- set rows = d.rows or [] -%}
 <ul class="mod-gallery mod-gallery-{{ c.columns }}">{% for r in rows %}{%- set m = host.media(r.get(c.field), c.kind) -%}{%- set cap = r.get(c.caption_field) if c.caption_field else none -%}
 <li>{% if m %}<figure>{% if c.kind == 'image' %}<a href="{{ m.src }}" target="_blank" rel="noopener noreferrer"><img class="mod-media-img" src="{{ m.thumb or m.src }}" alt="{{ cap | fmt('text') if cap is not none else 'image ' ~ loop.index }}" loading="lazy" referrerpolicy="no-referrer"></a>{% else %}{{ media_el(m, 'video', cap | fmt('text') if cap is not none else 'video ' ~ loop.index, 0) }}{% endif %}
-<figcaption class="small mut">{% if cap is not none %}{{ cap | fmt('text') }}{% endif %}{% if m.job %} <a href="{{ host.link_url({'job': m.job} | link_obj) }}">job {{ m.job }}</a>{% endif %}</figcaption></figure>
+<figcaption class="small mut">{% if cap is not none %}{{ cap | fmt('text') }}{% endif %}{% if m.job and host.link_url({'job': m.job} | link_obj) %} <a href="{{ host.link_url({'job': m.job} | link_obj) }}">job {{ m.job }}</a>{% endif %}</figcaption></figure>
 {%- else %}{{ placeholder(c, 'no artifact of this module to show') }}{% endif %}</li>{% else %}<li class="mut small">no rows</li>{% endfor %}</ul>
 {%- elif c.type == 'compare' -%}
 {%- set row = first_row(d) -%}{%- set a = host.media(row.get(c.left), 'image') -%}{%- set b = host.media(row.get(c.right), 'image') -%}
@@ -128,7 +135,7 @@
 {%- endif -%}
 {%- endmacro -%}
 
-<div class="mod-region" hx-disable data-module="{{ host.module }}" data-bridge-base="{{ host.context.get('bridge_base', '') }}" data-op-base="{{ host.op_url('') }}">
+<div class="mod-region" hx-disable data-module="{{ host.module }}" data-op-base="{{ host.op_url('') }}">
 {%- if page.title %}<h2 class="mod-title">{{ page.title }}</h2>{% endif -%}
 {%- for c in page.body %}{{ component(c) }}{% endfor -%}
 </div>

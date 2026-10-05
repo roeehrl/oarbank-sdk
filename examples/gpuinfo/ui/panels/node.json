@@ -1,0 +1,34 @@
+{
+ "ui_contract": "1.2",
+ "body": [
+  {
+   "type": "kv",
+   "requires": "1.2",
+   "fallback": "placeholder",
+   "source": {
+    "query": "nodes",
+    "params": {
+     "node_id": "$node"
+    }
+   },
+   "items": [
+    {
+     "label": "GPU APIs on the host",
+     "field": "gpu_apis_host"
+    },
+    {
+     "label": "GPU APIs in containers",
+     "field": "gpu_apis_containers"
+    },
+    {
+     "label": "container GPU",
+     "field": "container_gpu"
+    },
+    {
+     "label": "gpuinfo here",
+     "field": "module_state"
+    }
+   ]
+  }
+ ]
+}

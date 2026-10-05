@@ -1,0 +1,14 @@
+[
+ {
+  "digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "image": "ghcr.io/example/taskbench/task-001@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "set_name": "tasks",
+  "key_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "first_run_at": 1790000000,
+  "node_id": "n_box",
+  "attempt_id": 3,
+  "registry": "ghcr.io",
+  "repository": "example/taskbench/",
+  "platform": "linux/amd64"
+ }
+]
