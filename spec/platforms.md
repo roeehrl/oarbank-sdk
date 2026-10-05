@@ -67,8 +67,8 @@ ones derived per OS:
 | Purpose | darwin, linux | windows |
 |---|---|---|
 | search path | module environment `bin` + `/usr/bin:/bin:/usr/sbin:/sbin` | environment `Scripts` + `%SystemRoot%\System32;%SystemRoot%;%SystemRoot%\System32\Wbem`, `PATHEXT=.COM;.EXE` |
-| home | `HOME` | `USERPROFILE`, `HOMEDRIVE`/`HOMEPATH`; `APPDATA`, `LOCALAPPDATA` under it |
-| temporary files | `TMPDIR` | `TEMP`, `TMP` |
+| home | `HOME` | `USERPROFILE`, `HOMEDRIVE`/`HOMEPATH`; `APPDATA` under it; `LOCALAPPDATA` the host account's (an AppContainer start points it at the container's own profile folder, which exists only there) |
+| temporary files | `TMPDIR` | `TEMP`, `TMP` (an AppContainer start points them into the container's profile folder) |
 | system | none | `SystemRoot`, `SystemDrive`, `windir`, `ComSpec`, `PROCESSOR_ARCHITECTURE`, `NUMBER_OF_PROCESSORS` |
 | text | `LANG=C.UTF-8` (Linux), `en_US.UTF-8` (macOS) | none |
 | Python | `PYTHONUTF8=1` | `PYTHONUTF8=1` |

@@ -56,14 +56,15 @@ before Oarbank itself is released.
 
 ## What installation will look like
 
-A fleet is one **coordinator** and any number of **nodes**. The coordinator runs on macOS or Linux and can also be a
-node itself. Every node, whatever its operating system, reaches the coordinator on one address and port; see
+A fleet is one **coordinator** and any number of **nodes**. The coordinator runs on macOS, Linux or Windows and can
+also be a node itself. Every node, whatever its operating system, reaches the coordinator on one address and port; see
 [Requirements](/oarbank/operate/requirements).
 
 <Steps>
 
-1. **Install the coordinator** on a Mac or a Linux machine that stays on, and tell it the address nodes will use to
-   reach it. It runs as a background service: LaunchAgents on macOS, systemd user units on Linux.
+1. **Install the coordinator** on a Mac, a Linux machine or a Windows machine that stays on, and tell it the address
+   nodes will use to reach it. It runs as a background service: LaunchAgents on macOS, systemd user units on Linux,
+   Windows services on Windows.
 
 2. **Create your console account** on the coordinator. You sign in to the console with a password and a TOTP code
    from your authenticator app:

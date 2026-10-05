@@ -23,21 +23,9 @@ def _argv(exec_: list[str], root: Path) -> list[str]:
 
 def service_env(man, svc, data: Path, grants_env: dict, limits: Path) -> dict:
     """The protocol's environment (spec/service-protocol.md, "Invocation") for this host's OS."""
-    env = {"OARBANK_MODULE_DATA": str(data), "OARBANK_MODULE": man.module.id.rsplit(".", 1)[-1], "OARBANK_SERVICE": svc.name,
-           "OARBANK_NODE_ID": "conform", "OARBANK_PLATFORM": portable.host_platform(), "OARBANK_PROTOCOL": "1",
-           "OARBANK_LIMITS_FILE": str(limits), "PYTHONUTF8": "1", **grants_env}
-    tmp = data / "tmp"
-    if os.name == "nt":
-        root = os.environ.get("SystemRoot", r"C:\Windows")
-        env.update({"SystemRoot": root, "windir": root, "ComSpec": rf"{root}\System32\cmd.exe", "PATHEXT": ".COM;.EXE",
-                    "PATH": rf"{root}\System32;{root};{root}\System32\Wbem", "USERPROFILE": str(data), "TEMP": str(tmp),
-                    "TMP": str(tmp), "LOCALAPPDATA": str(data / "AppData" / "Local"),
-                    "PROCESSOR_ARCHITECTURE": os.environ.get("PROCESSOR_ARCHITECTURE", "AMD64"),
-                    "NUMBER_OF_PROCESSORS": os.environ.get("NUMBER_OF_PROCESSORS", "1")})
-    else:
-        env.update({"PATH": "/usr/bin:/bin:/usr/sbin:/sbin", "HOME": str(data), "TMPDIR": str(tmp), "LANG": "C.UTF-8",
-                    "LC_ALL": "C.UTF-8"})
-    return env
+    return {"OARBANK_MODULE_DATA": str(data), "OARBANK_MODULE": man.module.id.rsplit(".", 1)[-1], "OARBANK_SERVICE": svc.name,
+            "OARBANK_NODE_ID": "conform", "OARBANK_PLATFORM": portable.host_platform(), "OARBANK_PROTOCOL": "1",
+            "OARBANK_LIMITS_FILE": str(limits), **grants_env, **portable.os_env(data, data / "tmp")}
 
 
 class ServiceRun:

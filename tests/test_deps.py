@@ -153,3 +153,22 @@ def test_the_cli_compiles_beside_the_input(tmp_path, index):
     assert main(["deps", "compile", str(mod), str(mod / "requirements.in"), "--", "--no-index", "--find-links", str(index),
                  "--no-cache"]) == 0
     assert deps.parse_requirements((mod / "requirements.txt").read_text(encoding="utf-8"))[0]["name"] == "pure"
+
+
+@needs_uv
+def test_an_install_reads_the_interpreter_the_host_recorded_instead_of_starting_it(tmp_path):
+    """Inside an AppContainer uv could not start the interpreter on every Windows build (it gives it a new NUL device as
+    stdin): the host records it first, outside the sandbox, in the install's own cache."""
+    import os
+    import subprocess
+    import sys
+    uv, venv, cache = shutil.which("uv"), tmp_path / "venv", tmp_path / "cache"
+    subprocess.run([uv, "venv", "--quiet", "--no-cache", "--python", sys.executable, str(venv)], check=True)
+    py = venv / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+    subprocess.run([uv, *deps.query_args(py, cache)], check=True, capture_output=True)
+    (tmp_path / "wheels").mkdir()
+    (tmp_path / "requirements.txt").write_text("", encoding="utf-8")
+    out = subprocess.run([uv, "pip", "install", "--python", str(py), *deps.install_args(tmp_path, tmp_path / "requirements.txt", cache)],
+                         capture_output=True, text=True, env={**os.environ, "RUST_LOG": "uv_python=trace"})
+    assert out.returncode == 0, out.stderr
+    assert "Found cached interpreter info" in out.stderr and "Querying interpreter executable" not in out.stderr, out.stderr
