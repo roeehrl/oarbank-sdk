@@ -52,6 +52,15 @@ export const PAGES = [
     order: 5,
   },
   {
+    src: 'docs/compatibility.md',
+    dest: 'operate/compatibility.md',
+    type: 'reference',
+    description:
+      'The machines Oarbank’s GPU detection, GPU containers and Windows container runtime have run on, with each run’s result, versions and report, and how to add yours.',
+    platforms: ['macos', 'linux', 'windows'],
+    order: 2,
+  },
+  {
     src: 'docs/module-gui.md',
     dest: 'build/module-gui.md',
     type: 'how-to',

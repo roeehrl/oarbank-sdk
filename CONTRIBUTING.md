@@ -19,3 +19,9 @@ Anything under `spec/` or `schemas/`, and any Pydantic model they are generated 
 - no reused or retyped fields;
 - stability labels on everything new;
 - a schema-compatibility check against the previous release.
+
+## Hardware reports
+
+The hardware compatibility table ([docs/compatibility.md](docs/compatibility.md)) is generated from
+[docs/compatibility/reports.json](docs/compatibility/reports.json). How a contributor's report becomes a row is in
+[docs/compatibility/README.md](docs/compatibility/README.md).

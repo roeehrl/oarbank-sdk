@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/roeehrl/oarbank-sdk/blob/main/docs/compatibility/reports.schema.json",
+  "title": "Oarbank hardware compatibility reports",
+  "description": "The rows of docs/compatibility.md: one per configuration someone ran, the gated tests they can name, and the configurations nobody has reported yet. scripts/gen_compatibility.py adds the checks a schema cannot express.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["tests", "reports", "wanted"],
+  "properties": {
+    "$schema": {"type": "string"},
+    "tests": {
+      "description": "The gated tests a report may name, by id: the command a contributor runs and what it shows.",
+      "type": "object",
+      "propertyNames": {"$ref": "#/$defs/test_id"},
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["command", "checks", "issues"],
+        "properties": {
+          "command": {"type": "string", "minLength": 1},
+          "checks": {"type": "string", "minLength": 1},
+          "issues": {"type": "array", "items": {"$ref": "#/$defs/issue"}, "minItems": 1, "uniqueItems": true}
+        }
+      }
+    },
+    "reports": {"type": "array", "items": {"$ref": "#/$defs/report"}},
+    "wanted": {"type": "array", "items": {"$ref": "#/$defs/wanted"}}
+  },
+  "$defs": {
+    "test_id": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"},
+    "issue": {"type": "integer", "minimum": 1},
+    "family": {"enum": ["macos", "linux", "windows"]},
+    "api": {"enum": ["cuda", "directml", "metal", "opencl", "rocm", "vulkan"]},
+    "apis": {
+      "description": "null: not reported by this run. []: reported, and none.",
+      "oneOf": [{"type": "null"}, {"type": "array", "items": {"$ref": "#/$defs/api"}, "uniqueItems": true}]
+    },
+    "text": {"type": "string", "minLength": 1, "pattern": "^[^|\\n]*$"},
+    "report": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "status", "platform", "os", "machine", "gpu", "ran_in", "tools", "gpu_apis", "tests", "commit", "date", "source"],
+      "properties": {
+        "id": {"description": "Stable and unique: the row's anchor.", "type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"},
+        "status": {"enum": ["verified", "partial", "not-working"]},
+        "platform": {"description": "The agent's platform token (spec/platforms.md).", "enum": ["darwin-arm64", "darwin-amd64", "linux-arm64", "linux-amd64", "windows-arm64", "windows-amd64"]},
+        "os": {"description": "Name and version, e.g. `Ubuntu 24.04 LTS` or `Windows 11 Pro (build 26100)`.", "$ref": "#/$defs/text"},
+        "kernel": {"description": "Linux, or WSL's kernel, when it matters.", "$ref": "#/$defs/text"},
+        "machine": {"enum": ["physical", "vm", "ci"]},
+        "gpu": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["vendor", "model", "driver"],
+          "properties": {
+            "vendor": {"description": "`virtual`: a hypervisor's display adapter; `none`: no GPU adapter but a software renderer.", "enum": ["nvidia", "amd", "intel", "apple", "virtual", "none"]},
+            "model": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/text"}]},
+            "driver": {"description": "null where the OS ships it (macOS) or there is no GPU.", "oneOf": [{"type": "null"}, {"$ref": "#/$defs/text"}]}
+          }
+        },
+        "ran_in": {
+          "description": "Where the run reached: the host, a Linux container (Podman, Docker or Colima), WSL containers.",
+          "type": "array", "items": {"enum": ["host", "container", "wslc"]}, "minItems": 1, "uniqueItems": true
+        },
+        "tools": {
+          "description": "Container and GPU stack versions, by tool name.",
+          "type": "object", "propertyNames": {"pattern": "^[A-Za-z0-9][A-Za-z0-9 .+_-]*$"}, "additionalProperties": {"$ref": "#/$defs/text"}
+        },
+        "gpu_apis": {
+          "description": "`gpu_apis` as `oarbank-agent gpu-apis` or the doctor reported it.",
+          "type": "object", "additionalProperties": false, "required": ["host", "containers"],
+          "properties": {"host": {"$ref": "#/$defs/apis"}, "containers": {"$ref": "#/$defs/apis"}}
+        },
+        "tests": {
+          "type": "array",
+          "items": {
+            "type": "object", "additionalProperties": false, "required": ["id", "result"],
+            "properties": {
+              "id": {"$ref": "#/$defs/test_id"},
+              "result": {"description": "`skipped`: it ran and skipped itself, as it does without its hardware.", "enum": ["passed", "failed", "skipped"]}
+            }
+          }
+        },
+        "commit": {"description": "The core commit the run built.", "type": "string", "pattern": "^[0-9a-f]{7,40}$"},
+        "date": {"type": "string", "pattern": "^20[0-9]{2}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$"},
+        "source": {
+          "type": "object", "additionalProperties": false, "required": ["kind", "url"],
+          "properties": {
+            "kind": {"description": "`issue`: a contributor's report; `ci`: a CI job; `maintainers`: a maintainers' run, linked to the commit that records it.", "enum": ["issue", "ci", "maintainers"]},
+            "url": {"type": "string", "pattern": "^https://github\\.com/roeehrl/oarbank(-sdk)?/[^\\s|()]+$"},
+            "reporter": {"description": "The GitHub handle the report was posted under.", "type": "string", "pattern": "^[A-Za-z0-9](-?[A-Za-z0-9]){0,38}$"}
+          }
+        },
+        "notes": {"$ref": "#/$defs/text"}
+      }
+    },
+    "wanted": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["family", "hardware", "os", "question", "issue"],
+      "properties": {
+        "family": {"$ref": "#/$defs/family"},
+        "hardware": {"$ref": "#/$defs/text"},
+        "os": {"$ref": "#/$defs/text"},
+        "question": {"$ref": "#/$defs/text"},
+        "issue": {"$ref": "#/$defs/issue"}
+      }
+    }
+  }
+}
