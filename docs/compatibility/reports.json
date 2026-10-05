@@ -1,0 +1,166 @@
+{
+  "$schema": "./reports.schema.json",
+  "tests": {
+    "test_gpu_apis": {
+      "command": "uv run pytest -q tests/rust/test_gpu_apis.py",
+      "checks": "The agent and the SDK detect the same host APIs, and a real agent's module is placed by them: certified where one of its APIs exists, excluded with `GPU_API_MISSING` where none does. Passes with `2 passed`.",
+      "issues": [12, 13, 15]
+    },
+    "doctor_probe_gpu": {
+      "command": "oarbank-agent containers doctor --probe --gpu",
+      "checks": "The container runtime pulls, runs and removes a probe container with the GPU passed through; the report names the mechanism (`gpu`, e.g. `cdi:nvidia.com/gpu`) and the APIs in `gpu_apis.containers`.",
+      "issues": [12, 13]
+    },
+    "doctor_probe_service": {
+      "command": "\"C:\\Program Files\\Oarbank\\oarbank-agent.exe\" --home C:\\ProgramData\\Oarbank\\agent containers doctor --probe",
+      "checks": "The doctor's container probe as the installed agent runs it, under the service's own home.",
+      "issues": [14]
+    },
+    "verify_windows_containers": {
+      "command": "scripts\\verify-windows-containers.ps1 -InstallWsl",
+      "checks": "WSL 3.0.1 or newer, the agent's own WSL containers session, a signed image run through the broker with the Linux rules (egress, limits, mounts, cleanup) and the doctor's probe. Passes with `OK: the Windows container runtime works here`.",
+      "issues": [14]
+    },
+    "verify_windows_containers_gpu": {
+      "command": "scripts\\verify-windows-containers.ps1 -InstallWsl -Gpu",
+      "checks": "The same, and a container given the GPU: the doctor reports `gpu` as `cdi:microsoft.com/wslc` and the APIs in `gpu_apis.containers`.",
+      "issues": [10, 11]
+    },
+    "live_colima_gpu": {
+      "command": "OARBANK_LIVE_COLIMA=1 cargo test -p oarbank-agent --bins -- --ignored --nocapture live_colima_gpu_runs_vulkan_compute_on_the_apple_gpu",
+      "checks": "A container on the agent's krunkit VM runs a Vulkan compute shader on the Mac's GPU and prints `compute: ok 65536`.",
+      "issues": [16]
+    }
+  },
+  "reports": [
+    {
+      "id": "apple-m4-max-macos-27",
+      "status": "verified",
+      "platform": "darwin-arm64",
+      "os": "macOS 27",
+      "machine": "physical",
+      "gpu": {"vendor": "apple", "model": "Apple M4 Max", "driver": null},
+      "ran_in": ["host", "container"],
+      "tools": {"Colima": "0.10.3", "krunkit": "1.3.2", "Lima": "2.2.0", "Mesa": "25.3.6-102.fc44, libkrun build"},
+      "gpu_apis": {"host": ["metal", "opencl"], "containers": ["vulkan"]},
+      "tests": [
+        {"id": "test_gpu_apis", "result": "passed"},
+        {"id": "live_colima_gpu", "result": "passed"}
+      ],
+      "commit": "9a8e235",
+      "date": "2026-10-04",
+      "source": {"kind": "maintainers", "url": "https://github.com/roeehrl/oarbank/commit/9a8e2357490f4b9294b61d0ae2414c7d14195482"},
+      "notes": "The GPU container sees `Virtio-GPU Venus (Apple M4 Max)` and the compute shader's output is right. The image needs the libkrun build of Mesa: stock Mesa fails `vkCreateInstance` under krunkit."
+    },
+    {
+      "id": "github-macos-26-runner",
+      "status": "verified",
+      "platform": "darwin-arm64",
+      "os": "macOS 26.6.2",
+      "machine": "ci",
+      "gpu": {"vendor": "virtual", "model": "Apple paravirtual GPU", "driver": null},
+      "ran_in": ["host"],
+      "tools": {"runner image": "macos-26-arm64 20260907.0351"},
+      "gpu_apis": {"host": null, "containers": null},
+      "tests": [{"id": "test_gpu_apis", "result": "passed"}],
+      "commit": "1dc15f7",
+      "date": "2026-10-04",
+      "source": {"kind": "ci", "url": "https://github.com/roeehrl/oarbank/actions/runs/37240935327/job/111549350958"},
+      "notes": "GitHub's macos-26 runner is a macOS VM with a paravirtual GPU. The gpuinfo module is certified with Metal reached from its sandbox. The test asserts that `metal` is among the host APIs and that the agent and the SDK agree; the job does not print the whole list."
+    },
+    {
+      "id": "linux-arm64-vm-no-gpu",
+      "status": "verified",
+      "platform": "linux-arm64",
+      "os": "Ubuntu 26.04 LTS",
+      "kernel": "7.0",
+      "machine": "vm",
+      "gpu": {"vendor": "none", "model": null, "driver": null},
+      "ran_in": ["host"],
+      "tools": {},
+      "gpu_apis": {"host": [], "containers": []},
+      "tests": [{"id": "test_gpu_apis", "result": "passed"}],
+      "commit": "df64852",
+      "date": "2026-10-04",
+      "source": {"kind": "maintainers", "url": "https://github.com/roeehrl/oarbank/commit/df6485221bbdad04cb59d68976c4728327c7971b"},
+      "notes": "A virtual machine with no GPU device, only Mesa's lavapipe, a CPU Vulkan device. Detection correctly reports no API, the gpuinfo module is `undetected` and explain says `GPU_API_MISSING`."
+    },
+    {
+      "id": "windows-11-arm64-vm-no-gpu",
+      "status": "verified",
+      "platform": "windows-arm64",
+      "os": "Windows 11 Pro (build 26300)",
+      "machine": "vm",
+      "gpu": {"vendor": "none", "model": null, "driver": null},
+      "ran_in": ["host"],
+      "tools": {},
+      "gpu_apis": {"host": [], "containers": []},
+      "tests": [],
+      "commit": "df64852",
+      "date": "2026-10-04",
+      "source": {"kind": "maintainers", "url": "https://github.com/roeehrl/oarbank/commit/df6485221bbdad04cb59d68976c4728327c7971b"},
+      "notes": "A QEMU virtual machine whose only adapter is the Microsoft Basic Render Driver, which is excluded for DirectML, Vulkan (Dozen) and OpenCL (OpenCLOn12): the agent and the SDK both report no API. WSL containers cannot start in this VM (no nested virtualisation)."
+    },
+    {
+      "id": "github-windows-2025-runner",
+      "status": "verified",
+      "platform": "windows-amd64",
+      "os": "Windows Server 2025 Datacenter (build 26100)",
+      "kernel": "6.18.40.1-1",
+      "machine": "ci",
+      "gpu": {"vendor": "virtual", "model": "Microsoft Hyper-V Video", "driver": "10.0.26100.1150"},
+      "ran_in": ["host", "wslc"],
+      "tools": {"WSL": "3.0.1", "runner image": "windows-2025-vs2026 20260925.250.1"},
+      "gpu_apis": {"host": null, "containers": []},
+      "tests": [{"id": "verify_windows_containers", "result": "passed"}],
+      "commit": "1dc15f7",
+      "date": "2026-10-04",
+      "source": {"kind": "ci", "url": "https://github.com/roeehrl/oarbank/actions/runs/37240935327/job/111549350751"},
+      "notes": "The agent's WSL containers session is ready (`linux/amd64`). A signed image runs with the Linux rules: no network, then a granted one; the reservation's memory and CPU limits; the work directory mounted; unsigned and unapproved images refused before any pull. The doctor's probe passes as an administrator. No GPU: the Hyper-V video adapter is not one, and `gpu` is `undetected`."
+    }
+  ],
+  "wanted": [
+    {
+      "family": "macos",
+      "hardware": "Intel Mac with Intel or AMD Radeon graphics",
+      "os": "macOS (darwin-amd64)",
+      "question": "Does the host report `metal`, and does Vulkan reach containers through krunkit, or does the agent report container GPU unavailable?",
+      "issue": 16
+    },
+    {
+      "family": "linux",
+      "hardware": "NVIDIA GPU with the NVIDIA Container Toolkit",
+      "os": "Linux (amd64 or arm64)",
+      "question": "Does a container get the GPU through CDI, with `cuda` in `gpu_apis.containers`?",
+      "issue": 12
+    },
+    {
+      "family": "linux",
+      "hardware": "AMD GPU (ROCm or Mesa) or Intel GPU (Arc, Iris Xe or integrated)",
+      "os": "Linux (amd64 or arm64)",
+      "question": "Are `rocm`, `vulkan` and `opencl` detected correctly, and does a container reach the GPU through CDI (`/dev/dri`, and `/dev/kfd` for ROCm)?",
+      "issue": 13
+    },
+    {
+      "family": "windows",
+      "hardware": "NVIDIA GPU",
+      "os": "Windows 10 or 11 (amd64 or arm64)",
+      "question": "Does a WSL container get the GPU (`cdi:microsoft.com/wslc`), with `cuda` and `directml` in `gpu_apis.containers`?",
+      "issue": 10
+    },
+    {
+      "family": "windows",
+      "hardware": "AMD Radeon, Intel Arc or Iris Xe GPU",
+      "os": "Windows 10 or 11 (amd64 or arm64)",
+      "question": "Which APIs reach WSL containers: `directml`, and ROCm or Level Zero from the image's own runtime?",
+      "issue": 11
+    },
+    {
+      "family": "windows",
+      "hardware": "Any PC, no GPU needed (amd64 especially)",
+      "os": "Windows 10 or 11",
+      "question": "Does the container runtime work on a real machine, and can the installed service's account drive WSL containers?",
+      "issue": 14
+    }
+  ]
+}

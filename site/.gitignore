@@ -7,6 +7,7 @@ deploy-hub/
 /src/content/docs/spec/*.md
 /src/content/docs/build/*.md
 /src/content/docs/reference/manifest.md
+/src/content/docs/operate/compatibility.md
 /public/schemas/
 /public/vectors/
 # Private hygiene terms (owner names, machine names); CI passes them as a secret

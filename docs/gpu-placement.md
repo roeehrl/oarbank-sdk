@@ -50,6 +50,9 @@ whenever its doctors run; after installing a driver, run the doctor from the con
 On Linux the agent's account must be able to open the GPU's device files: add the `oarbank` account to the `render`
 and `video` groups (and restart the agent) when a GPU is missing from the list.
 
+[Hardware compatibility](compatibility.md) lists the machines detection and GPU containers have been checked on, and
+how to report yours.
+
 ## 3. Let the doctor and the goldens agree
 
 Where none of your APIs is reachable, say so in `doctor --json` with `health = "undetected"`: the node then never offers
