@@ -1,0 +1,81 @@
+{
+ "ui_contract": "1.2",
+ "body": [
+  {
+   "type": "kv",
+   "requires": "1.2",
+   "fallback": "placeholder",
+   "source": {
+    "query": "checkpoints",
+    "params": {
+     "job_id": "$job"
+    }
+   },
+   "items": [
+    {
+     "label": "latest checkpoint",
+     "field": "seq",
+     "type": "integer"
+    },
+    {
+     "label": "written on",
+     "field": "node_id"
+    },
+    {
+     "label": "size",
+     "field": "size",
+     "type": "bytes"
+    },
+    {
+     "label": "when",
+     "field": "at",
+     "type": "relative_time"
+    }
+   ]
+  },
+  {
+   "type": "table",
+   "requires": "1.2",
+   "fallback": "drop",
+   "source": {
+    "query": "attempts",
+    "params": {
+     "job_id": "$job"
+    },
+    "fields": [
+     "attempt_id",
+     "node_id",
+     "state",
+     "resumed_from_attempt",
+     "resumed_from_node"
+    ]
+   },
+   "columns": [
+    {
+     "key": "attempt_id",
+     "label": "attempt",
+     "type": "integer"
+    },
+    {
+     "key": "node_id",
+     "label": "node",
+     "type": "node_ref"
+    },
+    {
+     "key": "state",
+     "type": "status"
+    },
+    {
+     "key": "resumed_from_attempt",
+     "label": "resumed from attempt",
+     "type": "integer"
+    },
+    {
+     "key": "resumed_from_node",
+     "label": "checkpoint from",
+     "type": "node_ref"
+    }
+   ]
+  }
+ ]
+}

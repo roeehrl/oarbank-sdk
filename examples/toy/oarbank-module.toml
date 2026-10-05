@@ -55,7 +55,7 @@ digest_line = "sum = {sum:,d}"
 icon = "cube"
 pages = [{ id = "overview", title = "Toy", slot = "module.overview", file = "ui/pages/overview.json" }]
 panels = [{ id = "job_sum", title = "Toy result", slot = "job.detail.panel", file = "ui/panels/job.json" }]
-iframes = [{ id = "explorer", entry = "ui/frames/explorer.html", title = "Toy explorer", bridge = ["read.view", "request.operation", "resize"] }]
+iframes = [{ id = "explorer", entry = "ui/frames/explorer.html", title = "Toy explorer", bridge = ["read.view", "read.query", "request.operation", "resize", "navigate"] }]
 
 [ui.views.sums]
 shape = "rows"

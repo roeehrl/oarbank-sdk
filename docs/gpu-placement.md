@@ -87,6 +87,19 @@ host. The image needs Mesa's Venus driver in its libkrun build and the Vulkan lo
 slp/mesa-libkrun-vulkan`, then `mesa-vulkan-drivers` pinned to that build, and `vulkan-loader`; stock Mesa fails
 `vkCreateInstance` under krunkit). Metal itself never reaches a Linux container.
 
+## Show it on your module's pages
+
+The `nodes` host query (UI contract 1.2) carries each node's `platform`, `gpu_apis_host`, `gpu_apis_containers` and
+`container_gpu`, and `platforms` your per-platform support matrix beside the fleet's nodes. gpuinfo's overview
+([`ui/pages/overview.json`](../examples/gpuinfo/ui/pages/overview.json)) shows both, and its node panel the node's own
+APIs (`"params": {"node_id": "$node"}`):
+
+```json
+{"type": "table", "requires": "1.2", "fallback": "placeholder", "source": {"query": "nodes"},
+ "columns": [{"key": "hostname", "label": "node"}, {"key": "platform"}, {"key": "gpu_apis_host", "label": "GPU APIs"},
+             {"key": "gpu_apis_containers", "label": "in containers"}, {"key": "module_state", "type": "status"}]}
+```
+
 ## 5. Check it with the kit
 
 ```bash

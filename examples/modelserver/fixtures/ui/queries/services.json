@@ -1,0 +1,30 @@
+[
+ {
+  "node_id": "n_studio",
+  "hostname": "studio",
+  "service": "model",
+  "health": "healthy",
+  "state": "ready",
+  "stopped_reason": null,
+  "error": null,
+  "gpu_api_missing": null,
+  "lifecycle": "on_demand",
+  "users": 2,
+  "endpoint": true,
+  "reported_at": 1790000000
+ },
+ {
+  "node_id": "n_mini",
+  "hostname": "mini",
+  "service": "model",
+  "health": "healthy",
+  "state": "stopped",
+  "stopped_reason": "held: preempt_memory",
+  "error": null,
+  "gpu_api_missing": null,
+  "lifecycle": "on_demand",
+  "users": 0,
+  "endpoint": true,
+  "reported_at": 1790000000
+ }
+]

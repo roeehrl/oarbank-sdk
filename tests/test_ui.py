@@ -51,7 +51,7 @@ def test_cross_references_are_checked():
               {"type": "action", "action": {"op": "self.nope"}},
               {"type": "iframe", "view": "nope", "title": "x"},
               {"type": "link", "text": "x", "to": {"url": "https://unlisted.example"}}])
-    errs = ui.check_page(p, man.ui, man.operations)
+    errs = ui.check_page(p, man)
     assert len(errs) == 4 and any("view 'nope'" in e for e in errs) and any("self.nope" in e for e in errs)
 
 

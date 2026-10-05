@@ -1,0 +1,18 @@
+[
+ {
+  "platform": "darwin-arm64",
+  "runner": "supported",
+  "reason": null,
+  "nodes": 1,
+  "online": 1,
+  "certified": 1
+ },
+ {
+  "platform": "linux-amd64",
+  "runner": "supported",
+  "reason": null,
+  "nodes": 1,
+  "online": 1,
+  "certified": 0
+ }
+]

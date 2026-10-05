@@ -1,0 +1,141 @@
+{
+ "ui_contract": "1.2",
+ "title": "Taskbench",
+ "body": [
+  {
+   "type": "section",
+   "title": "Provider key",
+   "children": [
+    {
+     "type": "text",
+     "text": "The attempt stage alone receives the provider key, from the owner: this page shows only whether it is set and its fingerprint, never the value."
+    },
+    {
+     "type": "table",
+     "requires": "1.2",
+     "fallback": "placeholder",
+     "source": {
+      "query": "secrets"
+     },
+     "columns": [
+      {
+       "key": "name",
+       "type": "code"
+      },
+      {
+       "key": "set",
+       "type": "bool"
+      },
+      {
+       "key": "fingerprint",
+       "type": "code"
+      },
+      {
+       "key": "changed_at",
+       "label": "changed",
+       "type": "relative_time"
+      },
+      {
+       "key": "changed_by",
+       "label": "by"
+      },
+      {
+       "key": "node_values",
+       "label": "node values",
+       "type": "integer"
+      },
+      {
+       "key": "stages",
+       "label": "received by"
+      }
+     ]
+    },
+    {
+     "type": "link",
+     "requires": "1.2",
+     "fallback": "drop",
+     "text": "Set or replace it on the Secrets tab",
+     "to": {
+      "tab": "secrets"
+     }
+    }
+   ]
+  },
+  {
+   "type": "section",
+   "title": "Task images run",
+   "children": [
+    {
+     "type": "table",
+     "requires": "1.2",
+     "fallback": "placeholder",
+     "source": {
+      "query": "images"
+     },
+     "columns": [
+      {
+       "key": "image",
+       "type": "code"
+      },
+      {
+       "key": "set_name",
+       "label": "set"
+      },
+      {
+       "key": "digest",
+       "type": "digest"
+      },
+      {
+       "key": "first_run_at",
+       "label": "first run",
+       "type": "relative_time"
+      },
+      {
+       "key": "node_id",
+       "label": "on",
+       "type": "node_ref"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "type": "section",
+   "title": "Runs",
+   "children": [
+    {
+     "type": "table",
+     "source": {
+      "query": "campaigns",
+      "fields": [
+       "campaign_id",
+       "name",
+       "state"
+      ]
+     },
+     "columns": [
+      {
+       "key": "campaign_id",
+       "label": "campaign",
+       "type": "campaign_ref"
+      },
+      {
+       "key": "name"
+      },
+      {
+       "key": "state",
+       "type": "status"
+      }
+     ]
+    },
+    {
+     "type": "form",
+     "schema": "schemas/run_tasks.json",
+     "submit": {
+      "op": "self.run_tasks"
+     }
+    }
+   ]
+  }
+ ]
+}

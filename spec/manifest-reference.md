@@ -223,13 +223,14 @@ Cross-field rules are in [manifest.md](manifest.md).
 | `ui.views.columns[].direction` | `"min"` \| `"max"` (optional) |  | Which way is better; enables best/colouring generically. |
 | `ui.views.columns[].tone_by_sign` | bool | `false` |  |
 | `ui.views.columns[].sortable` | bool | `true` |  |
+| `ui.views.columns[].download` | bool | `false` | A dataset_ref or campaign_ref cell links to its download. [UI contract 1.2] |
 | `ui.views.refresh_s` | int (optional) |  | Clock-driven refresh; floor 5 minutes. |
 | `ui.views.max_rows` | int | `1000` |  |
 | `ui.iframes` | list of IframeDecl | `[]` |  |
 | `ui.iframes[].id` | str | required |  |
 | `ui.iframes[].entry` | str | required | Bundle path of the HTML entry (served from the module origin with its own CSP). |
 | `ui.iframes[].title` | str | required |  |
-| `ui.iframes[].bridge` | list of `"read.query"` \| `"read.view"` \| `"request.operation"` \| `"resize"` \| `"navigate"` | `["read.view", "resize"]` | Bridge capabilities the frame may use. |
+| `ui.iframes[].bridge` | list of `"read.query"` \| `"read.view"` \| `"read.media"` \| `"request.operation"` \| `"resize"` \| `"navigate"` | `["read.view", "resize"]` | Bridge capabilities the frame may use. |
 | `ui.external_urls` | list of str | `[]` |  |
 | `operations` | list of OperationDecl | `[]` | [beta] Module operations, registered as mod.<module>.<verb>. |
 | `operations[].verb` | str | required |  |

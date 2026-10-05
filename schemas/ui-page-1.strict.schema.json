@@ -339,6 +339,12 @@
           "description": "Which way is better; enables best/colouring generically.",
           "title": "Direction"
         },
+        "download": {
+          "default": false,
+          "description": "A dataset_ref or campaign_ref cell links to its download. [UI contract 1.2]",
+          "title": "Download",
+          "type": "boolean"
+        },
         "format": {
           "anyOf": [
             {
@@ -1493,6 +1499,12 @@
           "default": null,
           "title": "Dataset"
         },
+        "download": {
+          "default": false,
+          "description": "With `dataset` or `campaign`: its download instead of its page. [UI contract 1.2]",
+          "title": "Download",
+          "type": "boolean"
+        },
         "job": {
           "anyOf": [
             {
@@ -1529,6 +1541,35 @@
           ],
           "default": null,
           "title": "Page"
+        },
+        "tab": {
+          "anyOf": [
+            {
+              "enum": [
+                "secrets",
+                "health"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The module's own core tab. [UI contract 1.2]",
+          "title": "Tab"
+        },
+        "upload": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Upload"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Upload a folder as this module's dataset. [UI contract 1.2]"
         },
         "url": {
           "anyOf": [
@@ -2266,7 +2307,13 @@
                 "module_events",
                 "nodes",
                 "node_metrics",
-                "store"
+                "store",
+                "secrets",
+                "checkpoints",
+                "services",
+                "pins",
+                "images",
+                "platforms"
               ],
               "type": "string"
             },
@@ -2933,6 +2980,37 @@
       ],
       "title": "TextC",
       "type": "object"
+    },
+    "Upload": {
+      "additionalProperties": false,
+      "description": "The console's folder upload with this module and `kind` filled in; with `then`, the module's importer operation\n(target \"dataset\") is offered on the new dataset once it is registered. [beta, UI contract 1.2]",
+      "properties": {
+        "kind": {
+          "description": "One of the module's [datasets].kinds.",
+          "pattern": "^[a-z][a-z0-9_-]{0,40}$",
+          "title": "Kind",
+          "type": "string"
+        },
+        "then": {
+          "anyOf": [
+            {
+              "pattern": "^self\\.[a-z][a-z0-9_]{0,40}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "self.<verb>: an operation of this module with target = \"dataset\".",
+          "title": "Then"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "title": "Upload",
+      "type": "object"
     }
   },
   "$id": "https://codonic.dev/oarbank/schemas/ui-page-1.strict.schema.json",
@@ -3062,7 +3140,7 @@
       "title": "Title"
     },
     "ui_contract": {
-      "default": "1.1",
+      "default": "1.2",
       "pattern": "^1\\.\\d+$",
       "title": "Ui Contract",
       "type": "string"

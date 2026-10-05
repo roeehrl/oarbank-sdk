@@ -1,0 +1,56 @@
+{
+ "ui_contract": "1.2",
+ "body": [
+  {
+   "type": "status",
+   "requires": "1.2",
+   "fallback": "placeholder",
+   "label": "model server",
+   "source": {
+    "query": "services",
+    "params": {
+     "node_id": "$node",
+     "service": "model"
+    }
+   },
+   "field": "state",
+   "tones": {
+    "ready": "ok",
+    "starting": "running",
+    "stopped": "neutral"
+   }
+  },
+  {
+   "type": "kv",
+   "requires": "1.2",
+   "fallback": "drop",
+   "source": {
+    "query": "services",
+    "params": {
+     "node_id": "$node",
+     "service": "model"
+    }
+   },
+   "items": [
+    {
+     "label": "health",
+     "field": "health"
+    },
+    {
+     "label": "why stopped",
+     "field": "stopped_reason"
+    },
+    {
+     "label": "jobs using it",
+     "field": "users",
+     "type": "integer"
+    },
+    {
+     "label": "reported",
+     "field": "reported_at",
+     "type": "relative_time"
+    }
+   ]
+  }
+ ]
+}

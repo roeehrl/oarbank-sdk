@@ -25,7 +25,7 @@ def failed(rep) -> set[str]:
 def test_the_reference_module_conforms():
     rep = conform(TOY)
     assert rep.ok, rep.text()
-    assert {c.suite for c in rep.checks} == {"manifest", "bundle", "protocol", "runner"}
+    assert {c.suite for c in rep.checks} == {"manifest", "bundle", "protocol", "ui", "runner"}
 
 
 def test_an_impure_verb_is_caught(tmp_path):

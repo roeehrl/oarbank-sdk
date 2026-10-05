@@ -1,0 +1,10 @@
+{
+ "job": {
+  "id": 2,
+  "module": "toy",
+  "state": "done"
+ },
+ "user": {
+  "role": "operator"
+ }
+}

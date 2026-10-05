@@ -1,0 +1,26 @@
+[
+ {
+  "dataset_id": "asset:clip",
+  "kind": "asset",
+  "owner": "module",
+  "module": "reel",
+  "files": 1,
+  "size": 9673,
+  "origins": [
+   "assets.example.org"
+  ],
+  "pinned": false,
+  "created_at": 1790000000
+ },
+ {
+  "dataset_id": "upload:shots-1",
+  "kind": "upload",
+  "owner": "module",
+  "module": "reel",
+  "files": 12,
+  "size": 4194304,
+  "origins": [],
+  "pinned": false,
+  "created_at": 1790003600
+ }
+]

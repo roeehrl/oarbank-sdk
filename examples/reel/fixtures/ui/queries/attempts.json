@@ -1,0 +1,18 @@
+[
+ {
+  "attempt_id": 4,
+  "job_id": 1,
+  "node_id": "n_studio",
+  "state": "released",
+  "resumed_from_attempt": null,
+  "resumed_from_node": null
+ },
+ {
+  "attempt_id": 5,
+  "job_id": 1,
+  "node_id": "n_mini",
+  "state": "live",
+  "resumed_from_attempt": 4,
+  "resumed_from_node": "n_studio"
+ }
+]

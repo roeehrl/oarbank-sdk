@@ -104,6 +104,22 @@ A coordinator verb that truly needs the value declares `coordinator.permissions 
    (`oarbank_sdk.imagetest` writes signed test images without cosign or a registry). The kit verifies the members and
    checks that an image outside the set and an unsigned image inside it are refused.
 
+## Show it on your module's pages
+
+A page can say whether each secret is set, and since when, without ever seeing a value (the `secrets` host query,
+UI contract 1.2), and list the images your jobs ran (`images`). taskbench's overview
+([`ui/pages/overview.json`](../examples/taskbench/ui/pages/overview.json)) does both and links to the module's Secrets
+tab, where the owner sets the value:
+
+```json
+{"type": "table", "requires": "1.2", "fallback": "placeholder", "source": {"query": "secrets"},
+ "columns": [{"key": "name", "type": "code"}, {"key": "set", "type": "bool"}, {"key": "fingerprint", "type": "code"},
+             {"key": "changed_at", "label": "changed", "type": "relative_time"}, {"key": "changed_by", "label": "by"}]},
+{"type": "link", "requires": "1.2", "fallback": "drop", "text": "Set it on the Secrets tab", "to": {"tab": "secrets"}}
+```
+
+The fingerprint is the keyed one the Secrets tab shows. See [Build your module's GUI](module-gui.md).
+
 ## GPUs in containers
 
 A stage whose containers need the GPU reserves the agent's `gpu` pool and declares it:

@@ -52,6 +52,14 @@ export const PAGES = [
     order: 5,
   },
   {
+    src: 'docs/module-gui.md',
+    dest: 'build/module-gui.md',
+    type: 'how-to',
+    description:
+      'Pages and panels as data, the host queries that show what the core does for your module, buttons and typed links, and a sandboxed frame with a bridge client.',
+    order: 6,
+  },
+  {
     src: 'spec/public-surface.md',
     dest: 'spec/public-surface.md',
     type: 'spec',
