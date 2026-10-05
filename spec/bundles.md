@@ -68,8 +68,12 @@ bundle** as wheels, pinned by hash:
   missing or wrong.
 - **Install on a host.** Into an overlay virtual environment that also sees the host's site packages, with
   `uv pip install --offline --no-index --find-links <bundle>/wheels --require-hashes --only-binary :all: --no-deps
-  --no-cache -r <requirements>`, inside the module sandbox where the host has one: the bundle and the interpreter
-  read-only, only the new environment writable, no network.
+  --cache-dir <cache> -r <requirements>`, inside the module sandbox where the host has one: the bundle and the
+  interpreter read-only, only the new environment and the cache writable, no network. The cache is a fresh directory
+  of the host's for this install, in which the host first records the environment's interpreter outside the sandbox
+  (`uv pip list --offline --python <environment's python> --cache-dir <cache>`): uv then reads it instead of starting
+  the interpreter, which it would do with a new NUL device as stdin, and some Windows builds refuse an AppContainer the
+  NUL device ([backends/windows.md](sandbox/backends/windows.md)).
 - **Coordinator entry point.** `coordinator.exec` runs with the bundle root as its working directory, under
   `python -I` (no current directory or `PYTHONPATH` on `sys.path`). A package inside the bundle needs a small entry
   script:

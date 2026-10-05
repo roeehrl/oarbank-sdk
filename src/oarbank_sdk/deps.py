@@ -207,10 +207,18 @@ def check(root: Path, man) -> list[str]:
     return issues
 
 
-def install_args(bundle: Path, req_file: Path) -> list[str]:
-    """`uv pip install` arguments every host uses: offline, wheels only, hashes required, nothing resolved."""
+def install_args(bundle: Path, req_file: Path, cache_dir: Path) -> list[str]:
+    """`uv pip install` arguments every host uses: offline, wheels only, hashes required, nothing resolved, with a fresh
+    cache directory the host made for this install and filled with the interpreter's query (query_args)."""
     return ["--offline", "--no-index", "--find-links", str(Path(bundle) / WHEELS_DIR), "--require-hashes",
-            "--only-binary", ":all:", "--no-deps", "--no-cache", "-r", str(req_file)]
+            "--only-binary", ":all:", "--no-deps", "--cache-dir", str(cache_dir), "-r", str(req_file)]
+
+
+def query_args(python: Path, cache_dir: Path) -> list[str]:
+    """`uv` arguments that record what the new environment's interpreter is in `cache_dir`, run by the host outside the
+    sandbox before install_args inside it: uv then reads the interpreter from the cache instead of starting it, which
+    it would do with a new NUL device as its stdin, and some Windows builds refuse an AppContainer the NUL device."""
+    return ["pip", "list", "--quiet", "--offline", "--python", str(python), "--cache-dir", str(cache_dir)]
 
 
 def download(root: Path, man, python_version: str = "3.12") -> list[str]:

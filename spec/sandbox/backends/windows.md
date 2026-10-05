@@ -7,8 +7,8 @@ authors and normative for agent implementers. It needs Windows 10 1809 or later.
   Job Object, that starts the module in an AppContainer and waits for it, passing its exit code on. It exits 70 when
   the container cannot be set up and 71 when the module cannot start.
 - **Identity.** One AppContainer profile per module and role: `Oarbank.<module id>` for a node's processes (runners,
-  doctors, services, probes), `Oarbank.coordinator.<module id>` for the coordinator's (its module process and
-  dependency installs) and `Oarbank.cli.<module id>` for a module CLI. A container's named objects live in one directory
+  doctors, services, probes, dependency installs: policy kinds other than those below), `Oarbank.coordinator.<module
+  id>` for the coordinator's (kinds `coordinator` and `coordinator-install`) and `Oarbank.cli.<module id>` for a module CLI (kind `cli`). A container's named objects live in one directory
   per session that the account starting it first owns, so two accounts never share one (the agent's and the
   coordinator's services both run in session 0). Its SID is granted read and execute on the policy's read-only roots
   and full access on its read-write roots.
@@ -45,4 +45,6 @@ authors and normative for agent implementers. It needs Windows 10 1809 or later.
 Some Windows builds (seen on Windows Server 2025) refuse an AppContainer the null device: opening `NUL`
 (`os.devnull`, `subprocess.DEVNULL`) fails with access denied. The agent gives every module process standard handles
 it opened itself, so a module that starts a child passes those on (Python's `subprocess` does when `stdin`, `stdout` or
-`stderr` is left as it is) or a file in its own directories, never a new `NUL`.
+`stderr` is left as it is) or a file in its own directories, never a new `NUL`. uv starts an environment's
+interpreter that way to learn what it is, so a host installing a module's dependencies records the interpreter in
+the install's uv cache first, outside the sandbox ([bundles.md](../../bundles.md), "Install on a host").
