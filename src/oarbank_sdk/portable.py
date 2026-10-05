@@ -52,22 +52,25 @@ def _native_machine() -> str | None:
 
 def os_env(home, tmp, locale: str = "C.UTF-8") -> dict:
     """The conventional variables a module process gets from its host, for this host's OS (spec/platforms.md,
-    "Environment per OS"): the search path, `home` as the home directory and `tmp` for temporary files, plus on Windows
-    the system variables programs need to start at all. There LOCALAPPDATA stays the host account's: starting a process
-    in an AppContainer points LOCALAPPDATA, TEMP and TMP at the container's own profile folder under it, which exists
-    only there (and the start fails without the variable)."""
+    "Environment per OS"): the search path, `home` as the home directory with every per-user location in it (the XDG
+    directories; APPDATA and LOCALAPPDATA) and `tmp` for temporary files, plus on Windows the system variables programs
+    need to start at all. Starting a process in an AppContainer points LOCALAPPDATA, TEMP and TMP at the container's
+    folder under the given LOCALAPPDATA, which the module launcher creates first."""
     import os
+    home = str(home)
     if os.name == "nt":
         root = os.environ.get("SystemRoot", r"C:\Windows")
         return {"SystemRoot": root, "windir": root, "SystemDrive": os.environ.get("SystemDrive", root[:2]),
                 "ComSpec": rf"{root}\System32\cmd.exe", "PATHEXT": ".COM;.EXE",
-                "PATH": rf"{root}\System32;{root};{root}\System32\Wbem", "USERPROFILE": str(home), "TEMP": str(tmp),
-                "TMP": str(tmp), "APPDATA": os.path.join(str(home), "AppData", "Roaming"),
-                "LOCALAPPDATA": os.environ.get("LOCALAPPDATA") or os.path.join(str(home), "AppData", "Local"),
+                "PATH": rf"{root}\System32;{root};{root}\System32\Wbem", "USERPROFILE": home, "TEMP": str(tmp),
+                "TMP": str(tmp), "APPDATA": os.path.join(home, "AppData", "Roaming"),
+                "LOCALAPPDATA": os.path.join(home, "AppData", "Local"),
                 "PROCESSOR_ARCHITECTURE": os.environ.get("PROCESSOR_ARCHITECTURE", "AMD64"),
                 "NUMBER_OF_PROCESSORS": os.environ.get("NUMBER_OF_PROCESSORS", "1"), "PYTHONUTF8": "1"}
-    return {"PATH": "/usr/bin:/bin:/usr/sbin:/sbin", "HOME": str(home), "TMPDIR": str(tmp), "LANG": locale,
-            "LC_ALL": locale, "PYTHONUTF8": "1"}
+    return {"PATH": "/usr/bin:/bin:/usr/sbin:/sbin", "HOME": home, "TMPDIR": str(tmp),
+            "XDG_CONFIG_HOME": os.path.join(home, ".config"), "XDG_CACHE_HOME": os.path.join(home, ".cache"),
+            "XDG_DATA_HOME": os.path.join(home, ".local", "share"), "XDG_STATE_HOME": os.path.join(home, ".local", "state"),
+            "LANG": locale, "LC_ALL": locale, "PYTHONUTF8": "1"}
 
 
 def oci_platform(token: str) -> str:

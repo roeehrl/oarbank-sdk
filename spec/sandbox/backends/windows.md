@@ -21,13 +21,13 @@ authors and normative for agent implementers. It needs Windows 10 1809 or later.
 | Contract element | Windows |
 |---|---|
 | read and execute the bundle, runtime and tools | an inheritable allow entry for the container's SID; system directories are readable by every AppContainer already |
-| work, data and temporary directories | an inheritable full-access entry for the container's SID |
+| work, data and temporary directories | an inheritable full-access entry for the container's SID; the AppContainer start points `LOCALAPPDATA`, `TEMP` and `TMP` at `<LOCALAPPDATA>\Packages\<container>\AC` under the home's `LOCALAPPDATA` (a job's work directory), which the launcher creates first ([platforms.md](../../platforms.md#environment-per-os)) |
 | a runner's input folders | an inheritable `FILE_GENERIC_READ` entry for a capability SID only runner tokens of the module carry (`DeriveCapabilitySidsFromName("oarbank.runner.<module>")`); doctor, services and probes run without it |
 | a runner's outboxes | an inheritable entry for the same capability SID: `FILE_ADD_FILE`, `FILE_ADD_SUBDIRECTORY` (write data and append data on the files created), `FILE_WRITE_EA`, `FILE_WRITE_ATTRIBUTES`, `SYNCHRONIZE`; no `FILE_LIST_DIRECTORY`/`FILE_READ_DATA`, `DELETE`, `FILE_DELETE_CHILD`, `READ_CONTROL` or `WRITE_DAC`. An AppContainer token holds no symbolic-link privilege. The agent removes entries no accepted folder statement or release grants any more, and at start |
 | no local IPC except the broker | AppContainer object isolation: named pipes, sections and other objects outside the container are denied |
 | the job's broker | a named pipe (`OARBANK_BROKER=npipe://./pipe/<name>`, a random name created exclusively) whose DACL allows only the agent's account and the module's AppContainer, with a low mandatory label so the runner's token may write; remote clients are refused |
 | `net = none` | no network capability |
-| `net = egress-allowlist` | the elevated helper (a LocalSystem service) exempts the container from loopback isolation for the job, and Windows Filtering Platform filters block every loopback port but the agent's proxy |
+| `net = egress-allowlist` | the elevated helper (a LocalSystem service) exempts the container from loopback isolation, and Windows Filtering Platform filters block its loopback connections except to the agent's proxy port, for as long as the job's launcher runs (however the job ends) |
 | `net = egress-any` | the `internetClient` capability; loopback isolation keeps it off loopback |
 | children | children of an AppContainer process stay in it, and in the Job Object |
 

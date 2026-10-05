@@ -293,8 +293,20 @@ def test_each_new_key_alone_trips_the_core_floor(mutate):
     mf.Manifest.model_validate(doc)
 
 
+def test_every_per_user_location_lies_in_the_home(tmp_path):
+    # spec/platforms.md, "What the home is": a job's home is its work directory, so nothing kept there outlives it
+    home = tmp_path / "w"
+    env = portable.os_env(home, home / "tmp")
+    names = (("USERPROFILE", "APPDATA", "LOCALAPPDATA", "TEMP", "TMP") if os.name == "nt" else
+             ("HOME", "TMPDIR", "XDG_CONFIG_HOME", "XDG_CACHE_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME"))
+    for n in names:
+        assert Path(env[n]).is_relative_to(home), (n, env.get(n))
+    assert all(k.upper() in mf.RESERVED_ENV for k in env), "a module's env may not move any of them"
+
+
 @pytest.mark.parametrize("name", ["OARBANK_PLATFORM", "oarbank_x", "PATH", "HOME", "USERPROFILE", "SYSTEMROOT", "SYSTEMDRIVE", "TEMP", "TMP",
-                                  "TMPDIR", "LOCALAPPDATA", "APPDATA", "LANG", "HTTPS_PROXY", "PYTHONUTF8"])
+                                  "TMPDIR", "LOCALAPPDATA", "APPDATA", "XDG_CACHE_HOME", "xdg_config_home", "LANG",
+                                  "HTTPS_PROXY", "PYTHONUTF8"])
 def test_reserved_env_names_are_refused(name):
     for where in ("runner", "coordinator"):
         doc = _pp()

@@ -43,8 +43,9 @@ ENV_NAME = r"^[A-Z][A-Z0-9_]*$"
 # module's env never overrides them. Compared case-insensitively (Windows names are).
 RESERVED_ENV_PREFIX = "OARBANK_"
 RESERVED_ENV = ("PATH", "PATHEXT", "HOME", "USERPROFILE", "HOMEDRIVE", "HOMEPATH", "APPDATA", "LOCALAPPDATA", "TMPDIR",
-                "TEMP", "TMP", "SYSTEMROOT", "SYSTEMDRIVE", "WINDIR", "COMSPEC", "PROCESSOR_ARCHITECTURE",
-                "NUMBER_OF_PROCESSORS", "LANG", "LC_ALL", "PYTHONUTF8", "HTTPS_PROXY", "HTTP_PROXY", "ALL_PROXY", "NO_PROXY")
+                "TEMP", "TMP", "XDG_CONFIG_HOME", "XDG_CACHE_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME", "SYSTEMROOT",
+                "SYSTEMDRIVE", "WINDIR", "COMSPEC", "PROCESSOR_ARCHITECTURE", "NUMBER_OF_PROCESSORS", "LANG", "LC_ALL",
+                "PYTHONUTF8", "HTTPS_PROXY", "HTTP_PROXY", "ALL_PROXY", "NO_PROXY")
 
 
 def check_env(env: dict) -> dict:
