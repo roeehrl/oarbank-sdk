@@ -12,14 +12,26 @@ import { Steps, TabItem, Tabs } from '@astrojs/starlight/components';
 The current release is **Oarbank 2.5.0**, with module SDK 1.5.0. Every file and its checksums are on the
 [release page](https://github.com/roeehrl/oarbank/releases/tag/v2.5.0). First check that your computers meet the [Requirements](/oarbank/operate/requirements).
 
-| For | File |
-|---|---|
-| A Mac node with Apple silicon | [`oarbank-agent-2.5.0-macos-arm64.pkg`](https://github.com/roeehrl/oarbank/releases/download/v2.5.0/oarbank-agent-2.5.0-macos-arm64.pkg) |
-| An Intel Mac node | [`oarbank-agent-2.5.0-macos-x86_64.pkg`](https://github.com/roeehrl/oarbank/releases/download/v2.5.0/oarbank-agent-2.5.0-macos-x86_64.pkg) |
-| A Linux node (Debian, Ubuntu) | `oarbank-agent_2.5.0_amd64.deb`, `oarbank-agent_2.5.0_arm64.deb` |
-| A Linux node (Fedora, RHEL) | `oarbank-agent-2.5.0-1.x86_64.rpm`, `oarbank-agent-2.5.0-1.aarch64.rpm` |
-| A Windows node | `oarbank-agent-2.5.0-windows-x64.msi`, `oarbank-agent-2.5.0-windows-arm64.msi` |
-| The coordinator | `oarbank-coordinator-2.5.0-<platform>.tar.gz` for `darwin-arm64`, `linux-amd64`, `linux-arm64`, `windows-amd64` or `windows-arm64`, and its installer, `install-oarbankd.sh` (macOS, Linux) or `install-oarbankd.ps1` (Windows) |
+| Node | Package | Checksums |
+|---|---|---|
+| Mac node · Apple silicon | [`oarbank-agent-2.5.0-macos-arm64.pkg`](https://github.com/roeehrl/oarbank/releases/download/v2.5.0/oarbank-agent-2.5.0-macos-arm64.pkg) | [`SHA256SUMS-agent-2.5.0-darwin-arm64`](https://github.com/roeehrl/oarbank/releases/download/v2.5.0/SHA256SUMS-agent-2.5.0-darwin-arm64) |
+| Mac node · Intel | [`oarbank-agent-2.5.0-macos-x86_64.pkg`](https://github.com/roeehrl/oarbank/releases/download/v2.5.0/oarbank-agent-2.5.0-macos-x86_64.pkg) | [`SHA256SUMS-agent-2.5.0-darwin-amd64`](https://github.com/roeehrl/oarbank/releases/download/v2.5.0/SHA256SUMS-agent-2.5.0-darwin-amd64) |
+| Linux node · Debian/Ubuntu · x86_64 | [`oarbank-agent_2.5.0_amd64.deb`](https://github.com/roeehrl/oarbank/releases/download/v2.5.0/oarbank-agent_2.5.0_amd64.deb) | [`SHA256SUMS-agent-2.5.0-linux-amd64`](https://github.com/roeehrl/oarbank/releases/download/v2.5.0/SHA256SUMS-agent-2.5.0-linux-amd64) |
+| Linux node · Debian/Ubuntu · arm64 | [`oarbank-agent_2.5.0_arm64.deb`](https://github.com/roeehrl/oarbank/releases/download/v2.5.0/oarbank-agent_2.5.0_arm64.deb) | [`SHA256SUMS-agent-2.5.0-linux-arm64`](https://github.com/roeehrl/oarbank/releases/download/v2.5.0/SHA256SUMS-agent-2.5.0-linux-arm64) |
+| Linux node · Fedora/RHEL · x86_64 | [`oarbank-agent-2.5.0-1.x86_64.rpm`](https://github.com/roeehrl/oarbank/releases/download/v2.5.0/oarbank-agent-2.5.0-1.x86_64.rpm) | [`SHA256SUMS-agent-2.5.0-linux-amd64`](https://github.com/roeehrl/oarbank/releases/download/v2.5.0/SHA256SUMS-agent-2.5.0-linux-amd64) |
+| Linux node · Fedora/RHEL · arm64 | [`oarbank-agent-2.5.0-1.aarch64.rpm`](https://github.com/roeehrl/oarbank/releases/download/v2.5.0/oarbank-agent-2.5.0-1.aarch64.rpm) | [`SHA256SUMS-agent-2.5.0-linux-arm64`](https://github.com/roeehrl/oarbank/releases/download/v2.5.0/SHA256SUMS-agent-2.5.0-linux-arm64) |
+| Windows node · x64 | [`oarbank-agent-2.5.0-windows-x64.msi`](https://github.com/roeehrl/oarbank/releases/download/v2.5.0/oarbank-agent-2.5.0-windows-x64.msi) | [`SHA256SUMS-agent-2.5.0-windows-x64`](https://github.com/roeehrl/oarbank/releases/download/v2.5.0/SHA256SUMS-agent-2.5.0-windows-x64) |
+| Windows node · ARM64 | [`oarbank-agent-2.5.0-windows-arm64.msi`](https://github.com/roeehrl/oarbank/releases/download/v2.5.0/oarbank-agent-2.5.0-windows-arm64.msi) | [`SHA256SUMS-agent-2.5.0-windows-arm64`](https://github.com/roeehrl/oarbank/releases/download/v2.5.0/SHA256SUMS-agent-2.5.0-windows-arm64) |
+
+Download the coordinator archive for its computer **and** the installer for that operating system. Save them in the same folder; run the installation commands below from that folder. The coordinator archive does not include the node package.
+
+| Coordinator computer | Archive | Installer | Checksums |
+|---|---|---|---|
+| macOS · Apple silicon | [`oarbank-coordinator-2.5.0-darwin-arm64.tar.gz`](https://github.com/roeehrl/oarbank/releases/download/v2.5.0/oarbank-coordinator-2.5.0-darwin-arm64.tar.gz) | [`install-oarbankd.sh`](https://github.com/roeehrl/oarbank/releases/download/v2.5.0/install-oarbankd.sh) | [`SHA256SUMS-coordinator-2.5.0-darwin-arm64`](https://github.com/roeehrl/oarbank/releases/download/v2.5.0/SHA256SUMS-coordinator-2.5.0-darwin-arm64) |
+| Linux · x86_64 | [`oarbank-coordinator-2.5.0-linux-amd64.tar.gz`](https://github.com/roeehrl/oarbank/releases/download/v2.5.0/oarbank-coordinator-2.5.0-linux-amd64.tar.gz) | [`install-oarbankd.sh`](https://github.com/roeehrl/oarbank/releases/download/v2.5.0/install-oarbankd.sh) | [`SHA256SUMS-coordinator-2.5.0-linux-amd64`](https://github.com/roeehrl/oarbank/releases/download/v2.5.0/SHA256SUMS-coordinator-2.5.0-linux-amd64) |
+| Linux · arm64 | [`oarbank-coordinator-2.5.0-linux-arm64.tar.gz`](https://github.com/roeehrl/oarbank/releases/download/v2.5.0/oarbank-coordinator-2.5.0-linux-arm64.tar.gz) | [`install-oarbankd.sh`](https://github.com/roeehrl/oarbank/releases/download/v2.5.0/install-oarbankd.sh) | [`SHA256SUMS-coordinator-2.5.0-linux-arm64`](https://github.com/roeehrl/oarbank/releases/download/v2.5.0/SHA256SUMS-coordinator-2.5.0-linux-arm64) |
+| Windows · x64 | [`oarbank-coordinator-2.5.0-windows-amd64.tar.gz`](https://github.com/roeehrl/oarbank/releases/download/v2.5.0/oarbank-coordinator-2.5.0-windows-amd64.tar.gz) | [`install-oarbankd.ps1`](https://github.com/roeehrl/oarbank/releases/download/v2.5.0/install-oarbankd.ps1) | [`SHA256SUMS-coordinator-2.5.0-windows-amd64`](https://github.com/roeehrl/oarbank/releases/download/v2.5.0/SHA256SUMS-coordinator-2.5.0-windows-amd64) |
+| Windows · ARM64 | [`oarbank-coordinator-2.5.0-windows-arm64.tar.gz`](https://github.com/roeehrl/oarbank/releases/download/v2.5.0/oarbank-coordinator-2.5.0-windows-arm64.tar.gz) | [`install-oarbankd.ps1`](https://github.com/roeehrl/oarbank/releases/download/v2.5.0/install-oarbankd.ps1) | [`SHA256SUMS-coordinator-2.5.0-windows-arm64`](https://github.com/roeehrl/oarbank/releases/download/v2.5.0/SHA256SUMS-coordinator-2.5.0-windows-arm64) |
 
 The macOS packages are signed with Developer ID and notarized by Apple. The Windows installers are not code-signed
 yet: Windows SmartScreen may ask you to confirm before running one you downloaded with a browser.
