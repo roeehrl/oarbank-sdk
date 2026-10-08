@@ -21,10 +21,10 @@ A fleet is one coordinator and any number of nodes. The coordinator can also be 
 | | Versions | Architectures |
 |---|---|---|
 | macOS node | macOS 15 or later | Apple silicon, Intel |
-| Linux node | systemd, Linux 6.2 or later | x86_64, arm64 |
+| Linux node | systemd, glibc 2.39+, Linux 6.2 or later | x86_64, arm64 |
 | Windows node | Windows 10 version 1809 or later, Windows 11 | x64, ARM64 |
 | Coordinator on macOS | macOS 15 or later | Apple silicon |
-| Coordinator on Linux | systemd, Linux 6.2 or later | x86_64, arm64 |
+| Coordinator on Linux | systemd, glibc 2.39+, Linux 6.2 or later | x86_64, arm64 |
 | Coordinator on Windows · x64 | Windows 10 version 1809 or later, Windows 11, Windows Server 2019 or later | x64 |
 | Coordinator on Windows · ARM64 | Windows 11 (bundled x64 Python under emulation) | ARM64 |
 
@@ -42,7 +42,7 @@ A fleet is one coordinator and any number of nodes. The coordinator can also be 
     - **Containers**, for modules that use them, run in a Colima profile that the agent owns.
   </TabItem>
   <TabItem label="Linux" icon="linux">
-    - **x86_64 or arm64**, with glibc and systemd.
+    - **x86_64 or arm64**, with glibc 2.39 or newer and systemd. Published 2.6.0 Linux binaries are built and checked on Ubuntu 24.04.
     - **Linux 6.2 or later** for the module sandbox (Landlock and seccomp). Newer kernels enforce more:
       | Kernel | What the sandbox enforces |
       |---|---|
@@ -84,7 +84,7 @@ machines GPU detection and GPU containers have been checked on are listed in
 ## The coordinator
 
 - **A computer that stays on:** a Mac with Apple silicon and macOS 15 or later, a Linux machine (x86_64 or arm64)
-  with systemd and Linux 6.2 or later, or Windows x64 with Windows 10 version 1809 / Server 2019 or later.
+  with systemd, glibc 2.39 or newer and Linux 6.2 or later, or Windows x64 with Windows 10 version 1809 / Server 2019 or later.
   A Windows ARM64 coordinator needs Windows 11, because [only Windows 11 provides x64 emulation](https://learn.microsoft.com/en-us/windows/arm/apps-on-arm-x86-emulation) for its bundled Python. Intel Macs can run a source checkout; the native Mac coordinator package is Apple silicon only.
 - **First-run setup:** install the native coordinator package, then open **Oarbank Coordinator** on macOS/Linux or **Oarbank coordinator setup** in Windows Start. Package installation needs administrator privileges and installs software only. The wizard configures the reachable IP, administrator, authenticator and primary/backup owner signing keys. On macOS/Linux, open it as your ordinary user; Windows setup asks for elevation.
 - **Background services:** macOS runs per-user LaunchAgents while that user is logged in. Linux runs systemd user services; enable lingering with `sudo loginctl enable-linger <user>` to run from boot without login. Windows runs two system services under separate virtual accounts, with delayed automatic start and recovery after a crash.
