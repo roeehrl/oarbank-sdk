@@ -23,19 +23,19 @@ The current release is **Oarbank 2.6.0**, with module SDK 1.5.0. Every file and 
 | Windows node · x64 | [`oarbank-agent-2.6.0-windows-x64.msi`](https://github.com/roeehrl/oarbank/releases/download/v2.6.0/oarbank-agent-2.6.0-windows-x64.msi) | [`SHA256SUMS-agent-2.6.0-windows-x64`](https://github.com/roeehrl/oarbank/releases/download/v2.6.0/SHA256SUMS-agent-2.6.0-windows-x64) |
 | Windows node · ARM64 | [`oarbank-agent-2.6.0-windows-arm64.msi`](https://github.com/roeehrl/oarbank/releases/download/v2.6.0/oarbank-agent-2.6.0-windows-arm64.msi) | [`SHA256SUMS-agent-2.6.0-windows-arm64`](https://github.com/roeehrl/oarbank/releases/download/v2.6.0/SHA256SUMS-agent-2.6.0-windows-arm64) |
 
-Install the coordinator package on the computer that will manage the fleet. Native installers install the software; first-run configuration happens in **Oarbank Coordinator**.
+Install the coordinator package on the computer that will manage the fleet. Native installers install the software; first-run configuration happens in **Oarbank Coordinator** (**Oarbank coordinator setup** in Windows Start).
 
-| Coordinator computer | Installer |
-|---|---|
-| macOS · Apple silicon | [`oarbank-coordinator-2.6.0-macos-arm64.pkg`](https://github.com/roeehrl/oarbank/releases/download/v2.6.0/oarbank-coordinator-2.6.0-macos-arm64.pkg) |
-| Windows · x64 | [`oarbank-coordinator-2.6.0-windows-x64.msi`](https://github.com/roeehrl/oarbank/releases/download/v2.6.0/oarbank-coordinator-2.6.0-windows-x64.msi) |
-| Windows · ARM64 | [`oarbank-coordinator-2.6.0-windows-arm64.msi`](https://github.com/roeehrl/oarbank/releases/download/v2.6.0/oarbank-coordinator-2.6.0-windows-arm64.msi) |
-| Linux · Debian/Ubuntu · x86_64 or arm64 | TODO: verified coordinator .deb filenames and links |
-| Linux · Fedora/RHEL · x86_64 or arm64 | TODO: verified coordinator .rpm filenames and links |
+| Coordinator computer | Installer | Checksums |
+|---|---|---|
+| macOS · Apple silicon | [`oarbank-coordinator-2.6.0-macos-arm64.pkg`](https://github.com/roeehrl/oarbank/releases/download/v2.6.0/oarbank-coordinator-2.6.0-macos-arm64.pkg) | [`SHA256SUMS-coordinator-2.6.0-darwin-arm64`](https://github.com/roeehrl/oarbank/releases/download/v2.6.0/SHA256SUMS-coordinator-2.6.0-darwin-arm64) |
+| Windows · x64 | [`oarbank-coordinator-2.6.0-windows-x64.msi`](https://github.com/roeehrl/oarbank/releases/download/v2.6.0/oarbank-coordinator-2.6.0-windows-x64.msi) | [`SHA256SUMS-coordinator-msi-2.6.0-windows-x64`](https://github.com/roeehrl/oarbank/releases/download/v2.6.0/SHA256SUMS-coordinator-msi-2.6.0-windows-x64) |
+| Windows 11 · ARM64 | [`oarbank-coordinator-2.6.0-windows-arm64.msi`](https://github.com/roeehrl/oarbank/releases/download/v2.6.0/oarbank-coordinator-2.6.0-windows-arm64.msi) | [`SHA256SUMS-coordinator-msi-2.6.0-windows-arm64`](https://github.com/roeehrl/oarbank/releases/download/v2.6.0/SHA256SUMS-coordinator-msi-2.6.0-windows-arm64) |
+| Linux · Debian/Ubuntu · x86_64 | [`oarbank-coordinator-2.6.0-linux-amd64.deb`](https://github.com/roeehrl/oarbank/releases/download/v2.6.0/oarbank-coordinator-2.6.0-linux-amd64.deb) | [`SHA256SUMS-coordinator-packages-2.6.0-linux-amd64`](https://github.com/roeehrl/oarbank/releases/download/v2.6.0/SHA256SUMS-coordinator-packages-2.6.0-linux-amd64) |
+| Linux · Debian/Ubuntu · arm64 | [`oarbank-coordinator-2.6.0-linux-arm64.deb`](https://github.com/roeehrl/oarbank/releases/download/v2.6.0/oarbank-coordinator-2.6.0-linux-arm64.deb) | [`SHA256SUMS-coordinator-packages-2.6.0-linux-arm64`](https://github.com/roeehrl/oarbank/releases/download/v2.6.0/SHA256SUMS-coordinator-packages-2.6.0-linux-arm64) |
+| Linux · Fedora/RHEL · x86_64 | [`oarbank-coordinator-2.6.0-linux-amd64.rpm`](https://github.com/roeehrl/oarbank/releases/download/v2.6.0/oarbank-coordinator-2.6.0-linux-amd64.rpm) | [`SHA256SUMS-coordinator-packages-2.6.0-linux-amd64`](https://github.com/roeehrl/oarbank/releases/download/v2.6.0/SHA256SUMS-coordinator-packages-2.6.0-linux-amd64) |
+| Linux · Fedora/RHEL · arm64 | [`oarbank-coordinator-2.6.0-linux-arm64.rpm`](https://github.com/roeehrl/oarbank/releases/download/v2.6.0/oarbank-coordinator-2.6.0-linux-arm64.rpm) | [`SHA256SUMS-coordinator-packages-2.6.0-linux-arm64`](https://github.com/roeehrl/oarbank/releases/download/v2.6.0/SHA256SUMS-coordinator-packages-2.6.0-linux-arm64) |
 
-TODO: add checksum links after the native packages are included in verified release checksum files.
-
-Coordinator tar archives remain available on the release page for advanced deployment and signed coordinator moves.
+Compare your downloaded file’s SHA-256 with the entry for that exact filename in its checksum file; a checksum file may also list other downloads. Coordinator tar archives remain available on the release page for advanced deployment and signed coordinator moves.
 
 The macOS packages are signed with Developer ID and notarized by Apple. The Windows installers are not code-signed
 yet: Windows SmartScreen may ask you to confirm before running one you downloaded with a browser.
@@ -50,20 +50,15 @@ also be a node itself. Every node, whatever its operating system, reaches the co
 
 1. **Install the coordinator package** for its operating system and processor. It installs the software without configuring or enrolling the fleet.
 
-2. **Open Oarbank Coordinator** from Applications on macOS, the Start Menu on Windows, or the application menu on Linux (`oarbank-setup` also opens it on Linux).
+2. **Open the setup application:** **Oarbank Coordinator** in Applications on macOS or the application menu on Linux (`oarbank-setup` also works), or **Oarbank coordinator setup** in Windows Start. Accept the Windows administrator prompt; on macOS and Linux, launch setup as your ordinary user.
 
-   The local browser wizard guides you through choosing the address nodes can reach, creating the initial administrator password and authenticator, and initializing release signing. When setup finishes, it opens the console.
+   Select a LAN or tailnet IP assigned to this computer that the nodes can reach. Enter your administrator name and password (at least 12 characters), confirm the password, and submit. This configures the services and creates the account. Add the displayed secret to your authenticator app and verify its six-digit code. The wizard creates and pins primary and backup owner signing keys; copy the backup key to secure offline storage. When setup finishes, it opens the console.
 
-   Use the computer's reachable LAN, VPN or tailnet address for nodes. The console stays local unless you configure remote access; see [Requirements](/oarbank/operate/requirements).
+   The console stays local at `http://127.0.0.1:7400` unless you configure remote access. On macOS the coordinator runs while its user is logged in; Linux uses systemd user services, and Windows uses system services. See [Requirements](/oarbank/operate/requirements) for boot behavior and privileges.
 
-   TODO: verify installed CLI discovery, privileges, console address, service scope and first-run recovery against native installation tests.
+   If you close the wizard before verification, reopen it and resume with the same address, account name and password. Existing accounts and keys are preserved. Reopening completed setup opens the console; after an upgrade, or when services are stopped, it refreshes the service definitions first.
 
-3. **Make a join code for each node.** A join code names the coordinator's addresses, pins its certificate
-   authority and approves the node when it is used. It works once.
-
-   ```sh
-   oarbank join-code --label build-box
-   ```
+3. **Make a join code for each node.** In the console, open **Fleet**, enter the computer's name, and choose **Join code for a new machine…**. Copy the displayed code. It names the coordinator's address, pins its certificate authority, approves one node and works once.
 
 4. **Install the node package** with its join code.
 
@@ -113,7 +108,7 @@ also be a node itself. Every node, whatever its operating system, reaches the co
    push it with your own SSH, MDM or configuration tool; the coordinator never connects to nodes itself.
 
 5. **Add modules.** Oarbank ships no job module of its own: each job type is a module, delivered as a bundle. You
-   install a bundle, approve what its sandbox may reach, and enable it:
+   install a bundle, approve what its sandbox may reach, and enable it. For the CLI examples below, use the [bundled CLI path](https://github.com/roeehrl/oarbank/blob/v2.6.0/docs/install.md#1-the-coordinator) or add its `bin` directory to your terminal's PATH:
 
    ```sh
    oarbank module install <bundle>.mfb
