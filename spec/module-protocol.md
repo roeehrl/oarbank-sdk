@@ -5,7 +5,8 @@ The coordinator side of a module is a separate process. The core (oarbankd) spaw
 ## Lifecycle
 
 1. **Spawn.** The core starts the process with `coordinator.exec` from the installed bundle, in the module's own venv (for `runtime.kind = "uv"`), with a clean environment and the module's install directory as cwd. It applies the coordinator variant for its own platform (`coordinator.for_platform`), and the environment carries `OARBANK_PLATFORM` and the module's `coordinator.env`.
-2. **Handshake.** Host → module: `initialize {protocol_versions, host, module_digest, settings}`, where `host` is `{name, version, capabilities, platform}` (see "Host capabilities"). The module answers `{protocol_version, module, capabilities}`: it picks one major from `protocol_versions`, or fails with `-32001` and `data.supported`. The host then sends the `initialized` notification.
+2. **Handshake.** Host → module: `initialize {protocol_versions, host, module_digest, settings}` (`settings`: every
+   declared key at fleet scope, the owner's value else its default), where `host` is `{name, version, capabilities, platform}` (see "Host capabilities"). The module answers `{protocol_version, module, capabilities}`: it picks one major from `protocol_versions`, or fails with `-32001` and `data.supported`. The host then sends the `initialized` notification.
 3. **Verbs.** Requests flow, at most `coordinator.concurrency` in flight at once, each bounded by `coordinator.timeouts_s`.
 4. **Shutdown.** The host sends the `shutdown` notification and closes stdin. After 5 s it terminates the process container (POSIX: SIGTERM, then SIGKILL; Windows: Job termination). Never rely on a notice.
 
@@ -73,7 +74,7 @@ A module can make requests back to the host while it is handling a verb, if the 
 |---|---|---|
 | `host.datasets.query {kind?, ids?, attrs, limit, with_files?}` | `datasets:read` | Datasets matching the query (by kind and equality on attributes, or by id), each `{id, kind, attrs}` (with `with_files`, also `files`: `{path, digest, size}` and, when it has any, `origins`): the module's own datasets and the operator's unowned ones. `kind` is the short kind, as in `[datasets].kinds` and `datasets.create`: a dataset's owning module scopes its kind, so kinds are never namespaced. `attrs` are the dataset's `meta`. |
 | `host.blobs.stat {digest}` | `blobs:stat` | Whether the coordinator holds a blob, and its size. |
-| `host.settings.get {key}` | `settings:read:self` | A value from this module's own settings. |
+| `host.settings.get {key}` | `settings:read:self` | A value from this module's own settings at fleet scope: the owner's value, else the key's default; `null` for a key with neither or one the schema does not declare ([manifest.md](manifest.md#settings)). |
 | `host.secrets.get {name}` | `secrets:read:self` | `{set, value?}`: the module's value of a declared secret ([manifest.md](manifest.md#secrets)); node values never reach the coordinator side. Core 2.5. Never log it, return it from a verb or put it in a spec: a spec reaches every stage, and the conformance kit fails a verb whose answer holds one. `Host.secret(name)`. |
 | `host.store.get {collection, key}` | `store:read:self` | One document from this module's store, or null. |
 | `host.store.query {collection, where, limit}` | `store:read:self` | This module's documents in a collection; `where` is equality on top-level fields. Each document carries its `_key`. |
@@ -101,7 +102,7 @@ A module can make requests back to the host while it is handling a verb, if the 
 | `files.write` | `path`, `content_b64` (at most 1 MiB decoded) | Stores a small file in the module's files. |
 | `files.put` | `path`, `digest` | Names a blob the coordinator already holds (a job artifact, a dataset file) as one of the module's files. |
 | `files.delete` | `path`, or `prefix` | Removes files (the blobs stay; other rows may name them). |
-| `module_settings.update` | settings to merge | Changes the module's own settings. |
+| `module_settings.update` | `{key: value}` | Sets the module's own settings at fleet scope, key by key (`null` resets a key to inherit). Every key must be declared in the settings schema and every value valid against it, or the whole effect is refused ([manifest.md](manifest.md#settings)). |
 
 `oarbank_sdk.effects` builds them: `fx.campaign_create(cid, name, priority=0, weight=1, labels=None, placement=None)`,
 `fx.placement(mix, unit=None, pin=None, bind=None)`, `fx.jobs_enqueue(cid, jobs)` with

@@ -66,7 +66,7 @@ array, never a shell string.
 | `[[stages]]` | At least one. Each has `name`, optional `after`, and `requires` (node capabilities, reserved `pools`, `needs_pools` that must merely exist, and `resources` cpu/mem_gb), plus `timeout_s` and `retry`, per-platform `variants`, a `placement` constraint with its `after` stage, and, for a standalone stage, `default` (the stage a job runs when it names none) and its own `determinism` (`none` for work whose results depend on when it ran, such as ingesting a moving feed: the host never replicates, compares, caches or golden-tests it, and with no capability or pool required it runs before certification: [Stages that run before certification](#stages-that-run-before-certification)). A stage's `checkpoint` (`max_mb`, `min_interval_s`) keeps portable checkpoints ([Portable checkpoints](#portable-checkpoints)). |
 | `[[services]]` | Node helpers the agent manages through the [service protocol](service-protocol.md): lifecycle, timeouts, restart policy, which pools and capabilities they `provide`, the memory, yield and pause flags, GPU use (`gpu`), and `endpoint` for a service jobs reach through the agent (a warm model server). |
 | `[[probes]]` | Read-only capability checks (`fingerprint` only), each run every `period_s`. |
-| `[settings]` | The JSON Schema for the module's settings. The core stores settings but never interprets them. Settings are visible to the owner: never put a credential in them. |
+| `[settings]` | `schema`: a JSON Schema file whose properties are the module's settings, each with its type, default, constraints, title, description and an `x-oarbank` annotation (scope `fleet` or `node`, `required`, `unit`, `advanced`). The core validates every value against it ([Settings](#settings)). Settings are visible to the owner: never put a credential in them. |
 | `[[secrets]]` | Write-only credentials the owner sets through the core: `name`, `description` ([Secrets](#secrets)). |
 | `[placement]` | Which unit of work stays on one platform class (`mix`, `unit`), how it binds (`bind`) and what happens when its class has no eligible node (`rebind`, `stranded_after_s`). |
 | `[results]` | The payload schema and its version, `determinism` and its `determinism_scope`, the digest (`version`, `over`), the objective `value`, the inline size limit, and declared `fields` (typed; `indexed` promotes a field to a sortable column; `ui` sets column, format and unit). |
@@ -182,6 +182,72 @@ files = [{ path = "gatk-package-4.5.0.0-local.jar", sha256 = "<64 hex>", size = 
 - The pins are part of the manifest, so the bundle digest an operator installs and approves covers them.
 - A job runs a bootstrap stage only when it names it (`jobs.enqueue` `stage`); its results never count toward
   certification.
+
+## Settings
+
+A module's settings are the choices an owner makes for it: a VM size, a pipeline threshold, a gate's numbers. The
+module declares each one in the JSON Schema file `[settings].schema` names, one property per setting:
+
+```toml
+[settings]
+schema = "schemas/settings.schema.json"
+```
+
+```json
+{
+ "type": "object",
+ "properties": {
+  "vm_mem_gb": {"type": "number", "minimum": 2, "maximum": 64, "default": 8,
+                "title": "VM memory", "description": "Memory the module's VM gets on a node.",
+                "x-oarbank": {"scope": "node", "unit": "GB"}},
+  "pool_tao_per_round": {"type": "number", "minimum": 0,
+                         "title": "Miner pool per round", "description": "For the gate's expected value.",
+                         "x-oarbank": {"scope": "fleet", "unit": "TAO", "required": true}}
+ }
+}
+```
+
+- **The property is the contract.** Its `type` (`boolean`, `integer`, `number`, `string`, `array` or `object`,
+  optionally with `"null"`) and every JSON Schema constraint on it (`minimum`, `maximum`, `enum`, `pattern`,
+  `maxLength`, `items`, `format`, ...) are what the core checks each value against, on every write. `default` must be
+  valid itself. `title` is the label the owner reads (at most 80 characters; the key's name otherwise) and
+  `description` its one line of help (at most 500). A name is lower-case letters, digits and `_`, starting with a
+  letter, at most 64 characters; a schema declares at most 128 settings.
+- **`x-oarbank`** says how the core treats it:
+
+  | Field | Default | Meaning |
+  |---|---|---|
+  | `scope` | `"fleet"` | `fleet`: one value for the whole fleet, which the module's coordinator side reads (`host.settings.get`, `initialize`). `node`: a value the owner sets for the fleet, a node group or one node (the most specific wins); each node's runners, doctor and services receive it in `OARBANK_SETTINGS_FILE` |
+  | `required` | `false` (or the schema's own `required` list) | The owner must set it: until a value exists the module's work waits (`SETTINGS_NOT_SET`) and its readiness checklist shows the step "Required settings". A required setting has no `default` |
+  | `unit` | none | A short word shown beside the value (`GB`, `s`, `TAO`) |
+  | `advanced` | `false` | Shown under the module's Advanced disclosure |
+
+- **What a process receives.** Runners, `doctor` and services get the node-scoped settings, resolved for their node:
+  every `node` key with the owner's value, else its default (a key with neither is absent), and nothing else, in
+  `OARBANK_SETTINGS_FILE` (`oarbank_sdk.settings.read()`). Bootstrap jobs get `{}`. The coordinator side gets every
+  key at fleet scope the same way. A change to one module's setting never touches another module's.
+- **Writes are validated.** The owner sets values in the module's Settings tab or with
+  `oarbank settings set <key> <value> --module <module> [--node N | --group G]`. A module's own operations change
+  its settings with the `module_settings.update` effect ([module-protocol.md](module-protocol.md#effects)): each key
+  must be declared and each value valid, or the whole effect is refused; `null` resets a key to inherit.
+- **Upgrades.** The core reads the schema of the module's current version (before it is enabled, the newest
+  installed one). A key a new version drops keeps its values, unused, until the owner resets them or a later version
+  declares it again; a value a new version's schema no longer accepts is dropped, and the module event names it.
+- **The core's keys per module** are not yours to declare: `enabled` (the module on the fleet or on one node),
+  `services.disabled`, `pipeline` and `replica_rate` exist for every module and are set as `[module] <key>`.
+  `oarbank-sdk check` warns about a property with one of those names.
+- **Credentials are never settings.** A property with `writeOnly`, `x-secret` or `x-oarbank.secret` is refused, and a
+  name that looks like a credential gets a warning: declare it in [`[[secrets]]`](#secrets).
+
+`oarbank-sdk check`, `bundle build` and `bundle verify` refuse a schema the core would not read, and the conformance kit
+checks the fixtures' settings against it ([conformance.md](conformance.md)).
+
+**Migrating a module written for SDK 1.5 or earlier.** The core used to store a module's settings as one opaque
+object. Now: (1) declare every key the module reads or writes in its settings schema, (2) mark those its runners or
+services need on a node `"x-oarbank": {"scope": "node"}` (only those reach `OARBANK_SETTINGS_FILE`), (3) move any
+credential to `[[secrets]]`, (4) drop a `pipeline` property (the core's `[module] pipeline` replaces it). An
+undeclared key in `module_settings.update` is refused, and values an owner set before are kept only for declared keys
+that validate.
 
 ## Secrets
 

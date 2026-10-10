@@ -59,7 +59,8 @@ def test_tools_file(tmp_path, monkeypatch):
 
 
 def test_conform_gives_the_runner_its_grants(tmp_path):
-    """egress-allowlist starts the proxy, `tools` fixtures are granted and listed, `settings` becomes a file."""
+    """egress-allowlist starts the proxy, `tools` fixtures are granted and listed, the node-scoped `settings` become a
+    file (the toy's fleet-scoped favorite_n stays with its coordinator side)."""
     src = tmp_path / "toy"
     shutil.copytree(TOY, src)
     m = (src / "oarbank-module.toml").read_text(encoding="utf-8")
@@ -67,9 +68,9 @@ def test_conform_gives_the_runner_its_grants(tmp_path):
     (src / "oarbank-module.toml").write_text(m, encoding="utf-8", newline="\n")
     r = (src / "toy_runner.py").read_text(encoding="utf-8")                 # its doctor must be able to read both files (issue #8)
     r = r.replace('"health": "healthy"', '"health": "healthy" if json.load(open(__import__("os").environ["OARBANK_TOOLS_FILE"], encoding="utf-8"))'
-                  '.get("shell") and json.load(open(__import__("os").environ["OARBANK_SETTINGS_FILE"], encoding="utf-8")) == {"x": 1} else "unhealthy"')
+                  '.get("shell") and json.load(open(__import__("os").environ["OARBANK_SETTINGS_FILE"], encoding="utf-8")) == {"greeting": "hi"} else "unhealthy"')
     (src / "toy_runner.py").write_text(r, encoding="utf-8", newline="\n")
-    rep = conformance.conform(src, {"tools": {"shell": "/bin"}, "settings": {"x": 1}})
+    rep = conformance.conform(src, {"tools": {"shell": "/bin"}, "settings": {"greeting": "hi", "favorite_n": 1}})
     runner = {c["name"]: c for c in rep.as_dict()["checks"] if c["suite"] == "runner"}
     assert runner["doctor --json"]["status"] == "pass", runner
     assert runner["doctor --json"]["detail"] == "health healthy", runner

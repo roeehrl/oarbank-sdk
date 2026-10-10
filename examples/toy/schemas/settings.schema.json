@@ -1,0 +1,23 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "title": "toy settings",
+ "type": "object",
+ "properties": {
+  "favorite_n": {
+   "type": "integer",
+   "minimum": 0,
+   "maximum": 1000000000,
+   "title": "Favorite n",
+   "description": "The n the Set the favorite n operation stores; the overview page shows it.",
+   "x-oarbank": {"scope": "fleet"}
+  },
+  "greeting": {
+   "type": "string",
+   "maxLength": 80,
+   "default": "hello",
+   "title": "Runner greeting",
+   "description": "A word each runner on a node reads from its settings file (an example of a node-scoped setting).",
+   "x-oarbank": {"scope": "node", "advanced": true}
+  }
+ }
+}

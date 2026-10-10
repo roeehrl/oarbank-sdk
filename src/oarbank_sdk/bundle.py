@@ -182,6 +182,11 @@ def build(root, out=None) -> tuple[Path, BundleInfo]:
     dep_issues = deps.check(root, man)
     if dep_issues:
         raise BundleError("dependencies (spec/bundles.md, \"Dependencies\"):\n  " + "\n  ".join(dep_issues))
+    from . import settings as S
+    try:
+        S.load(root, man)
+    except S.SettingsSchemaError as e:
+        raise BundleError("settings (spec/manifest.md, \"Settings\"):\n  " + "\n  ".join(e.errors)) from None
     files = list_files(root, man)
     total = sum((root / f["path"]).stat().st_size for f in files)
     if len(files) > MAX_FILES or total > MAX_BYTES:
@@ -279,6 +284,14 @@ def _verify(path: Path, dest) -> BundleInfo:
             images.public_key(data.get(cs.key, b"").decode("utf-8", "replace"))
         except images.ImageError as e:
             raise BundleError(f"container set {cs.name}: key {cs.key}: {e}") from None
+    if man.settings.schema_:
+        from . import settings as S
+        if man.settings.schema_ not in data:
+            raise BundleError(f"settings.schema {man.settings.schema_}: no such file in the bundle")
+        try:
+            S.load_bytes(data[man.settings.schema_], man.settings.schema_)
+        except S.SettingsSchemaError as e:
+            raise BundleError("settings: " + "; ".join(e.errors)[:600]) from None
     if dest is not None:
         dest = Path(dest)
         tmp = dest.with_name(dest.name + ".partial")

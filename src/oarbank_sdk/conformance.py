@@ -7,6 +7,8 @@ Suites:
 - **manifest**: strict schema, UI contract references, no unknown fields, the lint warnings, and a resolved view per
   declared platform (runner exec, runtime, env and file subset) and per coordinator platform (coordinator exec);
 - **bundle**: the module builds into a bundle (no core imports, no symlinks) that verifies;
+- **settings**: the `[settings].schema` file parses as the core reads it, and the fixtures' settings validate against it
+  (runners get the node-scoped keys, the coordinator side every key, each with its default when unset);
 - **protocol**: the coordinator starts and completes `initialize`; it advertises every capability the
   manifest declares and every required verb; verbs are pure (the same input twice gives the same output);
   `golden.list` works for each node class (by default one per declared platform, with `platform` set), its goldens'
@@ -241,6 +243,33 @@ def check_manifest(root: Path, r: Report):
         r.warn("manifest", "lint", w)
     platform_views(root, man, r)
     return man
+
+
+NODE_SETTINGS = "_node_settings"
+
+
+def check_settings(root: Path, man, fx: dict, r: Report) -> dict:
+    """The settings suite: the declared settings parse (spec/manifest.md, "Settings") and the fixtures' `settings` are
+    values the core would accept. Returns what the fake host hands on, as the core does: every key (the fixture's value,
+    else its default) to the coordinator side, the node-scoped ones to runners and services."""
+    from . import settings as S
+    try:
+        sch = S.load(root, man)
+    except S.SettingsSchemaError as e:
+        r.add("settings", "schema", False, "; ".join(e.errors[:3]))
+        return {}
+    if not man.settings.schema_:
+        return {}
+    r.add("settings", "schema", True, f"{len(sch.keys)} settings")
+    for w in sch.warnings:
+        r.warn("settings", "lint", w)
+    given = fx.get("settings") or {}
+    bad = S.check_values(sch.keys, given)
+    r.add("settings", "fixtures validate", not bad, "; ".join(bad[:3]))
+    missing = [k.name for k in sch.keys if k.required and k.name not in given]
+    r.add("settings", "required settings have fixture values", not missing,
+          f"set {', '.join(missing)} in the fixtures' settings (the core holds the module's work until the owner sets them)")
+    return {"settings": S.effective(sch.keys, given), NODE_SETTINGS: S.effective(sch.keys, given, "node")}
 
 
 def platform_views(root: Path, man, r: Report):
@@ -535,7 +564,8 @@ class Grants:
                 self.unmet.append(f"{t.id} {inst['version']} (needs {t.version})")
             self.tools[t.id] = [inst]
         (self.dir / "tools.json").write_text(json.dumps(self.tools), encoding="utf-8")
-        (self.dir / "settings.json").write_text(json.dumps(fx.get("settings") or {}), encoding="utf-8")
+        # the node-scoped settings, as the agent writes them (fixtures `settings` over the declared defaults)
+        (self.dir / "settings.json").write_text(json.dumps(fx.get(NODE_SETTINGS, fx.get("settings")) or {}), encoding="utf-8")
         self.folders, given_f = {}, fx.get("folders") or {}
         for fg in man.sandbox.folders:
             if fg.access == "write":
@@ -1397,7 +1427,7 @@ def conform(root, fixtures: dict | None = None, runner: bool = True, sandbox: bo
     if man is None:
         return r
     check_bundle(root, r)
-    fx = {**fx, CANARIES: canaries(man, fx)}
+    fx = {**fx, CANARIES: canaries(man, fx), **check_settings(root, man, fx, r)}
     if man.sandbox.container_sets:
         check_images(root, man, fx, r)
     runs = check_protocol(root, man, fx, r)

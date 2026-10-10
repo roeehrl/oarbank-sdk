@@ -675,7 +675,7 @@ class Secret(Contract):
 
 
 class Settings(Contract):
-    schema_: str | None = Field(None, alias="schema", description="[stable] JSON Schema (bundle path) for the module's settings; the core stores but never interprets them.")
+    schema_: str | None = Field(None, alias="schema", description="[stable] JSON Schema (bundle path) whose properties are the module's settings: each one's type, default and constraints, title and description, and an `x-oarbank` annotation (scope fleet or node, required, unit, advanced). The core validates every value against it and hands node-scoped values to the module's runners and services (spec/manifest.md, \"Settings\").")
 
 
 FieldType = Literal["number", "integer", "string", "boolean"]

@@ -151,7 +151,7 @@ Cross-field rules are in [manifest.md](manifest.md).
 | `probes[].period_s` | float | `3600.0` |  |
 | `probes[].platforms` | list of str | `[]` | [beta] Only on these platforms (empty: every declared platform). |
 | `settings` | Settings | `"schema_=None"` |  |
-| `settings.schema` | str (optional) |  | [stable] JSON Schema (bundle path) for the module's settings; the core stores but never interprets them. |
+| `settings.schema` | str (optional) |  | [stable] JSON Schema (bundle path) whose properties are the module's settings: each one's type, default and constraints, title and description, and an `x-oarbank` annotation (scope fleet or node, required, unit, advanced). The core validates every value against it and hands node-scoped values to the module's runners and services (spec/manifest.md, "Settings"). |
 | `secrets` | list of Secret | `[]` | [beta] Write-only credentials. Needs requires.core >= 2.5. |
 | `secrets[].name` | str | required | [beta] The secret's name; unique. Stages list it in `secrets`. |
 | `secrets[].description` | str | `""` | [beta] What it is for, shown where the owner sets it. |
