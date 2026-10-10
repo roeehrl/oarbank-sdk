@@ -16,6 +16,12 @@ export const PRODUCT = {
   productUrl: 'https://codonic.dev/apps/oarbank',
 };
 
+/**
+ * The current release the docs describe. llms.txt states it for agents, and
+ * check-dist fails the build when the home page names a different release.
+ */
+export const RELEASE = { core: '2.8.0', sdk: '1.5.0' };
+
 export const PUBLISHER = { name: 'Codonic', url: 'https://codonic.dev' };
 
 export const REPO = {
@@ -96,7 +102,7 @@ export const SECTIONS = [
   { dir: 'concepts', label: 'Concepts' },
   { dir: 'operate', label: 'Operate' },
   { dir: 'build', label: 'Build modules' },
-  { dir: 'reference', label: 'Reference', pages: ['reference/manifest'], groups: [{ dir: 'schemas', label: 'JSON Schemas' }] },
+  { dir: 'reference', label: 'Reference', pages: ['reference/cli', 'reference/reason-codes', 'reference/manifest'], groups: [{ dir: 'schemas', label: 'JSON Schemas' }] },
   { dir: 'spec', label: 'Specification' },
 ];
 

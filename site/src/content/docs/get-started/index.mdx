@@ -1,43 +1,173 @@
 ---
 title: Get started
-description: Oarbank is not released yet. This page shows what setting up a fleet will look like on macOS, Linux and Windows, and how to install the open-source module SDK and build a module today.
+description: Download Oarbank for macOS, Linux and Windows, set up a coordinator and its nodes, and install the open-source module SDK to build your own modules.
 type: overview
 platforms: [macos, linux, windows]
 ---
 
-import { Aside, Steps, TabItem, Tabs } from '@astrojs/starlight/components';
+import { Steps, TabItem, Tabs } from '@astrojs/starlight/components';
 
-<Aside type="caution" title="Not released yet">
-  Oarbank itself (the coordinator and the node agents) has no public release yet: there are no installers or
-  downloads. They arrive with the first public release. Until then, the installation steps below are a preview of how
-  setup works, and file names and details may change. The source is public: the core is at
-  [roeehrl/oarbank](https://github.com/roeehrl/oarbank) and the module SDK at [roeehrl/oarbank-sdk](https://github.com/roeehrl/oarbank-sdk).
-</Aside>
+## Download
 
-## What you can do today
+The current release is **Oarbank 2.8.0**, with module SDK 1.5.0. Every file and its checksums are on the
+[release page](https://github.com/roeehrl/oarbank/releases/tag/v2.8.0). First check that your computers meet the [Requirements](/oarbank/operate/requirements).
 
-- **Learn how it works.** [How Oarbank works](/oarbank/concepts/how-oarbank-works) explains the coordinator, nodes,
-  join codes, modules, certification, sandboxing, host protection, signing and coordinator moves.
-- **Check your computers.** [Requirements](/oarbank/operate/requirements) lists what the coordinator and each node
-  need on macOS, Linux and Windows, and what the network needs.
-- **Read the core's source.** The coordinator, console, agent and launcher are source-available at
-  [roeehrl/oarbank](https://github.com/roeehrl/oarbank). To try them before the release, you can build the packages yourself:
-  [docs/install.md](https://github.com/roeehrl/oarbank/blob/main/docs/install.md) in that repository lists the build scripts and the install
-  steps.
-- **Build a module.** The module SDK (`oarbank-sdk`, Apache-2.0) is open source on
-  [GitHub](https://github.com/roeehrl/oarbank-sdk). Install it from source (it is not on PyPI yet) and follow
-  [Build a module in a day](/oarbank/build/tutorial), which builds a complete module step by step. See
-  [Install the module SDK](#install-the-module-sdk) below.
-- **Read the contracts.** The [specification](/oarbank/spec) describes everything a module can rely on, and the
-  [JSON Schemas](/oarbank/reference/schemas) are published as files you can validate against.
+### Coordinator installers
+
+Install the coordinator package on the computer that will manage the fleet. Native installers install the software; first-run configuration happens in **Oarbank Coordinator** (**Oarbank Coordinator** in Windows Start).
+
+| Coordinator computer | Installer | Checksums |
+|---|---|---|
+| macOS · Apple silicon | [`oarbank-coordinator-2.8.0-macos-arm64.pkg`](https://github.com/roeehrl/oarbank/releases/download/v2.8.0/oarbank-coordinator-2.8.0-macos-arm64.pkg) | [`SHA256SUMS-coordinator-2.8.0-darwin-arm64`](https://github.com/roeehrl/oarbank/releases/download/v2.8.0/SHA256SUMS-coordinator-2.8.0-darwin-arm64) |
+| Windows · x64 | [`oarbank-coordinator-2.8.0-windows-x64.msi`](https://github.com/roeehrl/oarbank/releases/download/v2.8.0/oarbank-coordinator-2.8.0-windows-x64.msi) | [`SHA256SUMS-coordinator-msi-2.8.0-windows-x64`](https://github.com/roeehrl/oarbank/releases/download/v2.8.0/SHA256SUMS-coordinator-msi-2.8.0-windows-x64) |
+| Windows 11 · ARM64 | [`oarbank-coordinator-2.8.0-windows-arm64.msi`](https://github.com/roeehrl/oarbank/releases/download/v2.8.0/oarbank-coordinator-2.8.0-windows-arm64.msi) | [`SHA256SUMS-coordinator-msi-2.8.0-windows-arm64`](https://github.com/roeehrl/oarbank/releases/download/v2.8.0/SHA256SUMS-coordinator-msi-2.8.0-windows-arm64) |
+| Linux · Debian/Ubuntu · x86_64 | [`oarbank-coordinator-2.8.0-linux-amd64.deb`](https://github.com/roeehrl/oarbank/releases/download/v2.8.0/oarbank-coordinator-2.8.0-linux-amd64.deb) | [`SHA256SUMS-coordinator-packages-2.8.0-linux-amd64`](https://github.com/roeehrl/oarbank/releases/download/v2.8.0/SHA256SUMS-coordinator-packages-2.8.0-linux-amd64) |
+| Linux · Debian/Ubuntu · arm64 | [`oarbank-coordinator-2.8.0-linux-arm64.deb`](https://github.com/roeehrl/oarbank/releases/download/v2.8.0/oarbank-coordinator-2.8.0-linux-arm64.deb) | [`SHA256SUMS-coordinator-packages-2.8.0-linux-arm64`](https://github.com/roeehrl/oarbank/releases/download/v2.8.0/SHA256SUMS-coordinator-packages-2.8.0-linux-arm64) |
+| Linux · Fedora/RHEL · x86_64 | [`oarbank-coordinator-2.8.0-linux-amd64.rpm`](https://github.com/roeehrl/oarbank/releases/download/v2.8.0/oarbank-coordinator-2.8.0-linux-amd64.rpm) | [`SHA256SUMS-coordinator-packages-2.8.0-linux-amd64`](https://github.com/roeehrl/oarbank/releases/download/v2.8.0/SHA256SUMS-coordinator-packages-2.8.0-linux-amd64) |
+| Linux · Fedora/RHEL · arm64 | [`oarbank-coordinator-2.8.0-linux-arm64.rpm`](https://github.com/roeehrl/oarbank/releases/download/v2.8.0/oarbank-coordinator-2.8.0-linux-arm64.rpm) | [`SHA256SUMS-coordinator-packages-2.8.0-linux-arm64`](https://github.com/roeehrl/oarbank/releases/download/v2.8.0/SHA256SUMS-coordinator-packages-2.8.0-linux-arm64) |
+
+Compare your downloaded file’s SHA-256 with the entry for that exact filename in its checksum file; a checksum file may also list other downloads. Coordinator tar archives remain available on the release page for advanced deployment and signed coordinator moves.
+
+### Node installers
+
+Install the node package on every computer that will execute jobs, including the coordinator computer if it will participate.
+
+| Node | Package | Checksums |
+|---|---|---|
+| Mac node · Apple silicon | [`oarbank-agent-2.8.0-macos-arm64.pkg`](https://github.com/roeehrl/oarbank/releases/download/v2.8.0/oarbank-agent-2.8.0-macos-arm64.pkg) | [`SHA256SUMS-agent-2.8.0-darwin-arm64`](https://github.com/roeehrl/oarbank/releases/download/v2.8.0/SHA256SUMS-agent-2.8.0-darwin-arm64) |
+| Mac node · Intel | [`oarbank-agent-2.8.0-macos-x86_64.pkg`](https://github.com/roeehrl/oarbank/releases/download/v2.8.0/oarbank-agent-2.8.0-macos-x86_64.pkg) | [`SHA256SUMS-agent-2.8.0-darwin-amd64`](https://github.com/roeehrl/oarbank/releases/download/v2.8.0/SHA256SUMS-agent-2.8.0-darwin-amd64) |
+| Linux node · Debian/Ubuntu · x86_64 | [`oarbank-agent_2.8.0_amd64.deb`](https://github.com/roeehrl/oarbank/releases/download/v2.8.0/oarbank-agent_2.8.0_amd64.deb) | [`SHA256SUMS-agent-2.8.0-linux-amd64`](https://github.com/roeehrl/oarbank/releases/download/v2.8.0/SHA256SUMS-agent-2.8.0-linux-amd64) |
+| Linux node · Debian/Ubuntu · arm64 | [`oarbank-agent_2.8.0_arm64.deb`](https://github.com/roeehrl/oarbank/releases/download/v2.8.0/oarbank-agent_2.8.0_arm64.deb) | [`SHA256SUMS-agent-2.8.0-linux-arm64`](https://github.com/roeehrl/oarbank/releases/download/v2.8.0/SHA256SUMS-agent-2.8.0-linux-arm64) |
+| Linux node · Fedora/RHEL · x86_64 | [`oarbank-agent-2.8.0-1.x86_64.rpm`](https://github.com/roeehrl/oarbank/releases/download/v2.8.0/oarbank-agent-2.8.0-1.x86_64.rpm) | [`SHA256SUMS-agent-2.8.0-linux-amd64`](https://github.com/roeehrl/oarbank/releases/download/v2.8.0/SHA256SUMS-agent-2.8.0-linux-amd64) |
+| Linux node · Fedora/RHEL · arm64 | [`oarbank-agent-2.8.0-1.aarch64.rpm`](https://github.com/roeehrl/oarbank/releases/download/v2.8.0/oarbank-agent-2.8.0-1.aarch64.rpm) | [`SHA256SUMS-agent-2.8.0-linux-arm64`](https://github.com/roeehrl/oarbank/releases/download/v2.8.0/SHA256SUMS-agent-2.8.0-linux-arm64) |
+| Windows node · x64 | [`oarbank-agent-2.8.0-windows-x64.msi`](https://github.com/roeehrl/oarbank/releases/download/v2.8.0/oarbank-agent-2.8.0-windows-x64.msi) | [`SHA256SUMS-agent-2.8.0-windows-x64`](https://github.com/roeehrl/oarbank/releases/download/v2.8.0/SHA256SUMS-agent-2.8.0-windows-x64) |
+| Windows node · ARM64 | [`oarbank-agent-2.8.0-windows-arm64.msi`](https://github.com/roeehrl/oarbank/releases/download/v2.8.0/oarbank-agent-2.8.0-windows-arm64.msi) | [`SHA256SUMS-agent-2.8.0-windows-arm64`](https://github.com/roeehrl/oarbank/releases/download/v2.8.0/SHA256SUMS-agent-2.8.0-windows-arm64) |
+
+The one-line installers [`oarbank-install.sh`](https://github.com/roeehrl/oarbank/releases/download/v2.8.0/oarbank-install.sh)
+(macOS and Linux) and [`oarbank-install.ps1`](https://github.com/roeehrl/oarbank/releases/download/v2.8.0/oarbank-install.ps1)
+(Windows) pick the right package for the computer and verify it; the Windows Group Policy template is
+[`oarbank-agent-2.8.0-windows-admx.zip`](https://github.com/roeehrl/oarbank/releases/download/v2.8.0/oarbank-agent-2.8.0-windows-admx.zip).
+
+The macOS packages are signed with Developer ID and notarized by Apple. The Windows installers are not code-signed
+yet: Windows SmartScreen may ask you to confirm before running one you downloaded with a browser.
+
+## Set up a fleet
+
+A fleet is one **coordinator** and any number of **nodes**. The coordinator runs on macOS, Linux or Windows and can
+also be a node itself. Every node, whatever its operating system, reaches the coordinator on one address and port; see
+[Requirements](/oarbank/operate/requirements).
+
+<Steps>
+
+1. **Install the coordinator package** for its operating system and processor. It installs the software without configuring or enrolling the fleet.
+
+2. **Open the setup application:** **Oarbank Coordinator** in Applications on macOS or the application menu on Linux (`oarbank-setup` also works), or **Oarbank Coordinator** in Windows Start. Click the menu bar or tray icon and choose **Open web app**. A Linux desktop without a tray host shows these controls in a small window. Launch the companion as your ordinary user; Windows asks for administrator permission when opening unfinished setup or recovering stopped services; opening the running console requires none.
+
+   Select a LAN or tailnet IP assigned to this computer that the nodes can reach. Enter your administrator name and password (at least 12 characters), confirm the password, and submit. This configures the services and creates the account. Scan the displayed QR code with your authenticator app and verify its six-digit code. The wizard creates and pins primary and backup owner signing keys; copy the backup key to secure offline storage. When setup finishes, it opens the console.
+
+   The console stays local at `http://127.0.0.1:7400` unless you configure remote access. On macOS the coordinator runs while its user is logged in; Linux uses systemd user services, and Windows uses system services. See [Requirements](/oarbank/operate/requirements) for boot behavior and privileges.
+
+   If you close the wizard before verification, choose **Open web app** again. The saved address and administrator name are shown; enter your original password to continue. Existing accounts and signing keys are preserved. Completed setup opens the normal console login.
+
+   The menu also shows coordinator status and **Preferences…**. **Start automatically at sign-in** is optional and launches the companion quietly for your account. **Quit Oarbank Coordinator** closes the menu app while leaving coordinator services running. On Windows, Startup Apps can also disable automatic startup; on macOS, Login Items manages it.
+
+3. **Add a machine.** In the console, open **Fleet** and choose **Add machine…**. Give the computer a name (optional),
+   say whether it is one machine or many, and create the code. The console shows the **join code** once, with a
+   **Copy** button, and under it the installer to download and the commands to run for each operating system, with the
+   code already filled in. A code names your coordinator's addresses and pins its identity, so a node checks it is
+   talking to your coordinator before it sends anything. A code for one machine works once, approves the machine at
+   once, and expires after 4 hours unless you chose otherwise.
+
+4. **Install the node package and join.** The package installs the node and asks nothing; joining is one step after
+   it, the same on every operating system.
+
+   <Tabs syncKey="os">
+     <TabItem label="macOS" icon="apple">
+       Open the package for your Mac's chip. When Installer finishes, **Oarbank Node** opens in the menu bar at its join
+       window: paste the code and choose **Join**. The window checks your network and the coordinator, asks for your
+       administrator password, and shows the machine until it is approved and connected.
+
+       Over SSH or in a script, install the package, then join (the code is read hidden, never typed on the command line):
+
+       ```sh
+       sudo installer -pkg oarbank-agent-2.8.0-macos-arm64.pkg -target /    # an Intel Mac: oarbank-agent-2.8.0-macos-x86_64.pkg
+       sudo oarbank-node join                                               # prompts for the code
+       ```
+
+       With `sudo`, the node runs as a system service under its own `_oarbank` account and starts at boot; the join
+       window offers the same choice as **Run as: System service**. Without `sudo` it runs while you are logged in.
+     </TabItem>
+     <TabItem label="Linux" icon="linux">
+       Install the package, then join. Pass the code to the package, or join afterwards:
+
+       ```sh
+       sudo OARBANK_JOIN_CODE='OB2-…' apt install ./oarbank-agent_2.8.0_amd64.deb
+       # or: sudo apt install ./oarbank-agent_2.8.0_amd64.deb && sudo oarbank-node join
+       ```
+
+       Use `dnf install ./oarbank-agent-2.8.0-1.x86_64.rpm` on Fedora and RHEL. On a desktop, open **Oarbank Node**
+       from your applications to paste the code instead. The package creates an `oarbank` account and a systemd
+       service whose jobs run in their own cgroups.
+     </TabItem>
+     <TabItem label="Windows" icon="seti:windows">
+       Open the MSI. Its join page takes the code; leave it empty to join later from **Oarbank Node** in Start. Use
+       the `arm64` MSI on ARM64 PCs. Tick **Run container jobs** for modules that run containers (WSL containers; see
+       [Requirements](/oarbank/operate/requirements)).
+
+       Silently, from an elevated prompt:
+
+       ```powershell
+       msiexec /i oarbank-agent-2.8.0-windows-x64.msi /qn JOINCODE=OB2-…
+       ```
+
+       The MSI installs the agent as a Windows service, a helper service that enforces each job's network allowlist,
+       and `oarbank-node` on the PATH.
+     </TabItem>
+   </Tabs>
+
+   Or in one line, which downloads this release's package for the computer, checks its SHA-256 and installs it.
+   The console's **Add machine** page gives this command with the code filled in (`OARBANK_JOIN_CODE`), and then it
+   joins too; without a code, run `sudo oarbank-node join` afterwards:
+
+   ```sh
+   curl -fsSL https://github.com/roeehrl/oarbank/releases/latest/download/oarbank-install.sh | sudo sh
+   ```
+
+   On Windows: `irm https://github.com/roeehrl/oarbank/releases/latest/download/oarbank-install.ps1 | iex` (it asks
+   for the code, hidden).
+
+   The node enrolls with a key it generates and keeps, then installs its release, runs each module's doctor and
+   golden jobs, and starts taking work. `oarbank-node status` shows where it is. If joining fails, the window and
+   `oarbank-node join` say which check failed and why; see [Adding machines](/oarbank/operate/adding-machines).
+
+   The coordinator's download holds only the coordinator: for the coordinator's computer to run jobs too, install the
+   node package on it as well and join it with a code of its own. For many machines (MDM, Intune, Ansible, images),
+   create a code for many machines and hand it out through managed policy; see
+   [Adding machines](/oarbank/operate/adding-machines). The coordinator never connects to nodes itself.
+
+5. **Add modules.** Oarbank ships no job module of its own: each job type is a module, delivered as a bundle. You
+   install a bundle, approve what its sandbox may reach, and enable it. For the CLI examples below, use the [bundled CLI path](https://github.com/roeehrl/oarbank/blob/v2.8.0/docs/install.md#1-the-coordinator) or add its `bin` directory to your terminal's PATH:
+
+   ```sh
+   oarbank module install <bundle>.mfb
+   oarbank module approve <name>@<version>
+   oarbank module enable <name>@<version>
+   ```
+
+</Steps>
+
+[Updating and removing](/oarbank/operate/update-and-remove) covers updates, moving the coordinator and uninstalling.
+If something does not work, see [Troubleshooting](/oarbank/operate/troubleshooting). The full install guide, with
+system scope and building the packages, is
+[docs/install.md](https://github.com/roeehrl/oarbank/blob/v2.8.0/docs/install.md) in the core's repository.
 
 ## Install the module SDK
 
-You need Python 3.12 or newer, on macOS, Linux or Windows. Install the SDK from its repository into your
-environment:
+To build your own job types, install the module SDK (`oarbank-sdk`, Apache-2.0). You need Python 3.12 or newer, on
+macOS, Linux or Windows. It is not on PyPI yet; install it from its repository:
 
 ```sh
-uv pip install "git+https://github.com/roeehrl/oarbank-sdk"   # or: pip install "git+https://github.com/roeehrl/oarbank-sdk"
+uv pip install "git+https://github.com/roeehrl/oarbank-sdk@v1.5.0"   # or: pip install "git+https://github.com/roeehrl/oarbank-sdk@v1.5.0"
 oarbank-sdk --help
 ```
 
@@ -51,92 +181,90 @@ uv sync --group dev
 uv run oarbank-sdk conform examples/toy   # must end with "0 failed"
 ```
 
-The conformance kit runs your module's runner as this computer's platform would, so you can build and test a module
-before Oarbank itself is released.
+The conformance kit runs your module's runner as each platform would, so you can test a module before you install it
+on a fleet. [Build a module in a day](/oarbank/build/tutorial) builds a complete module step by step.
 
-## What installation will look like
+## Use Oarbank with an AI agent
 
-A fleet is one **coordinator** and any number of **nodes**. The coordinator runs on macOS, Linux or Windows and can
-also be a node itself. Every node, whatever its operating system, reaches the coordinator on one address and port; see
-[Requirements](/oarbank/operate/requirements).
+The **Oarbank skill** lets a coding agent (Claude Code, Codex, Cursor, GitHub Copilot, Gemini CLI and others) install,
+run, troubleshoot and build modules for Oarbank. It is short on purpose: it tells the agent to read these docs live,
+check which versions you run, and ask you before it changes anything. Elevated steps, passwords and join codes stay
+with you. The skill is Apache-2.0, in [roeehrl/oarbank-sdk](https://github.com/roeehrl/oarbank-sdk/tree/main/skills/oarbank).
 
-<Steps>
+<Tabs syncKey="agent">
+  <TabItem label="Any agent">
+    With Node.js installed, this asks which of your agents to add it to:
 
-1. **Install the coordinator** on a Mac, a Linux machine or a Windows machine that stays on, and tell it the address
-   nodes will use to reach it. It runs as a background service: LaunchAgents on macOS, systemd user units on Linux,
-   Windows services on Windows.
+    ```sh
+    npx skills add roeehrl/oarbank-sdk --skill oarbank -g
+    ```
 
-2. **Create your console account** on the coordinator. You sign in to the console with a password and a TOTP code
-   from your authenticator app:
+    `-a claude-code -a codex` picks the agents instead; without `-g` it installs into the current project only.
+    Check with `npx skills list -g`, update with `npx skills update -g`, remove with
+    `npx skills remove oarbank -g`. Updates are never automatic.
 
-   ```sh
-   oarbank account create alice --role admin --password
-   ```
+  </TabItem>
+  <TabItem label="Claude Code">
+    In a Claude Code session:
 
-   The console answers only on the coordinator itself (`http://127.0.0.1:7400`) until you put it behind a TLS proxy
-   for a name you control.
+    ```text
+    /plugin marketplace add roeehrl/oarbank-sdk
+    /plugin install oarbank@codonic
+    ```
 
-3. **Make a join code for each node.** A join code names the coordinator's addresses, pins its certificate
-   authority and approves the node when it is used. It works once.
+    From a terminal: `claude plugin marketplace add roeehrl/oarbank-sdk`, then `claude plugin install oarbank@codonic`.
+    Check with `claude plugin list`. Update with `claude plugin update oarbank@codonic`, or turn on automatic updates
+    under `/plugin`, **Marketplaces**, **codonic** (they are off by default for marketplaces outside Anthropic's).
+    Remove with `claude plugin uninstall oarbank@codonic`.
 
-   ```sh
-   oarbank join-code --label build-box
-   ```
+  </TabItem>
+  <TabItem label="Codex">
+    ```sh
+    codex plugin marketplace add roeehrl/oarbank-sdk
+    codex plugin add oarbank@codonic
+    ```
 
-4. **Install the node package** with its join code.
+    Restart Codex, then check with `codex plugin list`. Update with `codex plugin marketplace upgrade codonic` and a
+    restart. Remove with `codex plugin remove oarbank@codonic`.
 
-   <Tabs syncKey="os">
-     <TabItem label="macOS" icon="apple">
-       Put the join code where the installer looks, then install the package (by hand or through MDM):
+  </TabItem>
+  <TabItem label="Claude app">
+    Download `oarbank-skill.zip` from the latest
+    [skill release](https://github.com/roeehrl/oarbank-sdk/releases?q=skill-v&expanded=true), then in Claude open
+    **Customize**, **Skills**, **+**, **Upload a skill**, and choose the file. Code execution must be on. Upload a
+    newer zip to update.
 
-       ```sh
-       sudo mkdir -p /Library/Oarbank/etc
-       echo 'OB1-…' | sudo tee /Library/Oarbank/etc/join-code >/dev/null
-       sudo installer -pkg oarbank-agent-<version>-macos.pkg -target /
-       ```
+  </TabItem>
+</Tabs>
 
-       The node runs for the user who is logged in. To run it as a system service that starts at boot, under its
-       own `_oarbank` account, create an empty `/Library/Oarbank/etc/system` file before installing.
-     </TabItem>
-     <TabItem label="Linux" icon="linux">
-       Put the join code where the package looks, then install the `.deb` (or the `.rpm` with `dnf`):
+To pin a version, add the skill's release tag: `/plugin marketplace add roeehrl/oarbank-sdk#skill-v1.0.0` in Claude
+Code, `--ref skill-v1.0.0` for Codex. Read [SKILL.md](https://github.com/roeehrl/oarbank-sdk/blob/main/skills/oarbank/SKILL.md)
+before installing: it is short and has no scripts.
 
-       ```sh
-       sudo install -d /etc/oarbank
-       echo 'OB1-…' | sudo tee /etc/oarbank/join-code >/dev/null
-       sudo apt install ./oarbank-agent_<version>_amd64.deb
-       ```
+**Without the skill**, paste this into any agent:
 
-       The package creates an `oarbank` account and a systemd service whose jobs run in their own cgroups.
-     </TabItem>
-     <TabItem label="Windows" icon="seti:windows">
-       Install the MSI with the join code, from an elevated prompt:
+```text
+Read https://docs.codonic.dev/oarbank/llms.txt and the pages it lists that fit my question, and use them to help me
+with Oarbank. Check which Oarbank version I run first, and ask me before changing anything.
+```
 
-       ```powershell
-       msiexec /i oarbank-agent-<version>-windows-x64.msi /qn JOINCODE=OB1-…
-       ```
+**In a module's repository**, add these lines to `AGENTS.md` or `CLAUDE.md` so every agent working on it knows where
+the contracts are:
 
-       The MSI installs the agent as a Windows service and a helper service that enforces each job's network
-       allowlist. Use the `arm64` MSI on ARM64 PCs.
-     </TabItem>
-   </Tabs>
-
-   The installer reads the join code and deletes it. The node enrolls with a key it generates and keeps, then
-   installs its release, runs each module's doctor and golden jobs, and starts taking work.
-
-5. **Add modules.** Oarbank ships no job module of its own: each job type is a module, delivered as a bundle. You
-   install a bundle, approve what its sandbox may reach, and enable it:
-
-   ```sh
-   oarbank module install <bundle>.mfb
-   oarbank module approve <name>@<version>
-   oarbank module enable <name>@<version>
-   ```
-
-</Steps>
+```markdown
+This is an Oarbank module. Oarbank docs: https://docs.codonic.dev/oarbank/llms.txt (Markdown pages;
+build/tutorial.md, reference/manifest.md, spec/sandbox.md). Run `oarbank-sdk check .` and `oarbank-sdk conform .`
+before bundling; conform must end with "0 failed".
+```
 
 ## Next
 
-- [How Oarbank works](/oarbank/concepts/how-oarbank-works): the ideas behind the steps above.
+- [How Oarbank works](/oarbank/concepts/how-oarbank-works): the coordinator, nodes, join codes, modules,
+  certification, sandboxing, host protection, signing and coordinator moves.
 - [Requirements](/oarbank/operate/requirements): what each computer and the network need.
+- [Command-line reference](/oarbank/reference/cli) and [Troubleshooting](/oarbank/operate/troubleshooting): run and
+  fix a fleet.
+- [Use Oarbank with an AI agent](#use-oarbank-with-an-ai-agent): let Claude Code, Codex or another coding agent help.
 - [Build a module in a day](/oarbank/build/tutorial): write your own job type.
+- The [specification](/oarbank/spec) and the [JSON Schemas](/oarbank/reference/schemas): everything a module can rely
+  on.
