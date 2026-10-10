@@ -7,7 +7,11 @@
 // their language. Each page advertises its twin with
 // <link rel="alternate" type="text/markdown"> (src/routeData.ts), and _headers
 // serves the twins with X-Robots-Tag: noindex so they never compete in search.
-import { readFileSync, writeFileSync } from 'node:fs';
+// llms.txt gets a Pages section listing every twin, so agents can fetch single
+// pages instead of a whole documentation set.
+import { appendFileSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { HOME_URL } from '../site.config.mjs';
 import { matches, select, selectAll } from 'hast-util-select';
 import rehypeParse from 'rehype-parse';
 import rehypeRemark from 'rehype-remark';
@@ -80,7 +84,7 @@ const toMarkdown = unified()
   .use(remarkGfm)
   .use(remarkStringify, { bullet: '-', fences: true, rule: '-' });
 
-let count = 0;
+const pages = [];
 for (const file of walk(DIST_DIR).filter((f) => f.endsWith('.html'))) {
   const path = rel(DIST_DIR, file);
   if (path === '404.html') continue;
@@ -91,6 +95,10 @@ for (const file of walk(DIST_DIR).filter((f) => f.endsWith('.html'))) {
     .filter(Boolean)
     .join('\n\n');
   writeFileSync(file.replace(/\.html$/, '.md'), `${head}\n\n${body}\n`);
-  count++;
+  pages.push({ url: `${HOME_URL}${path.replace(/\.html$/, '.md')}`, title, description });
 }
-console.log(`md-twins: wrote ${count} Markdown twins`);
+
+pages.sort((a, b) => a.url.localeCompare(b.url));
+const list = pages.map((p) => `- [${p.title}](${p.url})${p.description ? `: ${p.description}` : ''}`);
+appendFileSync(join(DIST_DIR, 'llms.txt'), `\n## Pages\n\n${list.join('\n')}\n`);
+console.log(`md-twins: wrote ${pages.length} Markdown twins and listed them in llms.txt`);
