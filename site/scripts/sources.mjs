@@ -69,6 +69,22 @@ export const PAGES = [
     order: 6,
   },
   {
+    src: 'docs/host-tools.md',
+    dest: 'build/host-tools.md',
+    type: 'how-to',
+    description:
+      'Ask for a JDK, a Python or another program on the node by tool id and version range, read the installation the node grants, test it, and move off tool registry ids.',
+    order: 7,
+  },
+  {
+    src: 'docs/module-settings.md',
+    dest: 'build/module-settings.md',
+    type: 'how-to',
+    description:
+      'Declare a module’s settings as typed keys with a scope, read them on nodes and on the coordinator, let campaigns override them, and move a module from SDK 1.5.',
+    order: 8,
+  },
+  {
     src: 'spec/public-surface.md',
     dest: 'spec/public-surface.md',
     type: 'spec',
