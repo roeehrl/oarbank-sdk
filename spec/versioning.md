@@ -2,7 +2,7 @@
 
 **Before 1.0.** Every contract published before oarbank-sdk 1.0.0 was a draft. Protocol 1.0 redefined "1" in place to add the cross-platform baseline ([platforms.md](platforms.md)). From 1.0.0 on, the rules below apply in full: new platforms, OS keys, GPU APIs, network modes and container platforms are additive, because every such set is open.
 
-oarbank has five public contracts. Each one carries its own small integer version, and each is negotiated at a defined point.
+oarbank has six public contracts. Each one carries its own small integer version, and each is negotiated at a defined point.
 
 | Contract | Version form | Negotiated where | Compatibility rule | Support window |
 |---|---|---|---|---|
@@ -10,6 +10,7 @@ oarbank has five public contracts. Each one carries its own small integer versio
 | Module protocol | Integer major, additive minors | The `initialize` handshake | Unknown fields are ignored; a missing capability means the feature is unsupported | N and N−1, through core-side adapters |
 | Runner protocol | Integer major | `doctor --json` | The agent picks the highest major both sides share; a job is claimed only by nodes that support it | N and N−1 |
 | Service protocol | Integer major | `fingerprint` | Same rule as the runner protocol | N and N−1 |
+| Workload protocol | Integer major | `requires.workload_protocol` | The agent runs a workload only with a major it speaks | N and N−1 |
 | Envelopes | `envelope = N` | Read side | Readers accept and preserve unknown fields | N and N−1 |
 
 Module-owned payloads are versioned separately as `<module>/spec@N` and `<module>/result@N`:
@@ -29,7 +30,8 @@ placement keys of SDK 1.1 need `requires.core >= 2.2`, the stage, tick-result an
 `requires.core >= 2.3`, the bootstrap stages and pinned datasets of SDK 1.4 need `requires.core >= 2.4`, and the
 secrets, container image sets, container GPU pool, GPU placement by API (`runner.gpu.apis_any`), service endpoints,
 service GPU use, folder grants, portable checkpoints and the `artifact_ref` cell type of SDK 1.5 need
-`requires.core >= 2.5`
+`requires.core >= 2.5`, and the workloads of SDK 1.6 (`[[workloads]]`, `requires.workload_protocol`, the
+`workload.report` capability and `coordinator.workload_effects`) need `requires.core >= 2.10`
 ([manifest.md](manifest.md#cross-field-rules), rule 12). For
 later features, `requires.features` is a must-understand list: a reader refuses a manifest that lists a feature it
 does not know. Module protocol additions are optional fields plus host capability names

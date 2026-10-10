@@ -1,0 +1,165 @@
+{
+  "$defs": {
+    "ErrorEvent": {
+      "additionalProperties": true,
+      "description": "Something went wrong: the agent keeps the latest as the run's last error. [beta]",
+      "properties": {
+        "message": {
+          "maxLength": 4096,
+          "title": "Message",
+          "type": "string"
+        },
+        "t": {
+          "description": "[beta] Unix seconds when the workload wrote it.",
+          "title": "T",
+          "type": "number"
+        },
+        "type": {
+          "const": "error",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "t",
+        "type",
+        "message"
+      ],
+      "title": "ErrorEvent",
+      "type": "object"
+    },
+    "LogEvent": {
+      "additionalProperties": true,
+      "description": "A line for the workload's log, with a level. [beta]",
+      "properties": {
+        "level": {
+          "default": "info",
+          "enum": [
+            "debug",
+            "info",
+            "warn",
+            "error"
+          ],
+          "title": "Level",
+          "type": "string"
+        },
+        "message": {
+          "maxLength": 4096,
+          "title": "Message",
+          "type": "string"
+        },
+        "t": {
+          "description": "[beta] Unix seconds when the workload wrote it.",
+          "title": "T",
+          "type": "number"
+        },
+        "type": {
+          "const": "log",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "t",
+        "type",
+        "message"
+      ],
+      "title": "LogEvent",
+      "type": "object"
+    },
+    "ProgressEvent": {
+      "additionalProperties": true,
+      "description": "A count of something the workload did (`n` of `event`); the agent sums them into the node's heartbeat. [beta]",
+      "properties": {
+        "event": {
+          "description": "[beta] What happened.",
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^[a-z][a-z0-9_.-]*$",
+          "title": "Event",
+          "type": "string"
+        },
+        "n": {
+          "default": 1,
+          "description": "[beta] How many times.",
+          "minimum": 0,
+          "title": "N",
+          "type": "integer"
+        },
+        "t": {
+          "description": "[beta] Unix seconds when the workload wrote it.",
+          "title": "T",
+          "type": "number"
+        },
+        "type": {
+          "const": "progress",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "t",
+        "type",
+        "event"
+      ],
+      "title": "ProgressEvent",
+      "type": "object"
+    },
+    "ReportEvent": {
+      "additionalProperties": true,
+      "description": "An observation for the module's own records: shipped to the coordinator (at most 60 a minute per workload), which\ncalls the module's `workload.report` verb with it (manifest `reports = true`). [beta]",
+      "properties": {
+        "data": {
+          "additionalProperties": true,
+          "description": "[beta] At most 4 KiB as compact JSON.",
+          "title": "Data",
+          "type": "object"
+        },
+        "t": {
+          "description": "[beta] Unix seconds when the workload wrote it.",
+          "title": "T",
+          "type": "number"
+        },
+        "type": {
+          "const": "report",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "t",
+        "type",
+        "data"
+      ],
+      "title": "ReportEvent",
+      "type": "object"
+    }
+  },
+  "$id": "https://codonic.dev/oarbank/schemas/workload-event-1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "One line of OARBANK_EVENTS_FILE (`<run>/events.ndjson`), UTF-8 JSON, LF-terminated, appended by the workload; the\nagent reads complete lines only. [beta]",
+  "discriminator": {
+    "mapping": {
+      "error": "#/$defs/ErrorEvent",
+      "log": "#/$defs/LogEvent",
+      "progress": "#/$defs/ProgressEvent",
+      "report": "#/$defs/ReportEvent"
+    },
+    "propertyName": "type"
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/ProgressEvent"
+    },
+    {
+      "$ref": "#/$defs/ErrorEvent"
+    },
+    {
+      "$ref": "#/$defs/ReportEvent"
+    },
+    {
+      "$ref": "#/$defs/LogEvent"
+    }
+  ],
+  "title": "Event"
+}

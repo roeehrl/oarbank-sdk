@@ -1,7 +1,7 @@
 # The module sandbox
 
-Every module process runs confined: the coordinator side, the runner, services, probes and `doctor`, on every
-platform. This page is the **contract**: what a module process may and may not reach. Each platform enforces it with
+Every module process runs confined: the coordinator side, the runner, services, probes, workloads and `doctor`, on
+every platform. This page is the **contract**: what a module process may and may not reach. Each platform enforces it with
 its own backend:
 
 | Platform | Backend | Details |
@@ -23,6 +23,12 @@ A module never sees the backend. It declares what it needs in `[sandbox]`, and a
 | approved host tools (`[sandbox].tools`) | none | read, execute | read, execute |
 | approved folders (`[sandbox].folders`) | none | read (input folders); create and write only (outboxes) | none |
 | everything else: homes, other modules, the agent's and coordinator's state, credential stores, devices other than null, zero, random and urandom | denied | denied | denied |
+
+**Workloads** ([workload-protocol.md](workload-protocol.md)) get what a service gets, with their run directory (inside
+the data directory) as cwd and home, plus their **private directory read-only**: the control document, the settings,
+tools and limits files and, for a workload that lists secrets, the secrets file. Only that workload's profile may read
+its private directory, so the module's other processes never see its secrets. A workload never gets the container
+broker.
 
 **Processes**
 - A module process may spawn children, and children inherit the confinement.
@@ -85,7 +91,8 @@ key = "keys/tasks.pub"
 
 **Network rules, whatever the mode:**
 - never loopback or link-local;
-- never listening (an endpoint service is handed its connections);
+- never listening (an endpoint service is handed its connections, and so is a workload that serves listeners: the
+  backend refuses `bind` and `listen`, so a workload can never raise a firewall prompt);
 - never another unix socket or pipe.
 
 **Approval**

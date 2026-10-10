@@ -744,9 +744,9 @@ class Workload(Contract):
 
 class Secret(Contract):
     """A credential the owner sets through the core, write-only (spec/manifest.md, "Secrets"): stored encrypted on the
-    coordinator, never shown, delivered only to the runners of stages that list it and, with `secrets:read:self`, to
-    coordinator verbs. [beta]"""
-    name: Name = Field(description="[beta] The secret's name; unique. Stages list it in `secrets`.")
+    coordinator, never shown, delivered only to the runners of stages that list it, to workloads that list it and, with
+    `secrets:read:self`, to coordinator verbs. [beta]"""
+    name: Name = Field(description="[beta] The secret's name; unique. Stages and workloads list it in `secrets`.")
     description: Annotated[str, Field(max_length=500)] = Field("", description="[beta] What it is for, shown where the owner sets it.")
 
 
@@ -1298,11 +1298,12 @@ class Manifest(Contract):
                 raise ValueError(f"stage {st.name!r}: a bootstrap stage receives no secrets (bootstrap jobs get only the "
                                  "egress allowlist)")
             used |= set(st.secrets)
+        used |= {n for w in self.workloads for n in w.secrets}
         if "secrets:read:self" not in self.coordinator.permissions:
             unused = [n for n in names if n not in used]
             if unused:
-                raise ValueError(f"secrets {unused} reach nothing: list them in a stage's `secrets`, or give the "
-                                 "coordinator the secrets:read:self permission")
+                raise ValueError(f"secrets {unused} reach nothing: list them in a stage's or a workload's `secrets`, or "
+                                 "give the coordinator the secrets:read:self permission")
         sets = [c.name for c in self.sandbox.container_sets]
         dup = sorted({n for n in sets if sets.count(n) > 1})
         if dup:

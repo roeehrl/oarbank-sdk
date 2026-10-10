@@ -1,0 +1,65 @@
+{
+  "$id": "https://codonic.dev/oarbank/schemas/workload-status-1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "description": "What `<exec> status` prints: one JSON object on stdout, then exit 0. The agent runs it every `health.period_s`\n(with `health.timeout_s`); `health.failures` consecutive unhealthy answers (a timeout, a non-zero exit or `healthy:\nfalse`) end the run as a failure. [beta]",
+  "properties": {
+    "detail": {
+      "default": "",
+      "description": "[beta] Why, in a line: shown with the workload's state.",
+      "maxLength": 4096,
+      "title": "Detail",
+      "type": "string"
+    },
+    "gpu_duty_supported": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "[beta] It honours the control document's `gpu_duty`.",
+      "title": "Gpu Duty Supported"
+    },
+    "healthy": {
+      "description": "[beta] Whether the workload is doing its work.",
+      "title": "Healthy",
+      "type": "boolean"
+    },
+    "paused": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "[beta] It holds a cooperative pause (control `pause`).",
+      "title": "Paused"
+    },
+    "threads": {
+      "anyOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "[beta] The compute-thread limit it applies now (None: none).",
+      "title": "Threads"
+    }
+  },
+  "required": [
+    "healthy"
+  ],
+  "title": "Status",
+  "type": "object"
+}
