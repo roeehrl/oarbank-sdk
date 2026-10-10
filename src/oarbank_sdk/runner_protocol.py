@@ -40,18 +40,38 @@ class Versions(Contract):
 
 
 class DoctorCheck(Contract):
-    name: str
+    name: str = Field(description=(
+        "[stable] The check's name. A check named after a capability (a probe's name, or a capability a service "
+        "provides) proves that capability for this module: when it fails, the node lacks the capability for the module's "
+        "stages whatever the probe or service says, and only stages that require it stop running there."))
     ok: bool
-    detail: str = ""
+    detail: str = Field("", description=(
+        "[stable] Why, in full: the agent and the coordinator keep it as it is and show it whole. A runner that shortens "
+        "a long one keeps its end, where the cause of a failed import or command usually is."))
 
 
 class DoctorOutput(Contract):
     """`doctor --json` stdout."""
     runner_protocol: Versions = Field(description="[stable] Majors this runner speaks; the agent picks the highest shared one.")
     capabilities: list[str] = Field(default_factory=list)
-    health: Literal["healthy", "unhealthy", "undetected"] = Field(description="[stable] undetected = cannot run here, don't offer, don't alert.")
+    health: Literal["healthy", "unhealthy", "undetected"] = Field(description=(
+        "[stable] The module as a whole: only a healthy module is certified (goldens), and so runs the stages that need "
+        "certification. unhealthy alerts; undetected (cannot do the module's work here) does not. Either way the agent "
+        "still offers the module, and stages that need no certification (bootstrap stages, and stages that compare "
+        "nothing and need no capability or pool) run there unless a failed check proves a capability they require."))
     attrs: dict[str, Any] = Field(default_factory=dict)
     checks: list[DoctorCheck] = Field(default_factory=list)
+
+
+def disproved_capabilities(checks) -> set[str]:
+    """The capabilities a doctor's failed checks disprove for its module (DoctorCheck.name): the names of the checks that
+    failed, of which those naming a capability matter. `checks` are DoctorChecks or their JSON objects."""
+    out = set()
+    for c in checks or []:
+        name, ok = (c.get("name"), c.get("ok")) if isinstance(c, dict) else (c.name, c.ok)
+        if isinstance(name, str) and name and not ok:
+            out.add(name)
+    return out
 
 
 class CheckpointFile(Contract):

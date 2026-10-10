@@ -228,6 +228,36 @@ def test_a_bootstrap_stage_is_standalone_never_default_never_compared_and_reserv
     bad(chained, "a bootstrap stage is standalone")
 
 
+def test_stages_that_compare_nothing_and_need_nothing_a_node_proves_run_before_certification():
+    """spec/manifest.md, "Stages that run before certification": bootstrap stages, and standalone stages whose effective
+    determinism is none and that require no capability and no pool; everything else waits for certification."""
+    d = copy.deepcopy(doc("render"))
+    d["requires"]["core"] = ">=2.3,<3"
+    d["stages"][0]["default"] = True
+    d["stages"] += [{"name": "sync", "determinism": "none"},
+                    {"name": "warm", "determinism": "none", "requires": {"capabilities": ["renderer4"]}},
+                    {"name": "diff", "determinism": "none", "requires": {"needs_pools": ["imagediff"]}},
+                    {"name": "copy", "determinism": "none", "requires": {"pools": {"imagediff": 1}}},
+                    {"name": "profile", "determinism": "exact"}]
+    man = m.Manifest.model_validate(d)
+    assert [s.name for s in man.stages if man.certification_exempt(s.name)] == ["sync"]
+    assert not man.certification_exempt(None)                  # the default stage compares
+    assert not man.certification_exempt("nosuch")
+    boot = m.Manifest.model_validate(bootstrapped(copy.deepcopy(doc("toy"))))
+    assert boot.certification_exempt("fetch") and not boot.certification_exempt("run")
+    assert man.capability_names() == {"renderer4", "imagediff"}
+
+
+def test_a_failed_doctor_check_disproves_the_capability_it_is_named_after():
+    from oarbank_sdk import runner_protocol as rp
+    out = rp.DoctorOutput.model_validate({"runner_protocol": {"supported": [1]}, "health": "undetected", "checks": [
+        {"name": "java17", "ok": False, "detail": "no JDK"}, {"name": "pysam_import", "ok": False},
+        {"name": "python_312", "ok": True}]})
+    assert rp.disproved_capabilities(out.checks) == {"java17", "pysam_import"}
+    assert rp.disproved_capabilities([c.model_dump() for c in out.checks]) == {"java17", "pysam_import"}
+    assert rp.disproved_capabilities(None) == set() and rp.disproved_capabilities([{"ok": False}]) == set()
+
+
 def test_bootstrap_stages_and_pins_need_each_other_and_core_2_4():
     bad(lambda d: bootstrapped(d)["datasets"].update(pinned=[]), r"need \[\[datasets.pinned\]\]", name="toy")
     bad(lambda d: bootstrapped(d)["stages"][1].update(bootstrap=False), r"\[\[datasets.pinned\]\] needs a bootstrap stage",

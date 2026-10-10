@@ -63,7 +63,7 @@ array, never a shell string.
 | `[coordinator]` | The module-protocol process: `exec`, `runtime`, optional-verb `capabilities`, `concurrency`, per-verb `timeouts_s`, host-callback `permissions`, the effects `campaign.tick` may request, `env`, and per-platform `variants`. |
 | `[coordinator.move]` | The module's part in a coordinator move: `rules` (a files prefix or a store collection, with class `carry`, `rebuild` or `drop`) and the `effects` the move verbs may request ([module-protocol.md](module-protocol.md#coordinator-moves)). |
 | `[runner]` | The runner-protocol executable: `exec`, `runtime`, `capabilities`, `stop_grace_s`, `checkpoint_grace_s`, `gpu`, `bandwidth_class`, `env`, and per-platform `variants`. |
-| `[[stages]]` | At least one. Each has `name`, optional `after`, and `requires` (node capabilities, reserved `pools`, `needs_pools` that must merely exist, and `resources` cpu/mem_gb), plus `timeout_s` and `retry`, per-platform `variants`, a `placement` constraint with its `after` stage, and, for a standalone stage, `default` (the stage a job runs when it names none) and its own `determinism` (`none` for work whose results depend on when it ran, such as ingesting a moving feed: the host never replicates, compares, caches or golden-tests it). A stage's `checkpoint` (`max_mb`, `min_interval_s`) keeps portable checkpoints ([Portable checkpoints](#portable-checkpoints)). |
+| `[[stages]]` | At least one. Each has `name`, optional `after`, and `requires` (node capabilities, reserved `pools`, `needs_pools` that must merely exist, and `resources` cpu/mem_gb), plus `timeout_s` and `retry`, per-platform `variants`, a `placement` constraint with its `after` stage, and, for a standalone stage, `default` (the stage a job runs when it names none) and its own `determinism` (`none` for work whose results depend on when it ran, such as ingesting a moving feed: the host never replicates, compares, caches or golden-tests it, and with no capability or pool required it runs before certification: [Stages that run before certification](#stages-that-run-before-certification)). A stage's `checkpoint` (`max_mb`, `min_interval_s`) keeps portable checkpoints ([Portable checkpoints](#portable-checkpoints)). |
 | `[[services]]` | Node helpers the agent manages through the [service protocol](service-protocol.md): lifecycle, timeouts, restart policy, which pools and capabilities they `provide`, the memory, yield and pause flags, GPU use (`gpu`), and `endpoint` for a service jobs reach through the agent (a warm model server). |
 | `[[probes]]` | Read-only capability checks (`fingerprint` only), each run every `period_s`. |
 | `[settings]` | The JSON Schema for the module's settings. The core stores settings but never interprets them. Settings are visible to the owner: never put a credential in them. |
@@ -123,6 +123,33 @@ The models enforce these, beyond the per-field types:
 
 A module may offer both forms of an evaluation. For example, render declares a single `eval` stage and a `render → score` chain; the operator's pipeline setting picks the form for jobs that name no stage. A module may also declare standalone utility stages (an ingestion `sync`, a `fetch` that provisions tools) and enqueue jobs that name them; it then marks its evaluation stage `default = true`.
 
+## Stages that run before certification
+
+A node runs a module's work only once the module is **certified** there: its doctor is healthy and its goldens passed
+(golden jobs on the stages that compare). Certification is what lets a node's results count: it shows that the node
+computes the module's comparable results exactly as the goldens expect. Two kinds of stage need no certification,
+because the goldens say nothing about their results and no other node's result is ever checked against theirs:
+
+- a **bootstrap stage** ([Pinned datasets](#pinned-datasets)): its output counts only when it is exactly the pinned
+  datasets, which the host checks file by file;
+- a stage that **compares nothing and needs nothing a node must prove**: its effective determinism is `none` (never
+  replicated, compared, cached or golden-tested, rule 14) and it requires no capability (`requires.capabilities`) and
+  no pool (`requires.pools`, `requires.needs_pools`). An ingestion `sync` that pulls a moving feed is the usual case.
+
+`Manifest.certification_exempt(stage)` says which stages these are. Their jobs run on any node where the module's
+runner starts (the agent ran its doctor and got a `DoctorOutput`), whatever the doctor's `health`: a module that is
+`unhealthy` or `undetected` on a node is not certified there, but its exempt stages still run. A failed doctor check
+gates only the stages that need what it proves: a check named after a capability (a probe's name, or a capability a
+service provides) that fails takes that capability away from the module on that node, so a stage that requires it
+waits there (`STAGE_CAPABILITY_MISSING`), and a stage that does not keeps running. Everything else is checked as for
+any job (platforms, sandbox, secrets, placement, retries). A stage with `determinism = "exact"` or
+`"within_tolerance"`, or one that needs a capability or a pool, always waits for certification: its result is
+replicated, compared and served from the result cache, and only certified nodes' results may enter that.
+
+Results of exempt stages are still judged by the module (`result.evaluate`) and fenced by job generation; they never
+count toward certification. A node whose jobs keep failing trips its breaker as for any job, which revokes the module
+there until its doctor runs again.
+
 ## Pinned datasets
 
 A module that provisions its own tools or reference data (downloads from public origins) does it with a **bootstrap
@@ -132,7 +159,7 @@ certified.
 ```toml
 [[stages]]
 name = "fetch"
-bootstrap = true            # runs on nodes whose doctor is healthy, before the goldens pass
+bootstrap = true            # runs where the module's runner starts, before the goldens pass
 determinism = "none"        # never compared, cached or golden-tested
 timeout_s = 3600
 requires = { resources = { cpu = 1, mem_gb = 1.0 } }
