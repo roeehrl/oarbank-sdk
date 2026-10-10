@@ -35,7 +35,7 @@ An optional `conformance.json` next to the manifest feeds the kit's fake host:
 {"datasets": {"scene:demo": {"kind": "scene", "attrs": {"scene": "atrium"}, "dir": "fixtures/demo"},
               "upload:shots": {"kind": "upload", "files": [{"path": "a.png", "digest": "<64 hex>", "size": 2048}]}},
  "settings": {"tool_datasets": {"renderer": "tool:renderer"}},
- "tools": {"renderer": "/opt/renderer/4.2"},
+ "tools": {"renderer": "/opt/renderer/4.2", "jdk": {"path": "/opt/homebrew/opt/openjdk@17", "version": "17.0.12", "arch": "aarch64"}},
  "node_classes": [{"platform": "darwin-arm64", "os_version": "26.1", "pools": {"containers": 1}, "capabilities": []},
                   {"pools": {"imagediff": 0}}],
  "params": [{"n": 3}, {"n": -1}],
@@ -59,8 +59,9 @@ it. A dataset's `files` are what `host.datasets.query` returns with `with_files`
 says so.
 
 The runner suite gives the runner what an agent would:
-- **`tools`** maps each `[sandbox].tools` id to a path on this machine. The kit resolves it (as the agent does),
-  grants it in the sandbox and lists it in `OARBANK_TOOLS_FILE`.
+- **`tools`** maps each `[sandbox].tools` id to an installation on this machine: a path, or `{path, version, arch}`.
+  The kit resolves the path (as the agent does), grants it in the sandbox and lists it in `OARBANK_TOOLS_FILE`; a
+  `version` the request's constraint does not accept fails the check `host tool versions`.
 - **`settings`** is written to a file passed as `OARBANK_SETTINGS_FILE` (doctor and runs), and also initializes
   the coordinator side.
 - **`secrets`** (optional `{name: value}`) replaces the random canaries; the kit delivers each to the stages that list

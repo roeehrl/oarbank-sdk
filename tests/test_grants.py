@@ -50,7 +50,8 @@ def test_the_proxy_refuses_hosts_outside_the_list_and_local_services():
 
 
 def test_tools_file(tmp_path, monkeypatch):
-    (tmp_path / "t.json").write_text(json.dumps({"renderer4": ["/opt/renderer4"]}), encoding="utf-8", newline="\n")
+    (tmp_path / "t.json").write_text(json.dumps({"renderer4": [{"path": "/opt/renderer4", "version": "4.2", "arch": "arm64"}]}),
+                                     encoding="utf-8", newline="\n")
     monkeypatch.setenv("OARBANK_TOOLS_FILE", str(tmp_path / "t.json"))
     assert tools.path("renderer4") == "/opt/renderer4" and tools.paths("nope") == []
     with pytest.raises(tools.ToolMissing):

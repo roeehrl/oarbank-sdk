@@ -513,7 +513,8 @@ def _spec_envelope(man, stage_name, payload: dict, datasets: list, mounts: dict,
 
 class Grants:
     """What the agent would give the runner beyond its directories, from the module's [sandbox] and the fixtures:
-    the tool paths (fixtures `tools`: {id: path}, resolved as the agent does), the settings file (fixtures `settings`)
+    the tool installations (fixtures `tools`: {id: path} or {id: {path, version, arch}}, resolved as the agent does and
+    checked against the request's version), the settings file (fixtures `settings`)
     and, for egress-allowlist, a real allowlist proxy (egress_proxy). A bootstrap stage's jobs get the bootstrap grants
     instead (spec/sandbox.md, "Bootstrap jobs"): the same proxy, no tools, `{}` as settings, no module data directory.
     Folders: a read folder is the fixtures' `folders` directory (relative to the module), granted read-only; a write
@@ -521,10 +522,18 @@ class Grants:
 
     def __init__(self, man, fx: dict, root: Path | None = None):
         self.dir = Path(tempfile.mkdtemp(prefix="conform-grants-"))
-        want = [t.id for t in man.sandbox.tools]
+        from . import toolversion
         given = fx.get("tools") or {}
-        self.missing = [t for t in want if t not in given]
-        self.tools = {t: [os.path.realpath(given[t])] for t in want if t in given}
+        self.missing = [t.id for t in man.sandbox.tools if t.id not in given]
+        self.tools, self.unmet = {}, []
+        for t in man.sandbox.tools:
+            if t.id not in given:
+                continue
+            g = given[t.id] if isinstance(given[t.id], dict) else {"path": given[t.id]}
+            inst = {"path": os.path.realpath(g["path"]), "version": g.get("version"), "arch": g.get("arch")}
+            if t.version and inst["version"] and not toolversion.satisfies(inst["version"], t.version):
+                self.unmet.append(f"{t.id} {inst['version']} (needs {t.version})")
+            self.tools[t.id] = [inst]
         (self.dir / "tools.json").write_text(json.dumps(self.tools), encoding="utf-8")
         (self.dir / "settings.json").write_text(json.dumps(fx.get("settings") or {}), encoding="utf-8")
         self.folders, given_f = {}, fx.get("folders") or {}
@@ -566,7 +575,7 @@ class Grants:
             return S.node_policy(man.module.id, root, ws, None, sandbox=man.sandbox.for_bootstrap(), kind=kind,
                                  tool_paths=[str(self.dir / "bootstrap"), sdk], proxy_port=self.proxy.port if self.proxy else None)
         return S.node_policy(man.module.id, root, ws, data, sandbox=man.sandbox, kind=kind,
-                             tool_paths=[p for ps in self.tools.values() for p in ps] + [str(self.dir), sdk],
+                             tool_paths=[i["path"] for ps in self.tools.values() for i in ps] + [str(self.dir), sdk],
                              proxy_port=self.proxy.port if self.proxy else None, folders=self.folders)
 
     def close(self):
@@ -1052,6 +1061,9 @@ def _check_runner(root: Path, man, fx: dict, runs: list, r: Report, g: "Grants")
     if g.missing:
         r.add("runner", "host tools and folders", None, f"fixtures `tools` and `folders` do not map {g.missing}: the runner "
               "may fail without them")
+    if g.unmet:
+        r.add("runner", "host tool versions", False, f"fixtures `tools` give versions the module does not accept: "
+              f"{', '.join(g.unmet)} (a node grants only an installation that satisfies [sandbox].tools[].version)")
     data = Path(tempfile.mkdtemp(prefix="conform-data-"))
     (data / "tmp").mkdir()
     host = portable.host_platform()

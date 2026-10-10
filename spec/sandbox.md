@@ -57,7 +57,7 @@ module process ever runs.
 [sandbox]
 contract = 1
 net = { mode = "egress-allowlist", allow = ["api.example.org", "*.files.example.org:8443"] }
-tools = [{ id = "renderer4", trust = "code-exec" }]
+tools = [{ id = "jdk", version = ">=17, <22", arch = "native", trust = "code-exec" }]
 devices = { gpu = "compute" }
 containers = [{ image = "docker.io/org/tool:1.2@sha256:<64 hex>", platform = "linux/amd64" }]
 exec_writable = false
@@ -76,7 +76,7 @@ key = "keys/tasks.pub"
 | `net.mode = "none"` (default) | No network at all. |
 | `net.mode = "egress-allowlist"` | Only the `allow` hosts, `host[:port]` with port 443 by default and `*.` for subdomains, never IP addresses. Traffic goes through **the agent's local proxy**, which enforces the list and refuses a name that resolves to a non-public address (loopback, link-local, private, multicast); `oarbank_sdk.egress_proxy` is the reference. The agent sets `HTTPS_PROXY`/`HTTP_PROXY`/`ALL_PROXY`; the backend blocks every other route. |
 | `net.mode = "egress-any"` | Outbound connections to any public address, plus DNS. A separately approved **full-trust** grant. |
-| `tools` | Read and execute the host paths that the operator's **tool registry** maps the id to, per OS (e.g. `renderer4` → the renderer's install directory), resolved to canonical paths; the process finds them in `OARBANK_TOOLS_FILE`. `trust = "code-exec"` flags tools that run arbitrary code (a JVM, an interpreter, a shell) in the approval UI. On Windows, any readable binary is executable. |
+| `tools` | Read and execute one installation of each host tool, detected and version-checked on the node, never a path the module names: see [Host tools](#host-tools). The process finds each in `OARBANK_TOOLS_FILE`. `trust = "code-exec"` flags tools that run arbitrary code (a JVM, an interpreter, a shell) in the approval UI. On Windows, any readable binary is executable. |
 | `devices.gpu = "compute"` | GPU compute through the platform's APIs, with no display server. Flagged at approval: it widens the kernel surface. |
 | `containers` | The job's broker endpoint, for these digest-pinned images only. A stage that runs containers reserves the agent-provided `containers` pool. |
 | `container_sets` | The job's broker endpoint, for digest-pinned images under a registry and repository prefix that carry a cosign signature by a pinned key (or that a signed index lists), when the job lists them ([Image sets](#image-sets)). |
@@ -97,6 +97,50 @@ key = "keys/tasks.pub"
 `unavailable` (and `endpoints`: whether its agent hands out service endpoints; a module with an endpoint service needs
 it). A module runs only where all of its grants, and the always-on rules above, are enforced. A node that
 cannot enforce them advertises `SANDBOX_BACKEND_MISSING` or `CAPABILITY_NOT_ENFORCED` for that module.
+
+## Host tools
+
+A module asks for a host tool by the fleet's **tool definition id** and says which versions it accepts; the node finds
+the installations, and the agent grants one per tool. The module never names a path, and the release carries no path.
+
+```toml
+[sandbox]
+tools = [
+  { id = "jdk", version = ">=17, <22", arch = "native", trust = "code-exec" },
+  { id = "python", version = "~> 3.12" },
+  { id = "samtools", version = ">=1.19" },            # a tool the fleet's admin defined (tools.define)
+]
+```
+
+| Key | Default | Meaning |
+|---|---|---|
+| `id` | required | The fleet's tool definition: `jdk` and `python` are built into Oarbank; an admin defines others (a generic executable with its version command). |
+| `version` | any | Comma-separated clauses, all of which hold: `=` (or `==`), `!=`, `>`, `>=`, `<`, `<=`, and `~>`, which lets the last given segment grow (`~> 17.0.2` is `>=17.0.2, <17.1`; `~> 17` is `>=17, <18`). Versions are dot-separated numbers with an optional pre-release (`22-ea`, which sorts below `22`); Java's legacy `1.8.0_392` reads as `8.0.392`. Reference: `oarbank_sdk.toolversion`, vectors in [vectors/tool-versions.json](vectors/tool-versions.json). |
+| `arch` | `any` | `any` (the node's own architecture preferred), `native` (only the node's own: no x86_64 JDK under Rosetta on Apple silicon), `arm64` or `amd64`. |
+| `trust` | `read` | `code-exec` flags a tool that runs arbitrary code. |
+
+**On the node.** The agent detects each defined tool at startup, when its release changes, when asked (Re-detect)
+and hourly: a JDK by reading its installation's `release` file (`JAVA_VERSION`, `OS_ARCH`, `IMPLEMENTOR`) without
+running it; another tool by running its version command inside the sandbox (read and execute on that file only, no
+network). It reports every installation with its canonical path, version, architecture and status, and the
+coordinator places a module's jobs only where each tool it asks for resolves. For each module the agent picks one
+installation per tool: a path the operator set for this module on this node, else one set for the node, else one set
+for its platform group or the fleet, else the highest detected version that satisfies `version` (the node's own
+architecture preferred). A path the operator adds that the node did not find itself arrives in the node's signed
+statement and is checked like a folder (no roots, homes, data or system directories) and by the detector before it is
+granted.
+
+**What the runner gets.** `OARBANK_TOOLS_FILE` maps each resolved tool to `[{"path", "version", "arch"}]`: a JDK's
+home directory, an executable's file (an interpreter's prefix is granted with it). `oarbank_sdk.tools.path("jdk")`
+and `tools.version("jdk")` read it. A tool with no satisfying installation on a node keeps the module's jobs off that
+node (`TOOL_NOT_FOUND`, `TOOL_VERSION_UNMET` or `TOOL_REFUSED`), except jobs of stages that need no certification,
+which get no tools anyway.
+
+**Migrating from tool registry ids.** Before core 2.9 a module named an operator-defined registry id (`java17`) that
+the coordinator mapped to paths per OS. That registry is gone: ask for `jdk` with a constraint
+(`{ id = "jdk", version = ">=17", trust = "code-exec" }`), read `tools.path("jdk")` (each entry is now an object,
+not a path string), and publish a new module version (its grant digest changes, so the owner approves it once). A
+module still asking for an id the fleet does not define never runs; its readiness checklist says so.
 
 ## Folders
 
