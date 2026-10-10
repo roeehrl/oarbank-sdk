@@ -168,7 +168,7 @@ sys.exit(sup.main())                   # `run` or `status`
 
 - `run`: starts the daemon as its child **in its own process group**, watches the control document (the nudge and a
   1 s re-read), and translates it: `pause` (`"signal"`: SIGSTOP and SIGCONT to the daemon and all of its descendants,
-  found through `/proc` on Linux, `ps` on macOS and a Toolhelp snapshot on Windows, where it suspends with
+  found through `/proc` on Linux, `sysctl` on macOS and a Toolhelp snapshot on Windows, where it suspends with
   `NtSuspendProcess`; never the supervisor itself; or `"none"`, or a callable), `threads` (a callable, or a flag template:
   the daemon is restarted with the flag when the limit changes) and `gpu_duty` (a callable). On a stop it sends
   `stop_signal` (SIGTERM; on Windows it terminates the daemon's tree), kills what is left after its own

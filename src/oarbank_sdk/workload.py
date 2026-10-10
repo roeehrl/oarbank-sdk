@@ -269,9 +269,49 @@ def _pairs() -> list[tuple[int, int]]:
             if len(fields) > 1 and fields[0] != "Z":
                 pairs.append((int(d), int(fields[1])))
         return pairs
+    if sys.platform == "darwin":
+        found = _kinfo_pairs()
+        if found is not None:
+            return found
     ps = subprocess.run(["ps", "-A", "-o", "pid=,ppid=,stat="], capture_output=True, text=True).stdout
     return [(int(f[0]), int(f[1])) for f in (line.split() for line in ps.splitlines())
             if len(f) == 3 and f[0].isdigit() and f[1].isdigit() and not f[2].startswith("Z")]
+
+
+_KINFO_SIZE, _P_STAT, _P_PID, _E_PPID = 648, 36, 40, 560       # struct kinfo_proc on 64-bit macOS
+_SZOMB = 5
+
+
+def _kinfo_pairs() -> list[tuple[int, int]] | None:
+    """macOS: (pid, ppid) of every live process from sysctl kern.proc.all, which the module sandbox allows (`ps` is
+    setuid there, and the sandbox refuses to exec it). None when the answer does not look like kinfo_proc records."""
+    import ctypes
+    import struct
+    lib = ctypes.CDLL("/usr/lib/libSystem.B.dylib", use_errno=True)
+    mib = (ctypes.c_int * 3)(1, 14, 0)                            # CTL_KERN, KERN_PROC, KERN_PROC_ALL
+    for _ in range(3):
+        size = ctypes.c_size_t(0)
+        if lib.sysctl(mib, 3, None, ctypes.byref(size), None, 0) != 0:
+            return None
+        size.value += 64 * _KINFO_SIZE                            # room for processes started meanwhile
+        buf = ctypes.create_string_buffer(size.value)
+        if lib.sysctl(mib, 3, buf, ctypes.byref(size), None, 0) == 0:
+            break
+        if ctypes.get_errno() != 12:                              # ENOMEM: it grew; ask again
+            return None
+    else:
+        return None
+    raw = buf.raw[:size.value]
+    if len(raw) % _KINFO_SIZE:
+        return None
+    out = []
+    for off in range(0, len(raw), _KINFO_SIZE):
+        if raw[off + _P_STAT] == _SZOMB:
+            continue
+        pid, = struct.unpack_from("i", raw, off + _P_PID)
+        ppid, = struct.unpack_from("i", raw, off + _E_PPID)
+        out.append((pid, ppid))
+    return out
 
 
 def descendants(pid: int) -> list[int]:
