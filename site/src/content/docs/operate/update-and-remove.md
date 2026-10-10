@@ -13,13 +13,25 @@ This page covers Oarbank 2.7.0. The full install guide, including building the p
 
 ## Update the coordinator
 
-Download the new installer from the [releases](https://github.com/roeehrl/oarbank/releases), check it against the
-release's `SHA256SUMS`, and run it as you did the first time.
+Download the new installer from the [releases](https://github.com/roeehrl/oarbank/releases) and check it. Each
+package set has its own checksum file beside it, for example `SHA256SUMS-coordinator-packages-2.7.0-linux-amd64` for
+the Linux `.deb` and `.rpm`, or `SHA256SUMS-coordinator-msi-2.7.0-windows-x64` for the Windows MSI:
+
+```sh
+sha256sum --ignore-missing -c SHA256SUMS-coordinator-packages-2.7.0-linux-amd64   # macOS: shasum -a 256 --ignore-missing -c …
+```
+
+Then run the installer as you did the first time.
 
 - **macOS and Linux:** the new build becomes `current`, the services restart, and agents reconnect by themselves.
   Modules' Python environments are rebuilt on the new build's interpreter when it starts. Earlier builds stay beside it
   for going back.
 - **Windows:** install the new MSI. It restarts the coordinator services with the updated payload.
+
+A coordinator installed from an **archive** (the only way before 2.6, and the advanced setup since) updates with the
+new archive's helper instead: `bash install-oarbankd.sh --build <archive> --agent-bind <address>` (Windows: elevated
+`install-oarbankd.ps1 -Build <archive> -AgentBind <address>`), with `--dry-run` / `-DryRun` to see the plan first.
+Earlier builds stay beside it.
 
 If the services do not come back, run the bundled `oarbank-setup` (paths in the
 [command-line reference](/oarbank/reference/cli#where-the-commands-are)). It refreshes the existing installation and never
@@ -29,14 +41,21 @@ makes a new fleet.
 
 Nodes update their agent from the coordinator; nobody needs to log in to them.
 
+Upload the release's agent binary for each platform your nodes run (`oarbank-agent-2.7.0-darwin-arm64`,
+`-darwin-amd64`, `-linux-amd64`, `-linux-arm64`, `-windows-x64.exe`, `-windows-arm64.exe`; each has a
+`SHA256SUMS-agent-…` file), then sign, try and promote it:
+
 ```sh
-oarbank agent upload <oarbank-agent binary>
+oarbank agent upload oarbank-agent-2.7.0-linux-amd64
+oarbank agent list                               # the uploaded builds, with their sha256
 oarbank agent sign <build>
-oarbank agent canary <build> --node <node>      # try it on one node first
+oarbank agent canary <build> --node <node>       # try it on one node first
 oarbank agent promote <build>
 ```
 
-`oarbank agent list` shows which version each node runs. The launcher keeps the previous version and rolls back a build
+`<build>` is the version (`2.7.0`) when only one uploaded build has it; with one build per platform, use the first 8 or
+more characters of its sha256 from `oarbank agent list`. `oarbank agent list` also shows which version each node
+runs. The launcher keeps the previous version and rolls back a build
 that does not confirm itself within 10 minutes. Installing a newer node package also works: it replaces the launcher and
 restarts the service.
 
