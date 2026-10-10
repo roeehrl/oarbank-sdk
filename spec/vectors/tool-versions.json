@@ -1,0 +1,375 @@
+{
+ "normalized": {
+  "17": "17",
+  "17.0.12": "17.0.12",
+  "17.0.12+7": "17.0.12",
+  "21.0.4": "21.0.4",
+  "22-ea": "22-ea",
+  "22": "22",
+  "1.8.0_392": "8.0.392",
+  "11.0.2": "11.0.2",
+  "17.0.0": "17.0.0",
+  "21-ea.1": "21-ea.1",
+  "21-ea.12": "21-ea.12",
+  "21-rc": "21-rc",
+  "1.10.2": "1.10.2",
+  "3.12.4": "3.12.4"
+ },
+ "versions_bad": [
+  "",
+  "v17",
+  "17.",
+  ".17",
+  "17..0",
+  "seventeen",
+  "17 0",
+  "17.0.x",
+  "-ea"
+ ],
+ "constraints": [
+  {
+   "constraint": ">=17",
+   "canonical": ">=17",
+   "matches": {
+    "17": true,
+    "17.0.12": true,
+    "17.0.12+7": true,
+    "21.0.4": true,
+    "22-ea": true,
+    "22": true,
+    "1.8.0_392": false,
+    "11.0.2": false,
+    "17.0.0": true,
+    "21-ea.1": true,
+    "21-ea.12": true,
+    "21-rc": true,
+    "1.10.2": false,
+    "3.12.4": false
+   }
+  },
+  {
+   "constraint": ">=17, <22",
+   "canonical": ">=17, <22",
+   "matches": {
+    "17": true,
+    "17.0.12": true,
+    "17.0.12+7": true,
+    "21.0.4": true,
+    "22-ea": true,
+    "22": false,
+    "1.8.0_392": false,
+    "11.0.2": false,
+    "17.0.0": true,
+    "21-ea.1": true,
+    "21-ea.12": true,
+    "21-rc": true,
+    "1.10.2": false,
+    "3.12.4": false
+   }
+  },
+  {
+   "constraint": "~> 17",
+   "canonical": "~>17",
+   "matches": {
+    "17": true,
+    "17.0.12": true,
+    "17.0.12+7": true,
+    "21.0.4": false,
+    "22-ea": false,
+    "22": false,
+    "1.8.0_392": false,
+    "11.0.2": false,
+    "17.0.0": true,
+    "21-ea.1": false,
+    "21-ea.12": false,
+    "21-rc": false,
+    "1.10.2": false,
+    "3.12.4": false
+   }
+  },
+  {
+   "constraint": "~> 17.0",
+   "canonical": "~>17.0",
+   "matches": {
+    "17": true,
+    "17.0.12": true,
+    "17.0.12+7": true,
+    "21.0.4": false,
+    "22-ea": false,
+    "22": false,
+    "1.8.0_392": false,
+    "11.0.2": false,
+    "17.0.0": true,
+    "21-ea.1": false,
+    "21-ea.12": false,
+    "21-rc": false,
+    "1.10.2": false,
+    "3.12.4": false
+   }
+  },
+  {
+   "constraint": "~> 17.0.2",
+   "canonical": "~>17.0.2",
+   "matches": {
+    "17": false,
+    "17.0.12": true,
+    "17.0.12+7": true,
+    "21.0.4": false,
+    "22-ea": false,
+    "22": false,
+    "1.8.0_392": false,
+    "11.0.2": false,
+    "17.0.0": false,
+    "21-ea.1": false,
+    "21-ea.12": false,
+    "21-rc": false,
+    "1.10.2": false,
+    "3.12.4": false
+   }
+  },
+  {
+   "constraint": "= 17.0.12",
+   "canonical": "=17.0.12",
+   "matches": {
+    "17": false,
+    "17.0.12": true,
+    "17.0.12+7": true,
+    "21.0.4": false,
+    "22-ea": false,
+    "22": false,
+    "1.8.0_392": false,
+    "11.0.2": false,
+    "17.0.0": false,
+    "21-ea.1": false,
+    "21-ea.12": false,
+    "21-rc": false,
+    "1.10.2": false,
+    "3.12.4": false
+   }
+  },
+  {
+   "constraint": "== 17",
+   "canonical": "=17",
+   "matches": {
+    "17": true,
+    "17.0.12": false,
+    "17.0.12+7": false,
+    "21.0.4": false,
+    "22-ea": false,
+    "22": false,
+    "1.8.0_392": false,
+    "11.0.2": false,
+    "17.0.0": true,
+    "21-ea.1": false,
+    "21-ea.12": false,
+    "21-rc": false,
+    "1.10.2": false,
+    "3.12.4": false
+   }
+  },
+  {
+   "constraint": "!= 11.0.2",
+   "canonical": "!=11.0.2",
+   "matches": {
+    "17": true,
+    "17.0.12": true,
+    "17.0.12+7": true,
+    "21.0.4": true,
+    "22-ea": true,
+    "22": true,
+    "1.8.0_392": true,
+    "11.0.2": false,
+    "17.0.0": true,
+    "21-ea.1": true,
+    "21-ea.12": true,
+    "21-rc": true,
+    "1.10.2": true,
+    "3.12.4": true
+   }
+  },
+  {
+   "constraint": "> 17",
+   "canonical": ">17",
+   "matches": {
+    "17": false,
+    "17.0.12": true,
+    "17.0.12+7": true,
+    "21.0.4": true,
+    "22-ea": true,
+    "22": true,
+    "1.8.0_392": false,
+    "11.0.2": false,
+    "17.0.0": false,
+    "21-ea.1": true,
+    "21-ea.12": true,
+    "21-rc": true,
+    "1.10.2": false,
+    "3.12.4": false
+   }
+  },
+  {
+   "constraint": "<= 21",
+   "canonical": "<=21",
+   "matches": {
+    "17": true,
+    "17.0.12": true,
+    "17.0.12+7": true,
+    "21.0.4": false,
+    "22-ea": false,
+    "22": false,
+    "1.8.0_392": true,
+    "11.0.2": true,
+    "17.0.0": true,
+    "21-ea.1": true,
+    "21-ea.12": true,
+    "21-rc": true,
+    "1.10.2": true,
+    "3.12.4": true
+   }
+  },
+  {
+   "constraint": "<22",
+   "canonical": "<22",
+   "matches": {
+    "17": true,
+    "17.0.12": true,
+    "17.0.12+7": true,
+    "21.0.4": true,
+    "22-ea": true,
+    "22": false,
+    "1.8.0_392": true,
+    "11.0.2": true,
+    "17.0.0": true,
+    "21-ea.1": true,
+    "21-ea.12": true,
+    "21-rc": true,
+    "1.10.2": true,
+    "3.12.4": true
+   }
+  },
+  {
+   "constraint": ">=17,<22",
+   "canonical": ">=17, <22",
+   "matches": {
+    "17": true,
+    "17.0.12": true,
+    "17.0.12+7": true,
+    "21.0.4": true,
+    "22-ea": true,
+    "22": false,
+    "1.8.0_392": false,
+    "11.0.2": false,
+    "17.0.0": true,
+    "21-ea.1": true,
+    "21-ea.12": true,
+    "21-rc": true,
+    "1.10.2": false,
+    "3.12.4": false
+   }
+  },
+  {
+   "constraint": "~> 1.8",
+   "canonical": "~>1.8",
+   "matches": {
+    "17": false,
+    "17.0.12": false,
+    "17.0.12+7": false,
+    "21.0.4": false,
+    "22-ea": false,
+    "22": false,
+    "1.8.0_392": true,
+    "11.0.2": false,
+    "17.0.0": false,
+    "21-ea.1": false,
+    "21-ea.12": false,
+    "21-rc": false,
+    "1.10.2": false,
+    "3.12.4": false
+   }
+  }
+ ],
+ "constraints_bad": [
+  "",
+  "17",
+  ">= ",
+  "=> 17",
+  ">=17;<22",
+  ">=17,",
+  "~ 17",
+  ">=v17",
+  "<>17"
+ ],
+ "ascending": [
+  "1.10.2",
+  "3.12.4",
+  "1.8.0_392",
+  "11.0.2",
+  "17",
+  "17.0.0",
+  "17.0.12",
+  "17.0.12+7",
+  "21-ea.1",
+  "21-ea.12",
+  "21-rc",
+  "21.0.4",
+  "22-ea",
+  "22"
+ ],
+ "arch": [
+  {
+   "installed": "aarch64",
+   "want": "native",
+   "native": "arm64",
+   "fits": true
+  },
+  {
+   "installed": "aarch64",
+   "want": "native",
+   "native": "amd64",
+   "fits": false
+  },
+  {
+   "installed": "x86_64",
+   "want": "any",
+   "native": "arm64",
+   "fits": true
+  },
+  {
+   "installed": "x86_64",
+   "want": "amd64",
+   "native": "arm64",
+   "fits": true
+  },
+  {
+   "installed": "",
+   "want": "any",
+   "native": "arm64",
+   "fits": true
+  },
+  {
+   "installed": "",
+   "want": "native",
+   "native": "arm64",
+   "fits": false
+  },
+  {
+   "installed": "arm64",
+   "want": "arm64",
+   "native": "amd64",
+   "fits": true
+  },
+  {
+   "installed": "x64",
+   "want": "native",
+   "native": "amd64",
+   "fits": true
+  },
+  {
+   "installed": "ppc64le",
+   "want": "native",
+   "native": "arm64",
+   "fits": false
+  }
+ ],
+ "note": "Versions: dot-separated numbers, optional -pre and +build; missing segments are zero, a pre-release sorts below its release (its identifiers numerically when numeric), build metadata is ignored, `_` separates segments and Java's legacy 1.x (x <= 9) is version x. Constraints: comma-separated clauses with =, ==, !=, >, >=, <, <=, ~> (pessimistic: the last given segment may grow; one segment: that segment). `ascending` lists equal versions in input order. Arch: aarch64/arm64 and x86_64/amd64/x64 are one each; an unknown arch fits only `any`."
+}

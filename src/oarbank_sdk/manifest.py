@@ -295,11 +295,29 @@ class SandboxNet(Contract):
 
 
 class ToolGrant(Contract):
-    """A host tool from the operator's tool registry (logical id mapped to per-OS paths by the operator). [beta]"""
-    id: Annotated[str, Field(pattern=r"^[a-z][a-z0-9_.-]{0,63}$")] = Field(description="[beta] Logical tool id, e.g. `renderer4`.")
+    """A host tool the module's node-side processes may read and execute: a tool the fleet defines (`jdk`, `python`, or
+    one an admin defines), detected and version-checked on each node, never a path (spec/sandbox.md, "Host tools").
+    The agent grants the one installation that satisfies `version` and `arch` on each node. [beta]"""
+    id: Annotated[str, Field(pattern=r"^[a-z][a-z0-9_.-]{0,63}$")] = Field(description=(
+        "[beta] The fleet's tool definition id: `jdk` and `python` are built in; an admin defines others "
+        "(`tools.define`)."))
+    version: str | None = Field(None, description=(
+        "[beta] Versions the module accepts, comma-separated clauses all of which hold: `=`, `!=`, `>`, `>=`, `<`, "
+        "`<=`, `~>` (Nomad's version operators), e.g. `\">=17, <22\"`. Leave it out for any version."))
+    arch: Literal["any", "native", "arm64", "amd64"] = Field("any", description=(
+        "[beta] `any`: any architecture, the node's own preferred; `native`: only the node's own (no x86_64 JDK under "
+        "Rosetta on Apple silicon); `arm64` or `amd64`: exactly that one."))
     trust: Literal["read", "code-exec"] = Field("read", description=(
         "[beta] `code-exec`: the tool runs arbitrary code (a JVM, an interpreter, a shell); the approval UI flags it. On "
         "Windows any readable binary is executable."))
+
+    @field_validator("version")
+    @classmethod
+    def _version(cls, v):
+        if v is None:
+            return v
+        from . import toolversion
+        return toolversion.describe(v)
 
 
 FOLDER_ID = r"^[a-z][a-z0-9_.-]{0,63}$"
@@ -326,7 +344,9 @@ class SandboxSection(Contract):
     that version can run. The coordinator side never gets these grants. [beta]"""
     contract: Literal[1] = Field(1, description="[beta] Sandbox contract version.")
     net: SandboxNet = Field(default_factory=SandboxNet)
-    tools: list[ToolGrant] = Field(default_factory=list, description="[beta] Host tools (registry ids) runners may read and execute.")
+    tools: list[ToolGrant] = Field(default_factory=list, description=(
+        "[beta] Host tools runners, services and probes may read and execute: fleet tool ids with version constraints, "
+        "resolved per node to one detected installation each (OARBANK_TOOLS_FILE)."))
     devices: SandboxDevices = Field(default_factory=SandboxDevices)
     containers: list[ContainerImage] = Field(default_factory=list, description=(
         "[beta] Images the agent's container broker may run for the module's jobs (a stage that uses them reserves the "
@@ -340,6 +360,15 @@ class SandboxSection(Contract):
     folders: list[FolderGrant] = Field(default_factory=list, description=(
         "[beta] Folders on the node (registry ids the operator maps to a path per node) the runner may read, or write into "
         "as an outbox. Needs requires.core >= 2.5."))
+
+    @field_validator("tools")
+    @classmethod
+    def _unique_tools(cls, v):
+        ids = [t.id for t in v]
+        dup = sorted({i for i in ids if ids.count(i) > 1})
+        if dup:
+            raise ValueError(f"sandbox.tools lists {dup} more than once")
+        return v
 
     @field_validator("folders")
     @classmethod

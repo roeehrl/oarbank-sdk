@@ -2024,7 +2024,7 @@
           "$ref": "#/$defs/SandboxNet"
         },
         "tools": {
-          "description": "[beta] Host tools (registry ids) runners may read and execute.",
+          "description": "[beta] Host tools runners, services and probes may read and execute: fleet tool ids with version constraints, resolved per node to one detected installation each (OARBANK_TOOLS_FILE).",
           "items": {
             "$ref": "#/$defs/ToolGrant"
           },
@@ -2522,10 +2522,22 @@
     },
     "ToolGrant": {
       "additionalProperties": false,
-      "description": "A host tool from the operator's tool registry (logical id mapped to per-OS paths by the operator). [beta]",
+      "description": "A host tool the module's node-side processes may read and execute: a tool the fleet defines (`jdk`, `python`, or\none an admin defines), detected and version-checked on each node, never a path (spec/sandbox.md, \"Host tools\").\nThe agent grants the one installation that satisfies `version` and `arch` on each node. [beta]",
       "properties": {
+        "arch": {
+          "default": "any",
+          "description": "[beta] `any`: any architecture, the node's own preferred; `native`: only the node's own (no x86_64 JDK under Rosetta on Apple silicon); `arm64` or `amd64`: exactly that one.",
+          "enum": [
+            "any",
+            "native",
+            "arm64",
+            "amd64"
+          ],
+          "title": "Arch",
+          "type": "string"
+        },
         "id": {
-          "description": "[beta] Logical tool id, e.g. `renderer4`.",
+          "description": "[beta] The fleet's tool definition id: `jdk` and `python` are built in; an admin defines others (`tools.define`).",
           "pattern": "^[a-z][a-z0-9_.-]{0,63}$",
           "title": "Id",
           "type": "string"
@@ -2539,6 +2551,19 @@
           ],
           "title": "Trust",
           "type": "string"
+        },
+        "version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "[beta] Versions the module accepts, comma-separated clauses all of which hold: `=`, `!=`, `>`, `>=`, `<`, `<=`, `~>` (Nomad's version operators), e.g. `\">=17, <22\"`. Leave it out for any version.",
+          "title": "Version"
         }
       },
       "required": [

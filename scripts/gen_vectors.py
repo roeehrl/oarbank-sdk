@@ -9,7 +9,7 @@ import hashlib
 import json
 from pathlib import Path
 
-from oarbank_sdk import images as I, imagetest as T, keys, platform as pf, portable
+from oarbank_sdk import images as I, imagetest as T, keys, platform as pf, portable, toolversion as tv
 
 OUT = Path(__file__).resolve().parents[1] / "spec" / "vectors"
 
@@ -180,6 +180,36 @@ def image_vectors() -> dict:
                     "their reasons may differ. Index documents belong to exactly one set."}
 
 
+# host tool versions and constraints (spec/sandbox.md, "Host tools")
+TOOL_VERSIONS = ["17", "17.0.12", "17.0.12+7", "21.0.4", "22-ea", "22", "1.8.0_392", "11.0.2", "17.0.0", "21-ea.1", "21-ea.12",
+                 "21-rc", "1.10.2", "3.12.4"]
+TOOL_VERSIONS_BAD = ["", "v17", "17.", ".17", "17..0", "seventeen", "17 0", "17.0.x", "-ea"]
+TOOL_CONSTRAINTS = [">=17", ">=17, <22", "~> 17", "~> 17.0", "~> 17.0.2", "= 17.0.12", "== 17", "!= 11.0.2", "> 17", "<= 21",
+                    "<22", ">=17,<22", "~> 1.8"]
+TOOL_CONSTRAINTS_BAD = ["", "17", ">= ", "=> 17", ">=17;<22", ">=17,", "~ 17", ">=v17", "<>17"]
+TOOL_ARCHES = [("aarch64", "native", "arm64"), ("aarch64", "native", "amd64"), ("x86_64", "any", "arm64"),
+               ("x86_64", "amd64", "arm64"), ("", "any", "arm64"), ("", "native", "arm64"), ("arm64", "arm64", "amd64"),
+               ("x64", "native", "amd64"), ("ppc64le", "native", "arm64")]
+
+
+def tool_vectors() -> dict:
+    vs = []
+    for c in TOOL_CONSTRAINTS:
+        vs.append({"constraint": c, "canonical": tv.describe(c),
+                   "matches": {v: tv.satisfies(v, c) for v in TOOL_VERSIONS}})
+    order = sorted(TOOL_VERSIONS, key=lambda v: __import__("functools").cmp_to_key(lambda a, b: a.compare(b))(tv.version(v)))
+    return {"normalized": {v: tv.normalize(v) for v in TOOL_VERSIONS},
+            "versions_bad": TOOL_VERSIONS_BAD, "constraints": vs, "constraints_bad": TOOL_CONSTRAINTS_BAD,
+            "ascending": order,
+            "arch": [{"installed": i, "want": w, "native": n, "fits": tv.arch_fits(i, w, n)} for i, w, n in TOOL_ARCHES],
+            "note": "Versions: dot-separated numbers, optional -pre and +build; missing segments are zero, a pre-release sorts "
+                    "below its release (its identifiers numerically when numeric), build metadata is ignored, `_` separates "
+                    "segments and Java's legacy 1.x (x <= 9) is version x. Constraints: comma-separated clauses with "
+                    "=, ==, !=, >, >=, <, <=, ~> (pessimistic: the last given segment may grow; one segment: that segment). "
+                    "`ascending` lists equal versions in input order. Arch: aarch64/arm64 and x86_64/amd64/x64 are "
+                    "one each; an unknown arch fits only `any`."}
+
+
 def main():
     OUT.mkdir(parents=True, exist_ok=True)
     canon = {"cases": [{"input": c, "canonical": keys.canonical_json(c),
@@ -224,6 +254,19 @@ def main():
     (OUT / "placement-class.json").write_text(json.dumps(pc, indent=1) + "\n", encoding="utf-8", newline="\n")
     iv = image_vectors()
     (OUT / "image-signatures.json").write_text(json.dumps(iv, indent=1) + "\n", encoding="utf-8", newline="\n")
+    for bad in TOOL_VERSIONS_BAD:
+        try:
+            tv.version(bad)
+            raise AssertionError(f"version {bad!r} parsed")
+        except ValueError:
+            pass
+    for bad in TOOL_CONSTRAINTS_BAD:
+        try:
+            tv.parse_constraint(bad)
+            raise AssertionError(f"constraint {bad!r} parsed")
+        except ValueError:
+            pass
+    (OUT / "tool-versions.json").write_text(json.dumps(tool_vectors(), indent=1) + "\n", encoding="utf-8", newline="\n")
     print("vectors written to", OUT)
 
 

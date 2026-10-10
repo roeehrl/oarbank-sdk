@@ -248,8 +248,10 @@ Cross-field rules are in [manifest.md](manifest.md).
 | `sandbox.net` | SandboxNet | `"mode='none' allow=[]"` |  |
 | `sandbox.net.mode` | str | `"none"` | [beta] Open set. `none`; `egress-allowlist`: only the `allow` hosts, through the agent's local proxy (the SDK sets HTTPS_PROXY/ALL_PROXY); `egress-any`: any public address, a separately approved full-trust grant. Never loopback or link-local, never listening. |
 | `sandbox.net.allow` | list of str | `[]` | [beta] `host[:port]` entries (a leading `*.` matches subdomains); never IP addresses or CIDRs. Required with egress-allowlist; port defaults to 443. |
-| `sandbox.tools` | list of ToolGrant | `[]` | [beta] Host tools (registry ids) runners may read and execute. |
-| `sandbox.tools[].id` | str | required | [beta] Logical tool id, e.g. `renderer4`. |
+| `sandbox.tools` | list of ToolGrant | `[]` | [beta] Host tools runners, services and probes may read and execute: fleet tool ids with version constraints, resolved per node to one detected installation each (OARBANK_TOOLS_FILE). |
+| `sandbox.tools[].id` | str | required | [beta] The fleet's tool definition id: `jdk` and `python` are built in; an admin defines others (`tools.define`). |
+| `sandbox.tools[].version` | str (optional) |  | [beta] Versions the module accepts, comma-separated clauses all of which hold: `=`, `!=`, `>`, `>=`, `<`, `<=`, `~>` (Nomad's version operators), e.g. `">=17, <22"`. Leave it out for any version. |
+| `sandbox.tools[].arch` | `"any"` \| `"native"` \| `"arm64"` \| `"amd64"` | `"any"` | [beta] `any`: any architecture, the node's own preferred; `native`: only the node's own (no x86_64 JDK under Rosetta on Apple silicon); `arm64` or `amd64`: exactly that one. |
 | `sandbox.tools[].trust` | `"read"` \| `"code-exec"` | `"read"` | [beta] `code-exec`: the tool runs arbitrary code (a JVM, an interpreter, a shell); the approval UI flags it. On Windows any readable binary is executable. |
 | `sandbox.devices` | SandboxDevices | `"gpu='none'"` |  |
 | `sandbox.devices.gpu` | str | `"none"` | [beta] Open set: `none` or `compute` (GPU compute through the platform's APIs, no display server; weakens isolation, so it is flagged at approval). |
