@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 
 from . import envelopes, manifest, module_protocol as mp, runner_protocol as rp, service_protocol as sp, ui
+from . import workload_protocol as wp
 
 _REPO = Path(__file__).resolve().parents[2]
 _DATA = Path(__file__).resolve().parent / "_data"          # where an installed wheel carries schemas/ and spec/
@@ -26,6 +27,8 @@ CONTRACTS: dict[str, type] = {
     "service-status-1": sp.Status,
     "service-owned-1": sp.OwnedList,
     "service-op-result-1": sp.OpResult,
+    "workload-status-1": wp.Status,
+    "workload-event-1": wp.Event,
     "module-rpc-request-1": mp.Request,
     "module-rpc-response-1": mp.Response,
     "module-rpc-notification-1": mp.Notification,

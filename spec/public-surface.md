@@ -6,11 +6,11 @@ This page states exactly what a module may depend on. Anything not listed here i
 
 - The contracts in this repository:
   - the manifest schema;
-  - module, runner and service protocols;
+  - module, runner, service and workload protocols;
   - envelopes;
   - the JSON Schemas in `schemas/`;
   - the Python models in `oarbank_sdk`.
-- The runner environment variables listed in [runner-protocol.md](runner-protocol.md), and the service environment variables in [service-protocol.md](service-protocol.md).
+- The runner environment variables listed in [runner-protocol.md](runner-protocol.md), the service environment variables in [service-protocol.md](service-protocol.md), and the workload environment variables, run directory and events file in [workload-protocol.md](workload-protocol.md).
 - The workdir layout the agent creates (`spec.json`, `result.json`, `events.ndjson`, `control.json`, dataset mounts, `inputs/`).
 - The exit codes in the runner protocol.
 - Reason codes: the core's reason-code registry (published with each core release as `reason-codes.json`), plus the module's own namespaced codes (`<module-short>/<code>`).
@@ -30,4 +30,4 @@ A module that imports a core Python module, reads core tables or parses core log
 - The module never sees another module's settings, results or datasets.
 - The coordinator side is stateless: every verb call carries everything it needs. The core owns leases, attempts, retries, certification, replication and storage.
 - The runner gets exactly the documented environment, plus the `env` its manifest declares, and nothing inherited.
-- Host protection is owner-set: a module cannot declare exemptions from it, or request priority over processes the owner protects. A runner can only declare its own behaviour (`gpu`, `freeze_ok`, `cooperative_throttle`).
+- Host protection is owner-set: a module cannot declare exemptions from it, or request priority over processes the owner protects. A runner or a workload can only declare its own behaviour (`gpu`, `freeze_ok`, `cooperative_throttle`, `cooperative_pause`, a workload's `pause_tolerance_s`).

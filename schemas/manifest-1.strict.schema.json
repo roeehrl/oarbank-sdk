@@ -2060,7 +2060,7 @@
     },
     "Secret": {
       "additionalProperties": false,
-      "description": "A credential the owner sets through the core, write-only (spec/manifest.md, \"Secrets\"): stored encrypted on the\ncoordinator, never shown, delivered only to the runners of stages that list it and, with `secrets:read:self`, to\ncoordinator verbs. [beta]",
+      "description": "A credential the owner sets through the core, write-only (spec/manifest.md, \"Secrets\"): stored encrypted on the\ncoordinator, never shown, delivered only to the runners of stages that list it, to workloads that list it and, with\n`secrets:read:self`, to coordinator verbs. [beta]",
       "properties": {
         "description": {
           "default": "",
@@ -2070,7 +2070,7 @@
           "type": "string"
         },
         "name": {
-          "description": "[beta] The secret's name; unique. Stages list it in `secrets`.",
+          "description": "[beta] The secret's name; unique. Stages and workloads list it in `secrets`.",
           "maxLength": 64,
           "pattern": "^[a-z][a-z0-9_]*$",
           "title": "Name",

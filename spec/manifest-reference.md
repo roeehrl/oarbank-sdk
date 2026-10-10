@@ -182,7 +182,7 @@ Cross-field rules are in [manifest.md](manifest.md).
 | `settings` | Settings | `"schema_=None"` |  |
 | `settings.schema` | str (optional) |  | [stable] JSON Schema (bundle path) whose properties are the module's settings: each one's type, default and constraints, title and description, and an `x-oarbank` annotation (scope fleet or node, required, unit, advanced, campaign). The core validates every value against it and hands node-scoped values to the module's runners and services (spec/manifest.md, "Settings"). |
 | `secrets` | list of Secret | `[]` | [beta] Write-only credentials. Needs requires.core >= 2.5. |
-| `secrets[].name` | str | required | [beta] The secret's name; unique. Stages list it in `secrets`. |
+| `secrets[].name` | str | required | [beta] The secret's name; unique. Stages and workloads list it in `secrets`. |
 | `secrets[].description` | str | `""` | [beta] What it is for, shown where the owner sets it. |
 | `results` | Results | required |  |
 | `results.schema` | str | required | [stable] JSON Schema (bundle path) for the result payload. |

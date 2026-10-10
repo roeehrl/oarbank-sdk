@@ -121,6 +121,9 @@ job crashed (a POSIX signal, or a Windows exception code).
     waits on the event.
 - **The runner re-reads the document when nudged** and acts on it at its next safe point. It has no reason to re-read it
   otherwise: nothing changes without a nudge.
+- **Workloads use the same document** ([workload-protocol.md](workload-protocol.md#control)), at
+  `OARBANK_CONTROL_FILE`, with the same nudges, and also re-read it at least every 2 s: a workload outlives agent
+  restarts, and after one its Windows control event is gone.
 
 `oarbank_sdk.control.Control` is a stdlib-only reference implementation (vendorable). It reads the document when
 created and again only after a nudge, and holds a pause by blocking on the next nudge; on POSIX create it on the main
