@@ -115,7 +115,7 @@ tools = [
 | Key | Default | Meaning |
 |---|---|---|
 | `id` | required | The fleet's tool definition: `jdk` and `python` are built into Oarbank; an admin defines others (a generic executable with its version command). |
-| `version` | any | Comma-separated clauses, all of which hold: `=` (or `==`), `!=`, `>`, `>=`, `<`, `<=`, and `~>`, which lets the last given segment grow (`~> 17.0.2` is `>=17.0.2, <17.1`; `~> 17` is `>=17, <18`). Versions are dot-separated numbers with an optional pre-release (`22-ea`, which sorts below `22`); Java's legacy `1.8.0_392` reads as `8.0.392`. Reference: `oarbank_sdk.toolversion`, vectors in [vectors/tool-versions.json](vectors/tool-versions.json). |
+| `version` | any | Comma-separated clauses, all of which hold: `=` (or `==`), `!=`, `>`, `>=`, `<`, `<=`, and `~>`, which lets the last given segment grow (`~> 17.0.2` is `>=17.0.2, <17.1`; `~> 17` is `>=17, <18`). Versions are dot-separated numbers with an optional pre-release (`22-ea`, which sorts below `22`); a node reports a JDK 8 (`1.8.0_392` in its `release` file) as `8.0.392`. Reference: `oarbank_sdk.toolversion`, vectors in [vectors/tool-versions.json](vectors/tool-versions.json). |
 | `arch` | `any` | `any` (the node's own architecture preferred), `native` (only the node's own: no x86_64 JDK under Rosetta on Apple silicon), `arm64` or `amd64`. |
 | `trust` | `read` | `code-exec` flags a tool that runs arbitrary code. |
 

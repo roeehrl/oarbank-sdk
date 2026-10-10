@@ -7,8 +7,8 @@ module, the coordinator, the agent) reproduces spec/vectors/tool-versions.json.
 
 **Versions** are dot-separated numbers with an optional pre-release (`-ea`, `-rc.1`) and build (`+7`) suffix:
 `17`, `17.0.12`, `21.0.4+7`, `22-ea`. Missing segments are zero (`17` equals `17.0.0`); a pre-release sorts below its
-release; build metadata is ignored. Java's legacy scheme is read as the version it names: `1.8.0_392` is `8.0.392`
-(`_` separates segments).
+release; build metadata is ignored; `_` separates segments like `.`. (A node reports a JDK 8, whose `release` file
+says `1.8.0_392`, as `8.0.392`: Java's legacy scheme is read by the JDK detector, not here.)
 
 **Constraints** are comma-separated clauses, each an operator and a version, all of which must hold (HashiCorp
 Nomad's `version` operator): `=` (or `==`), `!=`, `>`, `>=`, `<`, `<=` and `~>`, the pessimistic operator, which allows
@@ -34,8 +34,6 @@ class Version:
         if not m:
             raise ValueError(f"{text!r} is not a version (numbers separated by dots, e.g. 17.0.12)")
         nums = [int(x) for x in re.split(r"[._]", m.group(1))]
-        if len(nums) > 1 and nums[0] == 1 and nums[1] <= 9:     # Java's legacy 1.8.0_392 is version 8
-            nums = nums[1:]
         self.nums, self.pre, self.text = tuple(nums), m.group(2), text.strip()
 
     def _key(self, width: int):
@@ -57,7 +55,7 @@ def version(text: str) -> Version:
 
 
 def normalize(text: str) -> str:
-    """A version as nodes report it: its segments joined by dots, Java's legacy scheme read (`1.8.0_392` → `8.0.392`)."""
+    """A version in its canonical spelling: its segments joined by dots, its pre-release kept, its build dropped."""
     return str(Version(text))
 
 

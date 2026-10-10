@@ -181,11 +181,11 @@ def image_vectors() -> dict:
 
 
 # host tool versions and constraints (spec/sandbox.md, "Host tools")
-TOOL_VERSIONS = ["17", "17.0.12", "17.0.12+7", "21.0.4", "22-ea", "22", "1.8.0_392", "11.0.2", "17.0.0", "21-ea.1", "21-ea.12",
-                 "21-rc", "1.10.2", "3.12.4"]
+TOOL_VERSIONS = ["17", "17.0.12", "17.0.12+7", "21.0.4", "22-ea", "22", "8.0.392", "11.0.2", "17.0.0", "21-ea.1", "21-ea.12",
+                 "21-rc", "1.9", "1.10.2", "3.12.4", "11.0.2_7"]
 TOOL_VERSIONS_BAD = ["", "v17", "17.", ".17", "17..0", "seventeen", "17 0", "17.0.x", "-ea"]
 TOOL_CONSTRAINTS = [">=17", ">=17, <22", "~> 17", "~> 17.0", "~> 17.0.2", "= 17.0.12", "== 17", "!= 11.0.2", "> 17", "<= 21",
-                    "<22", ">=17,<22", "~> 1.8"]
+                    "<22", ">=17,<22", ">=1.10", "~> 1.9", ">= 8"]
 TOOL_CONSTRAINTS_BAD = ["", "17", ">= ", "=> 17", ">=17;<22", ">=17,", "~ 17", ">=v17", "<>17"]
 TOOL_ARCHES = [("aarch64", "native", "arm64"), ("aarch64", "native", "amd64"), ("x86_64", "any", "arm64"),
                ("x86_64", "amd64", "arm64"), ("", "any", "arm64"), ("", "native", "arm64"), ("arm64", "arm64", "amd64"),
@@ -204,7 +204,7 @@ def tool_vectors() -> dict:
             "arch": [{"installed": i, "want": w, "native": n, "fits": tv.arch_fits(i, w, n)} for i, w, n in TOOL_ARCHES],
             "note": "Versions: dot-separated numbers, optional -pre and +build; missing segments are zero, a pre-release sorts "
                     "below its release (its identifiers numerically when numeric), build metadata is ignored, `_` separates "
-                    "segments and Java's legacy 1.x (x <= 9) is version x. Constraints: comma-separated clauses with "
+                    "segments. Constraints: comma-separated clauses with "
                     "=, ==, !=, >, >=, <, <=, ~> (pessimistic: the last given segment may grow; one segment: that segment). "
                     "`ascending` lists equal versions in input order. Arch: aarch64/arm64 and x86_64/amd64/x64 are "
                     "one each; an unknown arch fits only `any`."}
