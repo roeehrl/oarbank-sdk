@@ -1,0 +1,41 @@
+# A workload the conformance kit must fail: its daemon calls setsid and forks twice, leaving the process group the
+# agent contains it in.
+manifest = 1
+
+[module]
+id = "dev.example.wlescapes"
+version = "0.1.0"
+compat = "wlescapes1"
+publisher = "example"
+license = "Apache-2.0"
+
+[requires]
+core = ">=2.10,<3"
+platforms = ["darwin-arm64", "darwin-amd64", "linux-arm64", "linux-amd64", "windows-arm64", "windows-amd64"]
+module_protocol = [1]
+runner_protocol = [1]
+workload_protocol = [1]
+
+[coordinator]
+exec = ["python", "-I", "{bundle}/module.py"]
+runtime = { kind = "python" }
+
+[runner]
+exec = ["python", "-I", "{bundle}/runner.py"]
+runtime = { kind = "python" }
+
+[[stages]]
+name = "run"
+
+[[workloads]]
+name = "worker"
+exec = ["python", "-I", "{bundle}/worker.py"]
+control = ["cooperative_pause", "cooperative_throttle"]
+stop_timeout_s = 10
+health = { period_s = 15, timeout_s = 10, failures = 3 }
+
+[results]
+schema = "schemas/result.schema.json"
+schema_version = 1
+determinism = "exact"
+digest = { version = 1, over = ["n"] }

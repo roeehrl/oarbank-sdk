@@ -1,6 +1,6 @@
 """The conformance kit: what a module must pass before a host installs it (spec/conformance.md).
 
-    oarbank-sdk conform <module-dir> [--fixtures conformance.json] [--no-runner] [--json]
+    oarbank-sdk conform <module-dir> [--fixtures conformance.json] [--no-runner] [--no-workloads] [--only workload] [--json]
 
 Suites:
 
@@ -40,6 +40,11 @@ Suites:
 - **service**: each endpoint service starts as an agent starts it (with its endpoint channel), says hello, becomes
   ready, answers the fixtures' `service_specs` through connections the kit hands it, drops an attempt that ended, stops,
   and **never listens itself** (no process of it holds a listening socket);
+- **workload**: each workload runs as an agent runs it (a run directory, the private directory with its control
+  document, the protocol's environment and a unique token, `run` as the leader of a new process group or Job Object):
+  it keeps running, answers `status` healthy, survives a freeze (`freeze_ok`), shows and clears a cooperative pause,
+  **stays in its process container** (every process carrying the token is in the leader's group), never listens,
+  writes valid events, leaks no secret and ends on a stop within `stop_timeout_s`;
 - **ui**: every declared view is computed from `fixtures/ui/inputs.json` and validated against its declaration as the
   host validates it (shape, row limit, declared columns, artifact references); every page and panel renders with the
   fixtures and `fixtures/ui/context.json` (a placeholder is a warning); axe finds no serious or critical violation
@@ -1379,6 +1384,473 @@ def check_services(root: Path, man, fx: dict, r: Report, g: "Grants"):
         r.add("service", f"{label}: stops", stopped is None, stopped or "")
 
 
+# ---------------------------------------------------------------------------- workloads
+
+WORKLOAD_SETTLE_S = 3.0        # a workload is still running this long after its start
+WORKLOAD_REACTION_S = 3.0      # it shows a cooperative pause (and its end) this soon after the nudge
+TOKEN_ENV = "OARBANK_CONFORMANCE_TOKEN"      # a value unique to one run: every process carrying it belongs to the run
+
+
+def _until(fn, timeout: float, every: float = 0.1):
+    """fn's first truthy value within `timeout`, else None (fn is tried at least once)."""
+    t = time.monotonic()
+    while True:
+        v = fn()
+        if v or time.monotonic() - t >= timeout:
+            return v or None
+        time.sleep(every)
+
+
+def _ps(extra: list[str], fields: str) -> list[list[str]]:
+    out = subprocess.run(["ps", "-A", *extra, "-o", fields], capture_output=True, text=True, errors="replace").stdout
+    return [line.split(None, 3) for line in out.splitlines() if line.strip()]
+
+
+def _group_members(pgid: int) -> list[tuple[int, str]]:
+    """The live processes of a POSIX process group: (pid, ps state)."""
+    return [(int(f[0]), f[2]) for f in _ps([], "pid=,pgid=,stat=")
+            if len(f) >= 3 and f[1].isdigit() and int(f[1]) == pgid and not f[2].startswith("Z")]
+
+
+def _tokened(token: str) -> list[tuple[int, int]] | None:
+    """Every live process whose environment carries the run's token: (pid, pgid). Linux reads /proc/<pid>/environ, macOS
+    `ps -E` (both work without privileges for the account's own processes); None where the kit cannot look (Windows,
+    where the Job Object contains the run instead)."""
+    needle = f"{TOKEN_ENV}={token}"
+    if sys.platform.startswith("linux"):
+        out = []
+        for d in os.listdir("/proc"):
+            if not d.isdigit():
+                continue
+            try:
+                env = Path(f"/proc/{d}/environ").read_bytes().split(b"\0")
+                if needle.encode() not in env:
+                    continue
+                stat = Path(f"/proc/{d}/stat").read_text()
+            except OSError:
+                continue
+            f = stat[stat.rfind(")") + 2:].split()                # state ppid pgrp ...
+            if f and f[0] != "Z":
+                out.append((int(d), int(f[2])))
+        return out
+    if sys.platform == "darwin":
+        return [(int(f[0]), int(f[1])) for f in _ps(["-E", "-ww"], "pid=,pgid=,stat=,command=")
+                if len(f) == 4 and f[0].isdigit() and not f[2].startswith("Z") and needle in f[3].split()]
+    return None
+
+
+class _WinJob:
+    """A Job Object for one workload run on Windows (the agent's container there): breakaway refused, killed on close."""
+
+    def __init__(self):
+        import ctypes
+        from ctypes import wintypes
+        self.ct, self.k32 = ctypes, ctypes.WinDLL("kernel32", use_last_error=True)
+        self.k32.CreateJobObjectW.restype = wintypes.HANDLE
+        self.job = self.k32.CreateJobObjectW(None, None)
+
+        class Basic(ctypes.Structure):
+            _fields_ = [("PerProcessUserTimeLimit", ctypes.c_longlong), ("PerJobUserTimeLimit", ctypes.c_longlong),
+                        ("LimitFlags", wintypes.DWORD), ("MinimumWorkingSetSize", ctypes.c_size_t),
+                        ("MaximumWorkingSetSize", ctypes.c_size_t), ("ActiveProcessLimit", wintypes.DWORD),
+                        ("Affinity", ctypes.c_size_t), ("PriorityClass", wintypes.DWORD), ("SchedulingClass", wintypes.DWORD)]
+
+        class Extended(ctypes.Structure):
+            _fields_ = [("Basic", Basic), ("IoInfo", ctypes.c_ulonglong * 6), ("ProcessMemoryLimit", ctypes.c_size_t),
+                        ("JobMemoryLimit", ctypes.c_size_t), ("PeakProcessMemoryUsed", ctypes.c_size_t),
+                        ("PeakJobMemoryUsed", ctypes.c_size_t)]
+        info = Extended()
+        info.Basic.LimitFlags = 0x2000                                 # KILL_ON_JOB_CLOSE; no BREAKAWAY_OK
+        self.k32.SetInformationJobObject(wintypes.HANDLE(self.job), 9, ctypes.byref(info), ctypes.sizeof(info))
+
+    def assign(self, process_handle: int):
+        from ctypes import wintypes
+        if not self.k32.AssignProcessToJobObject(wintypes.HANDLE(self.job), wintypes.HANDLE(int(process_handle))):
+            raise OSError(self.ct.get_last_error(), "AssignProcessToJobObject failed")
+
+    def pids(self) -> list[int]:
+        ct = self.ct
+        from ctypes import wintypes
+
+        class Ids(ct.Structure):
+            _fields_ = [("Assigned", wintypes.DWORD), ("Listed", wintypes.DWORD), ("Ids", ct.c_size_t * 1024)]
+        ids = Ids()
+        if not self.k32.QueryInformationJobObject(wintypes.HANDLE(self.job), 3, ct.byref(ids), ct.sizeof(ids), None):
+            return []
+        return [int(ids.Ids[i]) for i in range(ids.Listed)]
+
+    def terminate(self):
+        from ctypes import wintypes
+        self.k32.TerminateJobObject(wintypes.HANDLE(self.job), 1)
+
+    def close(self):
+        from ctypes import wintypes
+        if self.job:
+            self.k32.CloseHandle(wintypes.HANDLE(self.job))
+            self.job = None
+
+
+class _WorkloadRun:
+    """One workload run as an agent starts it (spec/workload-protocol.md): a run directory inside a fresh module data
+    directory, the private directory (control.json `{"seq": 0}`, settings, tools, limits and, for a workload that lists
+    secrets, secrets.json 0600), the protocol's environment plus a unique token, and `<exec> run` as the leader of a new
+    process group (a Job Object the kit creates on Windows), started with SIGUSR1 ignored and nudged after every change."""
+
+    def __init__(self, root: Path, man, fx: dict, w, g: "Grants"):
+        self.root, self.man, self.w, self.g = root, man, w, g
+        self.base = Path(tempfile.mkdtemp(prefix="conform-wl-"))
+        self.data = self.base / "data"
+        self.run = self.data / "workloads" / w.name / "run-1"
+        (self.run / "tmp").mkdir(parents=True)
+        self.private = self.base / "private"
+        self.private.mkdir(mode=0o700)
+        self.seq, self.doc = 0, {"seq": 0}
+        self._write_control()
+        files = {"settings.json": fx.get(NODE_SETTINGS, fx.get("settings")) or {}, "tools.json": g.tools, "limits.json": {}}
+        for name, doc in files.items():
+            (self.private / name).write_text(json.dumps(doc), encoding="utf-8")
+        every = fx.get(CANARIES) or {}
+        self.secrets = {n: every[n] for n in w.secrets if n in every}
+        self.token = os.urandom(16).hex()
+        short = man.module.id.rsplit(".", 1)[-1]
+        self.env = {**portable.os_env(self.run, self.run / "tmp"), **{k: v for k, v in g.env().items() if "PROXY" in k.upper()},
+                    "OARBANK_WORKLOAD": w.name, "OARBANK_MODULE": short, "OARBANK_NODE_ID": "conform",
+                    "OARBANK_PLATFORM": portable.host_platform(), "OARBANK_WORKLOAD_RUN": str(self.run),
+                    "OARBANK_MODULE_DATA": str(self.data), "OARBANK_CONTROL_FILE": str(self.private / "control.json"),
+                    "OARBANK_EVENTS_FILE": str(self.run / "events.ndjson"),
+                    "OARBANK_SETTINGS_FILE": str(self.private / "settings.json"),
+                    "OARBANK_TOOLS_FILE": str(self.private / "tools.json"),
+                    "OARBANK_LIMITS_FILE": str(self.private / "limits.json"), TOKEN_ENV: self.token}
+        if self.secrets:
+            fd = os.open(self.private / "secrets.json", os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(self.secrets, f)
+            self.env["OARBANK_SECRETS_FILE"] = str(self.private / "secrets.json")
+        if w.identity == "per_node":
+            seat = hashlib.sha256(f"{man.module.id}/{w.name}/{self.token}".encode()).hexdigest()[:16]
+            self.env.update({"OARBANK_SEAT_ID": f"s_{seat}", "OARBANK_SEAT_FENCE": "1"})
+        self.nudge = _Nudge()
+        self.env.update(self.nudge.env())
+        self.host = EH.ServiceHost() if w.listeners else None     # its endpoint channel: inbound connections arrive on it
+        if self.host:
+            self.env.update(self.host.env)
+        self.p = None
+        self.job = None
+        self.log = self.base / "workload.log"
+
+    def _write_control(self):
+        tmp = self.private / "control.json.tmp"
+        tmp.write_text(json.dumps(self.doc), encoding="utf-8")
+        os.replace(tmp, self.private / "control.json")
+
+    def _launch(self, op: str) -> list[str]:
+        argv = _argv(self.w.exec, self.root) + [op]
+        if SANDBOX["on"]:
+            import dataclasses
+            from . import sandbox as S
+            sdk = str(Path(__file__).resolve().parents[1])
+            pol = S.node_policy(self.man.module.id, self.root, None, self.data, sandbox=self.man.sandbox, kind="workload",
+                                tool_paths=[i["path"] for ps in self.g.tools.values() for i in ps] + [sdk],
+                                proxy_port=self.g.proxy.port if self.g.proxy else None)
+            text, params = S.render(dataclasses.replace(pol, rd=[str(self.private)]))
+            argv = S.launch_argv(S.write_profile(text, self.base / f"{op}.sb"), params, argv)
+        return argv
+
+    def start(self) -> str | None:
+        kwargs = _merged(self.nudge.popen_kwargs(), self.host.popen_kwargs if self.host else {})
+        with open(self.log, "wb") as out:
+            try:
+                if os.name == "nt":
+                    self.job = _WinJob()
+                    self.p = subprocess.Popen(self.nudge.argv(self._launch("run")), cwd=self.run, env=self.env,
+                                              stdin=subprocess.DEVNULL, stdout=out, stderr=out,
+                                              creationflags=0x4 | subprocess.CREATE_NEW_PROCESS_GROUP, **kwargs)
+                    self.job.assign(self.p._handle)                    # before its first instruction: CREATE_SUSPENDED
+                    from .workload import _resume
+                    _resume(self.p.pid)
+                else:
+                    self.p = subprocess.Popen(self.nudge.argv(self._launch("run")), cwd=self.run, env=self.env,
+                                              stdin=subprocess.DEVNULL, stdout=out, stderr=out, start_new_session=True,
+                                              **kwargs)
+            except OSError as e:
+                return f"{type(e).__name__}: {e}"
+            finally:
+                if self.host:
+                    self.host.spawned()
+        return None
+
+    def wait_exit(self, timeout: float):
+        try:
+            return self.p.wait(timeout)
+        except subprocess.TimeoutExpired:
+            return None
+
+    def log_tail(self) -> str:
+        try:
+            return self.log.read_text(encoding="utf-8", errors="replace")[-400:].strip()
+        except OSError:
+            return ""
+
+    def control(self, **change) -> float:
+        """Replace the control document with a newer seq and nudge the leader; returns when (monotonic)."""
+        self.seq += 1
+        self.doc = {**self.doc, **change, "seq": self.seq}
+        self._write_control()
+        t = time.monotonic()
+        self.nudge.send(self.p)
+        return t
+
+    def status_op(self) -> tuple[object, dict | None, str]:
+        """`<exec> status` as the agent runs it: (exit code or "timeout", its last JSON line, its stderr tail)."""
+        t = self.w.health.timeout_s if self.w.health else 5.0
+        try:
+            p = subprocess.run(self._launch("status"), cwd=self.run, env={k: v for k, v in self.env.items()
+                                                                           if k != "OARBANK_CONTROL_EVENT"},
+                               capture_output=True, text=True, timeout=t, encoding="utf-8", errors="replace")
+        except subprocess.TimeoutExpired:
+            return "timeout", None, ""
+        doc = None
+        for line in reversed(p.stdout.strip().splitlines()):
+            try:
+                doc = json.loads(line)
+                break
+            except ValueError:
+                continue
+        return p.returncode, doc, p.stderr[-300:]
+
+    def pids(self) -> list[int]:
+        """The run's processes: its process group and every process carrying its token (POSIX), the job's (Windows)."""
+        if os.name == "nt":
+            return self.job.pids() if self.job else []
+        return sorted({p for p, _ in _group_members(self.p.pid)} | {p for p, _ in (_tokened(self.token) or [])})
+
+    def escaped(self) -> list[str] | None:
+        """The run's processes outside the leader's process group, described; None when the kit cannot see the token
+        (then the check cannot be made)."""
+        if os.name == "nt":
+            return []
+        found = _tokened(self.token)
+        if not found or self.p.pid not in {p for p, _ in found}:
+            return None
+        return [f"process {p} in process group {g}" for p, g in found if g != self.p.pid]
+
+    def paused_state(self) -> bool | None:
+        """Whether the workload shows a cooperative pause: its supervisor's status file, else its last `paused` or
+        `resumed` progress event, else its status op."""
+        doc = _read_json(self.run / ".supervisor.json")
+        if isinstance(doc, dict) and "paused" in doc:
+            return bool(doc["paused"])
+        for e in reversed(_events(self.run / "events.ndjson")):
+            if e.get("type") == "progress" and e.get("event") in ("paused", "resumed"):
+                return e["event"] == "paused"
+        if self.w.health:
+            code, doc, _ = self.status_op()
+            if code == 0 and isinstance(doc, dict) and doc.get("paused") is not None:
+                return bool(doc["paused"])
+        return None
+
+    def cleanup(self):
+        """End whatever is left of the run: its group, every process carrying its token, its job."""
+        if self.p is not None:
+            if os.name == "nt":
+                if self.job:
+                    self.job.terminate()
+                    self.job.close()
+            else:
+                try:
+                    os.killpg(self.p.pid, signal.SIGKILL)
+                except (ProcessLookupError, PermissionError):
+                    pass
+                for pid, _ in _tokened(self.token) or []:
+                    try:
+                        os.kill(pid, signal.SIGKILL)
+                    except OSError:
+                        pass
+            try:
+                self.p.kill()
+                self.p.wait(5)
+            except (OSError, subprocess.TimeoutExpired):
+                pass
+        self.nudge.close()
+        if self.host:
+            self.host.close()
+
+
+def _freeze(run: "_WorkloadRun", on: bool):
+    """The agent's freeze of the whole container: SIGSTOP or SIGCONT to the process group (every job member suspended or
+    resumed on Windows)."""
+    if os.name == "nt":
+        from .workload import _resume, _suspend
+        for pid in run.job.pids():
+            (_suspend if on else _resume)(pid)
+        return
+    try:
+        os.killpg(run.p.pid, signal.SIGSTOP if on else signal.SIGCONT)
+    except (ProcessLookupError, PermissionError):
+        pass
+
+
+def check_workloads(root: Path, man, fx: dict, r: Report):
+    """The workload suite (spec/workload-protocol.md): each workload on this host's platform, run as an agent runs it."""
+    host = portable.host_platform()
+    todo = [w for w in man.workloads if pf.matches(host, w.platforms)]
+    if not todo:
+        return
+    g = Grants(man, fx, root)
+    try:
+        for w in todo:
+            _check_workload(root, man, fx, w, g, r)
+    finally:
+        g.close()
+
+
+def _check_workload(root: Path, man, fx: dict, w, g: "Grants", r: Report):
+    from ._service_run import listening
+    from .workload_protocol import Event, Status
+    label = f"workload {w.name}"
+    if w.gpu.use != "none" and not gpu.fits(w.gpu.apis_any, host_gpu_apis()):
+        r.add("workload", label, None, f"not run here: it needs one of {', '.join(w.gpu.apis_any)} on the host; this host "
+              f"provides {', '.join(host_gpu_apis()) or 'no GPU API'}, so an agent here would not offer it")
+        return
+    run = _WorkloadRun(root, man, fx, w, g)
+    try:
+        why = run.start()
+        if why:
+            r.add("workload", f"{label}: starts", False, why)
+            return
+        code = run.wait_exit(WORKLOAD_SETTLE_S)
+        if code is not None:
+            tail = run.log_tail()
+            r.add("workload", f"{label}: keeps running after it starts", False,
+                  f"exited {code} within {WORKLOAD_SETTLE_S:g} s (when its leader exits, the run has ended): {tail}")
+            if any(x in tail.lower() for x in ("permission", "not permitted")) and any(x in tail for x in ("bind", "listen")):
+                r.add("workload", f"{label}: never listens", False, f"the sandbox refused it a listening socket: {tail}")
+            return
+        r.add("workload", f"{label}: keeps running after it starts", True, f"still running {WORKLOAD_SETTLE_S:g} s after `run`")
+        escaped, blind = [], False
+        listens = listening(run.pids())
+
+        def look():
+            nonlocal blind
+            e = run.escaped()
+            if e is None:
+                blind = True
+            else:
+                escaped.extend(x for x in e if x not in escaped)
+        look()
+        if w.health:
+            got, last = None, None
+            for _ in range(3):
+                code, doc, err = run.status_op()
+                try:
+                    st = Status.model_validate(doc) if code == 0 and isinstance(doc, dict) else None
+                except ValidationError:
+                    st = None
+                last = (code, doc, err)
+                if st is not None and st.healthy:
+                    got = st
+                    break
+                time.sleep(1.0)
+            code, doc, err = last
+            r.add("workload", f"{label}: `status` answers healthy within health.timeout_s", got is not None,
+                  got.detail if got else (f"timed out after {w.health.timeout_s:g} s" if code == "timeout" else
+                                          f"exit {code}: {json.dumps(doc)[:200] if doc is not None else err or 'no JSON'}"))
+        if "freeze_ok" in w.control:
+            _freeze(run, True)
+            if os.name == "nt":
+                frozen, detail = True, "every member of its Job Object suspended"
+            else:
+                members = _until(lambda: (lambda m: m if m and all(s.startswith("T") for _, s in m) else None)(
+                    _group_members(run.p.pid)), WORKLOAD_REACTION_S)
+                frozen = members is not None
+                detail = f"{len(members)} process(es) stopped" if members else "its process group did not stop"
+            look()
+            _freeze(run, False)
+            alive = run.wait_exit(1.0) is None
+            r.add("workload", f"{label}: survives a freeze of its process container (freeze_ok)", frozen and alive,
+                  detail if alive else f"it exited {run.p.returncode} after the freeze ended: {run.log_tail()}")
+        if "cooperative_pause" in w.control and run.p.poll() is None:
+            run.control(pause=True, reason="conformance")
+            on = _until(lambda: run.paused_state() is True, WORKLOAD_REACTION_S, 0.2)
+            look()
+            r.add("workload", f"{label}: shows a cooperative pause within {WORKLOAD_REACTION_S:g} s", bool(on),
+                  "" if on else "nothing said paused: its .supervisor.json, a `paused` progress event or its status op")
+            run.control(pause=False, reason=None)
+            off = _until(lambda: run.paused_state() is False, WORKLOAD_REACTION_S, 0.2)
+            r.add("workload", f"{label}: resumes within {WORKLOAD_REACTION_S:g} s", bool(off) and run.p.poll() is None,
+                  "" if off else "it still shows paused after the pause was cleared")
+        look()
+        listens += listening(run.pids())
+        if os.name == "nt":
+            r.add("workload", f"{label}: stays in its process container", True,
+                  "the kit runs it in a Job Object that refuses breakaway, as the agent does")
+        elif blind:
+            r.add("workload", f"{label}: stays in its process container", None,
+                  f"the kit could not read the environment of the run's processes here (it looks for {TOKEN_ENV})")
+        else:
+            r.add("workload", f"{label}: stays in its process container", not escaped,
+                  "every process carrying the run's token is in the leader's process group" if not escaped else
+                  f"left the leader's process group (a daemon that calls setsid and forks): {'; '.join(escaped)[:400]}")
+        r.add("workload", f"{label}: never listens", not listens,
+              "; ".join(sorted(set(listens)))[:600] or "no listening socket while it ran")
+        events = _events(run.run / "events.ndjson")
+        bad = []
+        for i, e in enumerate(events):
+            try:
+                Event.model_validate(e)
+            except ValidationError as x:
+                bad.append(f"line {i + 1}: {str(x).splitlines()[0]}")
+        r.add("workload", f"{label}: its events are workload-event-1 lines", not bad,
+              "; ".join(bad[:3]) if bad else f"{len(events)} event(s)")
+        if w.secrets:
+            files = [f.read_bytes() for f in run.data.rglob("*") if f.is_file()]
+            leaked = _leaked([_read_bytes(run.log), *files], run.secrets)
+            r.add("workload", f"{label}: no secret in its log, events or files", not leaked,
+                  f"{leaked} appear in what it wrote" if leaked else "")
+        if run.p.poll() is None:
+            t = run.control(stop=True, reason="conformance")
+            code = run.wait_exit(w.stop_timeout_s)
+            dt = time.monotonic() - t
+            r.add("workload", f"{label}: a stop ends it within stop_timeout_s", code is not None,
+                  f"exit {code}, {dt:.1f} s after the nudge" if code is not None else
+                  f"still running {w.stop_timeout_s:g} s after the stop request; the agent kills its container then")
+        else:
+            r.add("workload", f"{label}: a stop ends it within stop_timeout_s", False,
+                  f"it had already exited {run.p.returncode} before the stop: {run.log_tail()}")
+    finally:
+        run.cleanup()
+
+
+def conform_workloads(root, fixtures: dict | None = None, sandbox: bool | None = None) -> Report:
+    """Only the workload suite (with the manifest it needs): what `oarbank-sdk conform --only workload` runs.
+    `sandbox`: run the workload under the module sandbox (default: on macOS) for this call only."""
+    before = SANDBOX["on"]
+    if sandbox is not None:
+        SANDBOX["on"] = sandbox and sys.platform == "darwin"
+    try:
+        return _conform_workloads(Path(root).resolve(), fixtures)
+    finally:
+        SANDBOX["on"] = before
+
+
+def _conform_workloads(root: Path, fixtures: dict | None) -> Report:
+    fx = fixtures if fixtures is not None else (json.loads((root / "conformance.json").read_text(encoding="utf-8"))
+                                                if (root / "conformance.json").exists() else {})
+    r = Report()
+    HOST_GPU.clear()
+    try:
+        man = mf.load(root / B.MANIFEST_FILE)
+    except (ValidationError, OSError, ValueError) as e:
+        r.add("manifest", "schema", False, str(e).splitlines()[0])
+        return r
+    r.module = f"{man.module.id} {man.module.version}"
+    fx = {**fx, CANARIES: canaries(man, fx), **check_settings(root, man, fx, r)}
+    if not man.workloads:
+        r.add("workload", "workloads", None, "the module declares no [[workloads]]")
+    check_workloads(root, man, fx, r)
+    return r
+
+
 def check_images(root: Path, man, fx: dict, r: Report):
     """Container sets (spec/sandbox.md, "Image sets"), with the reference policy the agent shares: each member the
     fixtures name verifies (fixtures `images`: {set: {"layout"?: OCI image layout dir, "members": [refs]}}; without a
@@ -1415,8 +1887,10 @@ def check_images(root: Path, man, fx: dict, r: Report):
 SANDBOX = {"on": sys.platform == "darwin"}
 
 
-def conform(root, fixtures: dict | None = None, runner: bool = True, sandbox: bool | None = None) -> Report:
-    """`sandbox`: run the runner under the module sandbox (default: on macOS)."""
+def conform(root, fixtures: dict | None = None, runner: bool = True, sandbox: bool | None = None,
+            workloads: bool = True) -> Report:
+    """`sandbox`: run the runner under the module sandbox (default: on macOS). `runner = False` skips every suite that
+    runs node processes (runner, gpu, service, workload); `workloads = False` only the workload suite."""
     root = Path(root).resolve()
     if sandbox is not None:
         SANDBOX["on"] = sandbox and sys.platform == "darwin"
@@ -1435,6 +1909,8 @@ def conform(root, fixtures: dict | None = None, runner: bool = True, sandbox: bo
     check_ui_suite(root, man, r)
     if runner:
         check_runner(root, man, fx, runs, r)
+        if workloads:
+            check_workloads(root, man, fx, r)
     return r
 
 
