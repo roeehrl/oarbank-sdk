@@ -4,7 +4,7 @@ description: Install, run, troubleshoot and build modules for Oarbank, the self-
 license: Apache-2.0
 compatibility: Needs a shell and network access to docs.codonic.dev, github.com and api.github.com.
 metadata:
-  version: "1.1.0"
+  version: "1.2.0"
   docs: "https://docs.codonic.dev/oarbank/llms.txt"
 ---
 
@@ -70,7 +70,10 @@ instructions to an older version without saying so.
 | Know what Oarbank is, decide if it fits | `index.md`, `concepts/how-oarbank-works.md` |
 | Check requirements | `operate/requirements.md`, `operate/compatibility.md` (GPU and container hardware) |
 | Install a coordinator or add nodes | `get-started.md`, then `operate/adding-machines.md` (join codes, `oarbank-node`, MDM, join errors) |
-| Update, move the coordinator, uninstall | `operate/update-and-remove.md` |
+| Update, move the coordinator, uninstall | `operate/update-and-remove.md`; from an older release, `operate/upgrading.md` first |
+| Coordinator service, owners' group, menu bar app | `operate/coordinator.md` |
+| Change node or fleet settings, groups, locks, managed policy | `operate/settings.md` (the `oarbank settings` commands) |
+| Get a module running: release signing, readiness checklist, host tools, containers | `operate/modules.md`, `operate/host-tools.md`, `operate/containers.md` |
 | Run the fleet: commands, jobs, campaigns, data | `reference/cli.md`, `operate/datasets-and-folders.md` |
 | Fix something | `operate/troubleshooting.md`, then `reference/reason-codes.md` for any code |
 | Find versions or compatibility | `operate/versions.md` |
@@ -82,8 +85,10 @@ Paths are relative to `https://docs.codonic.dev/oarbank/`.
 
 ## Working with a fleet
 
-- The operator CLI is `oarbank`, run on the coordinator. The installers do not put it on the `PATH`; its location per
-  OS is in `reference/cli.md`. On Windows it needs an elevated prompt.
+- The operator CLI is `oarbank`, run on the coordinator. From 2.9 the packages put it on the `PATH`, and it works for
+  members of the coordinator's owners' group (`reference/cli.md`, `operate/coordinator.md`). On Windows it needs an
+  elevated prompt. Node settings and caps are `oarbank settings …` (there is no `oarbank node policy` or
+  `node limits` any more).
 - Diagnose before acting: `oarbank fleet`, `oarbank explain job <id>`, `oarbank explain node <node>`,
   `oarbank node show <node>`, `oarbank alerts list`, `oarbank verify`. Explain the reason codes they print using
   `reference/reason-codes.md`; each code lists its remedy.
