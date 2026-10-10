@@ -9,13 +9,16 @@
 //   Search URLs   Pagefind results link to served URLs (no .html, which 307s).
 //   Sitemap       every sitemap URL is a built page that may be indexed, under the
 //                 production host; every indexable page is in the sitemap.
+//   Agent files   llms.txt names the current release (RELEASE), and the home page
+//                 names the same one; llms.txt lists every Markdown twin; no
+//                 llms export has prose collapsed into very long lines.
 //   File limit    the Workers per-version file limit, per Worker.
 //
 // Usage: node scripts/check-dist.mjs [--require-private-terms]
 import { existsSync, readFileSync } from 'node:fs';
 import { extname, join } from 'node:path';
 import { gunzipSync } from 'node:zlib';
-import { BASE, HOME_URL, MAX_DEPLOY_FILES } from '../site.config.mjs';
+import { BASE, HOME_URL, MAX_DEPLOY_FILES, RELEASE } from '../site.config.mjs';
 import { DEPLOY_DIR, HUB_DEPLOY_DIR, SITE_DIR, rel, walk } from './lib/fs.mjs';
 import { CONTENT_RULES, RAW_RULES, privateRule } from './lib/hygiene-rules.mjs';
 import { SCRIPT_RE, classify, cspProblems, parseAttrs } from './lib/html-scripts.mjs';
@@ -111,6 +114,27 @@ for (const file of files.filter((f) => f.endsWith('.html'))) {
   if (!listed.has(url)) sitemapProblems.push(`${url}: indexable page missing from the sitemap`);
 }
 
+// Agent files: what a coding agent reads first must be current and well-formed.
+const agentProblems = [];
+const llmsTxt = readFileSync(join(productDir, 'llms.txt'), 'utf8');
+const releaseLine = `Oarbank ${RELEASE.core}, module SDK ${RELEASE.sdk}`;
+if (!llmsTxt.includes(releaseLine)) agentProblems.push(`llms.txt: does not name "${releaseLine}"`);
+const homeMd = readFileSync(join(productDir, 'index.md'), 'utf8');
+if (!homeMd.includes(`Oarbank ${RELEASE.core}`) || !homeMd.includes(`SDK ${RELEASE.sdk}`))
+  agentProblems.push(`index.md: the home page names a different release than RELEASE (${releaseLine})`);
+for (const f of files.filter((f) => f.endsWith('.md'))) {
+  const url = `${HOME_URL}${rel(productDir, f)}`;
+  if (!llmsTxt.includes(`(${url})`)) agentProblems.push(`llms.txt: does not list ${url}`);
+}
+const MAX_LINE = 3000;
+for (const f of files.filter((f) => f.endsWith('.txt') && /\/(llms-[a-z]+|_llms-txt\/[^/]+)\.txt$/.test(f))) {
+  let fenced = false;
+  readFileSync(f, 'utf8').split('\n').forEach((line, i) => {
+    if (/^\s*(`{3,}|~{3,})/.test(line)) fenced = !fenced;
+    if (!fenced && line.length > MAX_LINE) agentProblems.push(`${rel(SITE_DIR, f)}:${i + 1}: a ${line.length}-character prose line`);
+  });
+}
+
 const assets = files.filter((f) => !f.endsWith('_headers')).length;
 const hubAssets = hubFiles.filter((f) => !/\/_(headers|redirects)$/.test(f)).length;
 let failed = false;
@@ -129,6 +153,7 @@ report(
 );
 report('search URLs', search, 'no result URL ends in .html');
 report('sitemap', sitemapProblems, `${listed.size} URLs, every one an indexable page, every indexable page listed`);
+report('agent files', agentProblems, `llms.txt names ${releaseLine} and lists every Markdown twin; no collapsed prose`);
 report(
   'file limit',
   [assets, hubAssets].some((n) => n > MAX_DEPLOY_FILES) ? [`${assets} or ${hubAssets} files > ${MAX_DEPLOY_FILES}`] : [],

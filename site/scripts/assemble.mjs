@@ -27,7 +27,6 @@ ${BASE}/_inline/*
 
 ${BASE}/*.md
   X-Robots-Tag: noindex
-  Content-Type: text/markdown; charset=utf-8
 
 ${BASE}/*.txt
   Content-Type: text/plain; charset=utf-8

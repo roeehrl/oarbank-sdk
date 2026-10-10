@@ -6,7 +6,7 @@ import starlight from '@astrojs/starlight';
 import { defineConfig } from 'astro/config';
 import starlightLinksValidator from 'starlight-links-validator';
 import starlightLlmsTxt from 'starlight-llms-txt';
-import { BASE, HOME_URL, PRODUCT, REPO, SECTIONS, SITE } from './site.config.mjs';
+import { BASE, HOME_URL, PRODUCT, RELEASE, REPO, SECTIONS, SITE } from './site.config.mjs';
 import { gitDateUtc, pageSource } from './scripts/lib/git-dates.mjs';
 
 export default defineConfig({
@@ -71,6 +71,16 @@ export default defineConfig({
         starlightLlmsTxt({
           projectName: 'Oarbank',
           description: PRODUCT.description,
+          details: [
+            `Current release: Oarbank ${RELEASE.core}, module SDK ${RELEASE.sdk}. These docs describe that release only; for an older installation, read the docs in the repositories at its tag (https://github.com/roeehrl/oarbank/tree/v<version>/docs).`,
+            'Load only what the task needs: one of the sets below, or single pages. Every page has a Markdown version at its URL plus `.md`; they are listed under Pages. A Markdown URL that returns a status other than 200 is not a page.',
+          ].join('\n\n'),
+          // The default collapses all prose whitespace, which turns tables and
+          // step lists into one line per page. Keep the line structure.
+          minify: { whitespace: false },
+          // The abridged set is the guides without the normative specification,
+          // which has its own set and is most of the text.
+          exclude: ['spec/**', 'reference/**'],
           customSets: [
             { label: 'Operate', description: 'Install, run and maintain an Oarbank fleet.', paths: ['operate/**', 'get-started/**', 'concepts/**'] },
             { label: 'Build modules', description: 'Write, test and ship modules with the open SDK.', paths: ['build/**'] },
