@@ -50,7 +50,7 @@ the [command-line reference](/oarbank/reference/cli#where-the-commands-are)). It
 never makes a new fleet.
 
 **Windows says the installer is from an unknown publisher.** The MSIs are not code-signed yet, so SmartScreen warns.
-Check the file against the release's `SHA256SUMS` before you run it.
+Check the file against its `SHA256SUMS-…` file on the release page before you run it.
 
 **Windows asks for elevation.** Installing, and setting up or recovering services, need an administrator. Opening a
 configured, running web app does not. The `oarbank` CLI on Windows needs an elevated prompt.
