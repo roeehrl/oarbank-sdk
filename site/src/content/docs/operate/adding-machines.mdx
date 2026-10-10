@@ -95,12 +95,16 @@ the way is caught rather than trusted. Expiring or revoking a code never removes
 </Tabs>
 
 **In one line.** The installer script picks this release's package for the computer, checks its SHA-256 against the
-release's checksum file, installs it and joins. It asks for the code on the terminal, or reads `OARBANK_JOIN_CODE`:
+release's checksum file and installs it. With the console's command, which fills in `OARBANK_JOIN_CODE`, it also
+joins; otherwise run `sudo oarbank-node join` afterwards:
 
 ```sh
 curl -fsSL https://github.com/roeehrl/oarbank/releases/latest/download/oarbank-install.sh | sudo sh
 curl -fsSL https://github.com/roeehrl/oarbank/releases/latest/download/oarbank-install.sh | sudo sh -s -- --name build-07 --no-join
 ```
+
+Piped into `sudo sh`, the script never asks for the code itself: recent sudo versions run it on a terminal of their own
+and leave yours echoing, so a pasted code would show on screen. `sudo oarbank-node join` on its own hides it.
 
 ```powershell
 irm https://github.com/roeehrl/oarbank/releases/latest/download/oarbank-install.ps1 | iex

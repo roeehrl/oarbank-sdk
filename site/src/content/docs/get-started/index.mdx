@@ -125,14 +125,16 @@ also be a node itself. Every node, whatever its operating system, reaches the co
      </TabItem>
    </Tabs>
 
-   Or in one line, which downloads this release's package for the computer, checks its SHA-256, installs it and
-   asks for the code:
+   Or in one line, which downloads this release's package for the computer, checks its SHA-256 and installs it.
+   The console's **Add machine** page gives this command with the code filled in (`OARBANK_JOIN_CODE`), and then it
+   joins too; without a code, run `sudo oarbank-node join` afterwards:
 
    ```sh
    curl -fsSL https://github.com/roeehrl/oarbank/releases/latest/download/oarbank-install.sh | sudo sh
    ```
 
-   On Windows: `irm https://github.com/roeehrl/oarbank/releases/latest/download/oarbank-install.ps1 | iex`.
+   On Windows: `irm https://github.com/roeehrl/oarbank/releases/latest/download/oarbank-install.ps1 | iex` (it asks
+   for the code, hidden).
 
    The node enrolls with a key it generates and keeps, then installs its release, runs each module's doctor and
    golden jobs, and starts taking work. `oarbank-node status` shows where it is. If joining fails, the window and
