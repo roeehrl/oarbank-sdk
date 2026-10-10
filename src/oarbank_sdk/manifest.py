@@ -37,6 +37,7 @@ SDK13_KEYS_CORE = (2, 3)          # stage determinism and default, structured ti
 BOOTSTRAP_KEYS_CORE = (2, 4)      # bootstrap stages and the pinned dataset table (SDK 1.4)
 SDK15_KEYS_CORE = (2, 5)          # SDK 1.5: secrets, signed container image sets, the container GPU pool, service
                                   # endpoints and GPU use, folder grants, portable checkpoints, artifact_ref
+INBOUND_KEYS_CORE = (2, 10)       # inbound listeners: sandbox.net.inbound and services[].listeners
 KNOWN_FEATURES = ("placement",)          # requires.features this SDK understands (must-understand)
 ENV_NAME = r"^[A-Z][A-Z0-9_]*$"
 # Variables the agent or the host sets itself (spec/runner-protocol.md, spec/platforms.md "Environment per OS"); a
@@ -271,6 +272,62 @@ class ContainerSet(Contract):
         return path.startswith(self.repository) if self.repository.endswith("/") else path == self.repository
 
 
+class InboundListener(Contract):
+    """A listener the agent opens on nodes the owner assigns: it accepts TCP connections from the internet and hands each
+    one to the endpoint service that lists the listener (spec/sandbox.md, "Inbound listeners"). Module code still never
+    listens. The limits are the module's ceilings; the owner may lower them per node, never raise them. [beta]"""
+    name: Name = Field(description=(
+        "[beta] The listener's name, unique in the module; the node statement and every report call it "
+        "`<module>/<name>`. Needs requires.core >= 2.10."))
+    protocol: Literal["tcp"] = Field("tcp", description="[beta] `tcp` only (UDP is not built).")
+    port_hint: Annotated[int, Field(ge=1024, le=65535)] | None = Field(None, description=(
+        "[beta] The external port the module would like; the owner decides the real one per node."))
+    port_policy: Literal["stable", "flexible"] = Field("stable", description=(
+        "[beta] `stable`: the external port is published somewhere costly to change (a chain, a registry), so a port "
+        "someone else holds on the router is refused rather than replaced; `flexible`: the agent may take the next free "
+        "port of a small range. The owner may override it per node."))
+    tls: Literal["passthrough", "none"] = Field("passthrough", description=(
+        "[beta] The agent relays bytes untouched either way; the service terminates its own TLS, if any."))
+    handover: Literal["connections", "listen_fd"] = Field("connections", description=(
+        "[beta] `connections`: each connection arrives on the service's endpoint channel (every OS). `listen_fd` (macOS "
+        "and Linux): the service's `start` inherits a listening unix socket the agent made, in "
+        "OARBANK_LISTEN_FD_<NAME>, and only accepts on it (a third-party server that serves on an inherited socket); "
+        "Windows nodes refuse such a listener."))
+    proxy_protocol: bool | None = Field(None, description=(
+        "[beta] The agent writes a PROXY protocol v2 header before the first byte of each connection. Absent: true with "
+        "handover `listen_fd` (the header is then the only way a server learns the client's address), else false (the "
+        "address arrives in the `connection` message)."))
+    max_conns: Annotated[int, Field(ge=1, le=65535)] = Field(256, description="[beta] Open connections at once.")
+    max_conns_per_ip: Annotated[int, Field(ge=1, le=65535)] = Field(16, description=(
+        "[beta] Open connections at once from one client address (IPv6: per /64)."))
+    new_conns_per_ip_per_s: Annotated[float, Field(gt=0)] = Field(4.0, description=(
+        "[beta] New connections per second from one client address (a token bucket with a burst of twice the rate)."))
+    idle_timeout_s: Annotated[float, Field(ge=1, le=86400)] = Field(120.0, description=(
+        "[beta] A connection with no bytes either way for this long is closed."))
+    max_bytes_per_s: Annotated[float, Field(gt=0)] | None = Field(None, description=(
+        "[beta] A byte-rate cap for the listener, both directions together. Absent: none."))
+
+    def proxy(self) -> bool:
+        """Whether connections start with a PROXY v2 header (the default follows `handover`)."""
+        return self.handover == "listen_fd" if self.proxy_protocol is None else self.proxy_protocol
+
+    def env_name(self) -> str:
+        """The variable a `listen_fd` listener's inherited socket is named in."""
+        return LISTEN_FD_PREFIX + self.name.upper()
+
+    def approval_text(self) -> str:
+        """How the grant reads at approval (spec/sandbox.md, "Inbound listeners")."""
+        port = f"port {self.port_hint} wanted" if self.port_hint else "any port"
+        extra = ", served on an inherited listening socket" if self.handover == "listen_fd" else ""
+        cap = f", at most {self.max_bytes_per_s:g} bytes a second" if self.max_bytes_per_s else ""
+        return (f"listener {self.name} (TCP, {port}, {self.port_policy}{extra}; at most {self.max_conns} connections, "
+                f"{self.max_conns_per_ip} per address, {self.new_conns_per_ip_per_s:g} new a second per address, idle "
+                f"{self.idle_timeout_s:g} s{cap})")
+
+
+LISTEN_FD_PREFIX = "OARBANK_LISTEN_FD_"         # + the listener name, upper-cased: a listen_fd listener's socket
+
+
 class SandboxNet(Contract):
     """Network for the module's node-side processes (spec/sandbox.md, "Network"). [beta]"""
     mode: Annotated[str, Field(pattern=r"^[a-z][a-z0-9-]*$")] = Field("none", description=(
@@ -280,6 +337,22 @@ class SandboxNet(Contract):
     allow: list[Annotated[str, Field(max_length=253, pattern=HOST_PATTERN)]] = Field(default_factory=list, description=(
         "[beta] `host[:port]` entries (a leading `*.` matches subdomains); never IP addresses or CIDRs. Required with "
         "egress-allowlist; port defaults to 443."))
+    inbound: list[InboundListener] = Field(default_factory=list, description=(
+        "[beta] Listeners the agent opens on nodes the owner assigns, each served by one endpoint service that lists it "
+        "(`services[].listeners`); module code never listens. A grant approved by digest, independent of `mode` "
+        "(answering an accepted connection is not egress). Needs requires.core >= 2.10."))
+
+    @field_validator("inbound")
+    @classmethod
+    def _unique_inbound(cls, v):
+        names = [x.name for x in v]
+        dup = sorted({n for n in names if names.count(n) > 1})
+        if dup:
+            raise ValueError(f"sandbox.net.inbound lists {dup} more than once (listener names are unique)")
+        return v
+
+    def listener(self, name: str) -> InboundListener | None:
+        return next((x for x in self.inbound if x.name == name), None)
 
     @model_validator(mode="after")
     def _allow(self):
@@ -381,7 +454,7 @@ class SandboxSection(Contract):
 
     def requests(self) -> bool:
         return bool(self.net.mode != "none" or self.tools or self.devices.gpu != "none" or self.containers
-                    or self.container_sets or self.exec_writable or self.folders)
+                    or self.container_sets or self.exec_writable or self.folders or self.net.inbound)
 
     def runs_containers(self) -> bool:
         return bool(self.containers or self.container_sets)
@@ -389,8 +462,9 @@ class SandboxSection(Contract):
     def for_bootstrap(self) -> "SandboxSection":
         """The grants a bootstrap stage's jobs get (spec/sandbox.md, "Bootstrap jobs"): the network as approved (none or the
         egress allowlist; a module with a bootstrap stage never asks for egress-any) and nothing else: no host tools, GPU,
-        containers or execution of written files. The host also withholds the module data directory and settings."""
-        return SandboxSection(contract=self.contract, net=self.net)
+        containers, execution of written files or listeners. The host also withholds the module data directory and
+        settings."""
+        return SandboxSection(contract=self.contract, net=self.net.model_copy(update={"inbound": []}))
 
 
 class BundleSection(Contract):
@@ -649,13 +723,21 @@ class Service(Contract):
     endpoint: bool = Field(False, description=(
         "[beta] Jobs reach the service: each attempt whose stage reserves one of its pools gets OARBANK_SERVICE_<NAME>, "
         "and the agent hands the service every connection over its endpoint channel; the service never listens "
-        "(spec/service-protocol.md, \"Endpoints\"). Provides at least one pool; lifecycle on_demand or always. Needs "
-        "requires.core >= 2.5."))
+        "(spec/service-protocol.md, \"Endpoints\"). Provides at least one pool or lists at least one listener; "
+        "lifecycle on_demand or always. Needs requires.core >= 2.5."))
+    listeners: list[Name] = Field(default_factory=list, description=(
+        "[beta] `[sandbox].net.inbound` listeners this service serves: the agent hands it each connection a listener "
+        "accepts (or, for handover `listen_fd`, the listening socket) and announces each listener's external address on "
+        "its endpoint channel. Needs endpoint = true, lifecycle always and requires.core >= 2.10."))
     gpu: ServiceGPU = Field(default_factory=ServiceGPU, description="[beta] Needs requires.core >= 2.5 when `use` is not none.")
 
     def env_name(self) -> str:
         """The variable a job finds this endpoint service's connector in."""
         return SERVICE_ENV_PREFIX + self.name.upper()
+
+    def listener_target(self) -> str:
+        """How listener rules name this process."""
+        return f"service {self.name!r}"
 
 
 class Probe(Contract):
@@ -885,8 +967,13 @@ class Manifest(Contract):
             ("runner capability checkpoint", "checkpoint" in self.runner.capabilities),
             ("ui.views.columns[].type artifact_ref", any(c.type == "artifact_ref" for v in self.ui.views.values() for c in v.columns)),
         ]
+        inbound = [
+            ("sandbox.net.inbound", bool(self.sandbox.net.inbound)),
+            ("services[].listeners", any(s.listeners for s in self.services)),
+        ]
         return (out + [(k, SDK13_KEYS_CORE) for k, on in sdk13 if on] + [(k, BOOTSTRAP_KEYS_CORE) for k, on in sdk14 if on]
-                + [(k, SDK15_KEYS_CORE) for k, on in sdk15 if on])
+                + [(k, SDK15_KEYS_CORE) for k, on in sdk15 if on]
+                + [(k, INBOUND_KEYS_CORE) for k, on in inbound if on])
 
     # ------------------------------------------------------------------------ stages
 
@@ -1141,14 +1228,53 @@ class Manifest(Contract):
     def _endpoint_rules(self):
         """Service endpoints and service GPU use (spec/manifest.md, rule 18)."""
         for s in self.services:
-            if s.endpoint and not s.provides.pools:
+            if s.endpoint and not s.provides.pools and not s.listeners:
                 raise ValueError(f"service {s.name!r}: an endpoint service provides at least one pool (a job reaches it "
-                                 "through a pool its stage reserves)")
+                                 "through a pool its stage reserves) or lists at least one listener")
             if s.endpoint and s.lifecycle == "manual":
                 raise ValueError(f"service {s.name!r}: an endpoint service is on_demand or always (the agent never starts "
                                  "a manual service, so it could never hand it its endpoint channel)")
             if s.gpu.use != "none" and self.sandbox.devices.gpu != "compute":
                 raise ValueError(f"service {s.name!r}: gpu.use = {s.gpu.use!r} needs sandbox.devices.gpu = 'compute'")
+        self._listener_rules()
+
+    def listener_targets(self) -> list[tuple[str, list[str], "Service"]]:
+        """Every module process that lists listeners, as (how rules name it, its listeners, the process): today endpoint
+        services. A further kind of module process that serves listeners is added here."""
+        return [(s.listener_target(), list(s.listeners), s) for s in self.services if s.listeners]
+
+    def listener_service(self, name: str) -> "Service | None":
+        """The process serving listener `name`."""
+        return next((t for _, names, t in self.listener_targets() if name in names), None)
+
+    def _listener_rules(self):
+        """Inbound listeners (spec/manifest.md, rule 22)."""
+        declared = {x.name for x in self.sandbox.net.inbound}
+        served: dict[str, list[str]] = {}
+        for where, names, _ in self.listener_targets():
+            dup = sorted({n for n in names if names.count(n) > 1})
+            if dup:
+                raise ValueError(f"{where}: listeners lists {dup} more than once")
+            unknown = [n for n in names if n not in declared]
+            if unknown:
+                raise ValueError(f"{where}: listeners {unknown} are not [sandbox].net.inbound entries")
+            for n in names:
+                served.setdefault(n, []).append(where)
+        for s in self.services:
+            if s.listeners and not s.endpoint:
+                raise ValueError(f"service {s.name!r}: a service with listeners is an endpoint service (endpoint = true): "
+                                 "its connections and announcements arrive on its endpoint channel")
+            if s.listeners and s.lifecycle != "always":
+                raise ValueError(f"service {s.name!r}: a service with listeners has lifecycle = 'always' (a listener is "
+                                 "wanted for as long as the module is enabled on the node)")
+        for x in self.sandbox.net.inbound:
+            by = served.get(x.name, [])
+            if not by:
+                raise ValueError(f"sandbox.net.inbound {x.name!r}: no endpoint service lists it in `listeners` (a "
+                                 "listener needs exactly one)")
+            if len(by) > 1:
+                raise ValueError(f"sandbox.net.inbound {x.name!r} is listed by {', '.join(by)}: a listener needs exactly "
+                                 "one service")
 
     def _bootstrap_rules(self, chain: set):
         """Bootstrap stages and the pinned dataset table (spec/manifest.md, rule 15)."""
@@ -1356,6 +1482,13 @@ def lint(man: Manifest) -> list[str]:
         if images and os_ == "windows" and f"linux/{arch}" not in images:
             out.append(f"requires.platforms lists {plat}, but no container image or set is for linux/{arch}: Windows nodes run "
                        f"containers of their own architecture only, so its containers cannot run there")
+    for x in man.sandbox.net.inbound:
+        svc = man.listener_service(x.name)
+        wins = [p for p in man.requires.platforms if p.startswith("windows")
+                and (svc is None or pf.matches(p, getattr(svc, "platforms", [])))]
+        if x.handover == "listen_fd" and wins:
+            out.append(f"sandbox.net.inbound {x.name!r} has handover 'listen_fd', which Windows nodes cannot provide: on "
+                       f"{', '.join(wins)} nodes this listener is unavailable (LISTENER_HANDOVER_UNSUPPORTED)")
     scope = man.results.determinism_scope
     if scope not in pf.SCOPE_MIX:
         out.append(f"results.determinism_scope {scope!r} is not known to this SDK; replicas compare within one platform")
