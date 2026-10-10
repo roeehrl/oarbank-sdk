@@ -3,14 +3,14 @@ title: Versions and compatibility
 description: Find the Oarbank, agent and module SDK versions you have installed, the latest release, which SDK features need which core, and where the docs for an older version are.
 type: reference
 platforms: [macos, linux, windows]
-core: '2.8.0'
+core: '2.9.0'
 sidebar:
-  order: 4
+  order: 13
 ---
 
 Oarbank has two version lines. The **core** (the coordinator and the node agent, in
-[roeehrl/oarbank](https://github.com/roeehrl/oarbank)) is at 2.8.0. The **module SDK** (`oarbank-sdk`, in
-[roeehrl/oarbank-sdk](https://github.com/roeehrl/oarbank-sdk)) is at 1.5.0. These docs describe those releases.
+[roeehrl/oarbank](https://github.com/roeehrl/oarbank)) is at 2.9.0. The **module SDK** (`oarbank-sdk`, in
+[roeehrl/oarbank-sdk](https://github.com/roeehrl/oarbank-sdk)) is at 1.6.0. These docs describe those releases.
 
 ## Find the installed versions
 
@@ -43,12 +43,15 @@ The first line of [llms.txt](/oarbank/llms.txt) names the release these docs des
 
 | Core | Date | Module SDK |
 |---|---|---|
+| 2.9.0 | 2026-10-11 | 1.6.0 |
 | 2.8.0 | 2026-10-10 | 1.5.0 |
 | 2.7.0 | 2026-10-09 | 1.5.0 |
 | 2.6.0 | 2026-10-08 | 1.5.0 |
 | 2.5.0 | 2026-10-06 | 1.5.0 |
 
-Each release's notes are on its release page.
+Each release's notes are on its release page, and each repository keeps a changelog: the core's
+[CHANGELOG.md](https://github.com/roeehrl/oarbank/blob/main/CHANGELOG.md) (what changes for the people who run a fleet,
+and the upgrade steps) and the SDK's [CHANGELOG.md](https://github.com/roeehrl/oarbank-sdk/blob/main/CHANGELOG.md).
 
 ## Which SDK features need which core
 
@@ -62,6 +65,10 @@ whose `requires.core` excludes it ([Versioning and deprecation](/oarbank/spec/ve
 | Stages, tick results, datasets | 1.3 | `>= 2.3` |
 | Bootstrap stages and pinned datasets | 1.4 | `>= 2.4` |
 | Secrets, container image sets, the container GPU pool, GPU placement by API, service endpoints, service GPU use, folder grants, portable checkpoints, the `artifact_ref` cell type | 1.5 | `>= 2.5` |
+| Host tool version constraints and `arch` other than `any` (`[sandbox].tools`), module settings with `x-oarbank` `scope = "node"`, `required` or `campaign` | 1.6 | `>= 2.9` |
+
+Stages that run before certification ([Running modules](/oarbank/operate/modules#which-stages-run-before-certification))
+need no new key and no core floor: a 2.9 coordinator applies the rule to modules as they are.
 
 The `oarbank-sdk` package follows SemVer. Its major equals the highest module protocol major it speaks, and the latest
 two majors receive fixes.
