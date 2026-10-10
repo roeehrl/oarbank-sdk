@@ -119,6 +119,9 @@ tools = [
 | `arch` | `any` | `any` (the node's own architecture preferred), `native` (only the node's own: no x86_64 JDK under Rosetta on Apple silicon), `arm64` or `amd64`. |
 | `trust` | `read` | `code-exec` flags a tool that runs arbitrary code. |
 
+A `version`, or an `arch` other than `any`, needs `requires.core >= 2.9`: older cores ignore both
+([manifest.md](manifest.md#cross-field-rules), rule 12).
+
 **On the node.** The agent detects each defined tool at startup, when its release changes, when asked (Re-detect)
 and hourly: a JDK by reading its installation's `release` file (`JAVA_VERSION`, `OS_ARCH`, `IMPLEMENTOR`) without
 running it; another tool by running its version command inside the sandbox (read and execute on that file only, no

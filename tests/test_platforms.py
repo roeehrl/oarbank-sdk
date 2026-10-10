@@ -101,7 +101,11 @@ def test_current_platform_prefers_the_environment(monkeypatch):
 
 
 def _doc():
-    return tomllib.loads((TOY / "oarbank-module.toml").read_text(encoding="utf-8"))
+    """The toy's manifest with the oldest core range these checks start from (the toy itself needs core 2.9 for its
+    node-scoped setting, which the settings schema, not the manifest, declares)."""
+    doc = tomllib.loads((TOY / "oarbank-module.toml").read_text(encoding="utf-8"))
+    doc["requires"]["core"] = ">=2.1,<3"
+    return doc
 
 
 def test_platforms_are_required():

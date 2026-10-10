@@ -289,7 +289,7 @@ def _verify(path: Path, dest) -> BundleInfo:
         if man.settings.schema_ not in data:
             raise BundleError(f"settings.schema {man.settings.schema_}: no such file in the bundle")
         try:
-            S.load_bytes(data[man.settings.schema_], man.settings.schema_)
+            S.load_bytes(data[man.settings.schema_], man.settings.schema_, man)
         except S.SettingsSchemaError as e:
             raise BundleError("settings: " + "; ".join(e.errors)[:600]) from None
     if dest is not None:
