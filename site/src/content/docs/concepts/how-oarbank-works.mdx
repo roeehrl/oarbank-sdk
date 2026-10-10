@@ -31,14 +31,16 @@ from the console or the CLI.
 Nodes connect to the coordinator; the coordinator never connects to nodes. Each node reaches it on one address and
 port over whatever network you choose: a LAN, Tailscale, ZeroTier or any other VPN.
 
-To add a computer, you make a **join code** on the coordinator (`oarbank join-code`), one per node. The code carries
-the coordinator's addresses, a pin for the coordinator's own certificate authority and a one-time secret. When the
-node's installer uses it:
+To add a computer, you install the node package, which asks nothing, and then join it with a **join code** from
+the console (**Add machine…**) or `oarbank join-code`. The code carries the coordinator's addresses, its identity key, a
+pin for its own certificate authority, when the code expires and a secret. When the node joins with it:
 
-1. The agent checks the coordinator's signed identity before it sends anything.
+1. The agent checks the code offline, then the network: the coordinator's address and port, its signed identity
+   against the code's key, and its certificate authority against the code's pin. Only then does it send the secret.
 2. It generates its own key, which never leaves the node, and asks the coordinator for a client certificate.
-3. The join code approves the node at once. A node that enrolls without a code waits until you approve it in the
-   console.
+3. A code for one machine approves the node at once. A code for many machines (MDM, images) leaves each one waiting
+   for your approval unless you chose otherwise, and a node joined by the coordinator's address shows a short code you
+   approve it by. [Adding machines](/oarbank/operate/adding-machines) covers every way to join.
 
 From then on, the node and the coordinator talk over mutual TLS. Node certificates last 30 days and are renewed
 automatically. The coordinator stores only certificate fingerprints, so a copy of its database contains no

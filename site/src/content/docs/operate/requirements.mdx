@@ -10,7 +10,7 @@ sidebar:
 import { Aside, TabItem, Tabs } from '@astrojs/starlight/components';
 
 <Aside type="note">
-  These are the requirements of Oarbank 2.7.0. The installers are on the [release page](https://github.com/roeehrl/oarbank/releases/tag/v2.7.0);
+  These are the requirements of Oarbank 2.8.0. The installers are on the [release page](https://github.com/roeehrl/oarbank/releases/tag/v2.8.0);
   [Get started](/oarbank/get-started) walks through the setup.
 </Aside>
 
@@ -33,16 +33,17 @@ A fleet is one coordinator and any number of nodes. The coordinator can also be 
 <Tabs syncKey="os">
   <TabItem label="macOS" icon="apple">
     - **macOS 15 or later on Apple silicon or Intel.** There is one package per architecture.
-    - **Installer:** a `.pkg`, signed with Developer ID and notarized by Apple, installed by hand or through MDM. Administrator rights are needed to install it.
-    - **Service:** by default the agent runs as a LaunchAgent for the user who is logged in. Installed in system
-      scope, it runs as a system service under its own `_oarbank` account and starts at boot, before anyone logs in.
+    - **Installer:** a `.pkg`, signed with Developer ID and notarized by Apple, installed by hand or through MDM. Administrator rights are needed to install it. It adds **Oarbank Node** to the menu bar for joining.
+    - **Service:** joined as the system service (`sudo oarbank-node join`, or **System service** in the join
+      window), the agent runs under its own `_oarbank` account and starts at boot, before anyone logs in. Joined for
+      the user, it runs as a LaunchAgent while that user is logged in.
     - **Sandbox:** Seatbelt. Each job runs in its own process group.
     - **Host protection:** the memory guard and per-node caps, plus the owner's rules (named apps and processes,
       someone using the computer) and back-off for heat and battery.
     - **Containers**, for modules that use them, run in a Colima profile that the agent owns.
   </TabItem>
   <TabItem label="Linux" icon="linux">
-    - **x86_64 or arm64**, with glibc 2.39 or newer and systemd. Published 2.7.0 Linux binaries are built and checked on Ubuntu 24.04.
+    - **x86_64 or arm64**, with glibc 2.39 or newer and systemd. Published 2.8.0 Linux binaries are built and checked on Ubuntu 24.04.
     - **Linux 6.2 or later** for the module sandbox (Landlock and seccomp). Newer kernels enforce more:
       | Kernel | What the sandbox enforces |
       |---|---|
@@ -89,7 +90,7 @@ machines GPU detection and GPU containers have been checked on are listed in
 - **First-run setup:** install the native coordinator package, then open **Oarbank Coordinator** on macOS/Linux or **Oarbank Coordinator** in Windows Start. Package installation needs administrator privileges and installs software only. Choose **Open web app** from its menu bar/tray icon (or the Linux fallback window). The wizard configures the reachable IP, administrator, authenticator by QR scan and primary/backup owner signing keys. **Preferences…** offers opt-in automatic sign-in startup; **Quit** leaves coordinator services running. On macOS/Linux, open it as your ordinary user; Windows setup asks for elevation; the tray app and normal console login do not. Linux desktop packages include GTK 3 and Python GObject bindings for the companion; headless users can still run `oarbank-setup` from a terminal. Linux desktops without StatusNotifier support have a control-window fallback.
 - **Background services:** macOS runs per-user LaunchAgents while that user is logged in. Linux runs systemd user services; enable lingering with `sudo loginctl enable-linger <user>` to run from boot without login. Windows runs two system services under separate virtual accounts, with delayed automatic start and recovery after a crash.
 - **Installed software:** `/Applications/Oarbank Coordinator.app` on macOS, `/opt/oarbank/coordinator` on Linux, and `C:\Program Files\Oarbank\Coordinator\package` on Windows. Python and uv are bundled.
-- **State and keys:** macOS uses `~/Library/Application Support/Oarbank/coordinator` and its sibling `keys`; Linux uses `${XDG_DATA_HOME:-~/.local/share}/oarbank/coordinator` and `${XDG_CONFIG_HOME:-~/.config}/oarbank/keys`. Windows stores protected state in `C:\ProgramData\Oarbank\coordinator`. Native uninstall retains this data. The [full install guide](https://github.com/roeehrl/oarbank/blob/v2.7.0/docs/install.md) gives cleanup and update steps.
+- **State and keys:** macOS uses `~/Library/Application Support/Oarbank/coordinator` and its sibling `keys`; Linux uses `${XDG_DATA_HOME:-~/.local/share}/oarbank/coordinator` and `${XDG_CONFIG_HOME:-~/.config}/oarbank/keys`. Windows stores protected state in `C:\ProgramData\Oarbank\coordinator`. Native uninstall retains this data. The [full install guide](https://github.com/roeehrl/oarbank/blob/v2.8.0/docs/install.md) gives cleanup and update steps.
 - **Its module processes are sandboxed too,** with the same backend as on a node of that operating system. A
   coordinator on an operating system without a sandbox backend refuses to start module processes.
 - **It can also be a node:** install the node package on the same computer.

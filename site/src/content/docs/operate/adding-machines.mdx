@@ -1,0 +1,218 @@
+---
+title: Adding machines
+description: Join computers to an Oarbank fleet on macOS, Linux and Windows, by hand, over SSH, with a one-line installer or through MDM, Intune and Ansible, and what each join error means.
+type: how-to
+platforms: [macos, linux, windows]
+core: '2.8.0'
+sidebar:
+  order: 2
+---
+
+import { TabItem, Tabs } from '@astrojs/starlight/components';
+
+A node package installs the node and asks nothing. Joining it to your fleet is a separate step, the same on every
+operating system: give the node a **join code**. You never create files by hand, and the code is never typed on a
+command line where other programs could read it.
+
+## Make a join code
+
+In the console, open **Fleet** and choose **Add machine…**. The console shows the code once, with **Copy**, and under
+it the installer and commands for each operating system with the code filled in, plus an MDM tab. It then shows the
+machines that use the code as they arrive.
+
+On the coordinator's command line:
+
+```sh
+oarbank join-code --label build-07          # one machine
+oarbank join-code --uses 50 --ttl 604800    # up to 50 machines, for a week
+oarbank join-codes                          # outstanding codes and the machines that used them
+oarbank join-code revoke <id>               # machines that already joined stay
+```
+
+| | One machine | Many machines |
+|---|---|---|
+| For | a computer you set up by hand or over SSH | MDM, Intune, Ansible, disk images |
+| Uses | 1 | 2 to 10,000 |
+| Lifetime | 4 hours by default; 10 minutes to 7 days | up to 30 days |
+| Approval | at once | each machine waits on the Fleet page, unless you tick **Approve automatically** (`--approve`) |
+| Name | the label names the node | each node keeps its own name (or the one it asks for with `--name`) |
+
+A code names your coordinator's addresses and pins its identity key and certificate authority. The node checks both
+before it sends the code's secret, so a code cannot be used to join it to anyone else's coordinator, and a TLS proxy in
+the way is caught rather than trusted. Expiring or revoking a code never removes a machine that already joined.
+
+## Join a machine
+
+<Tabs syncKey="os">
+  <TabItem label="macOS" icon="apple">
+    **By hand:** open the `.pkg`. When Installer finishes, **Oarbank Node** opens in the menu bar at its join window.
+    Paste the code, choose how the node runs (**System service**, always on even when no one is logged in, or **Only
+    while I'm logged in**) and choose **Join**. The window checks the network and the coordinator, asks for your
+    password when needed, and follows the machine until it is connected. **Oarbank Node** stays in the menu bar with the
+    node's status; it can start at sign-in (Preferences).
+
+    **Over SSH:**
+
+    ```sh
+    sudo installer -pkg oarbank-agent-2.8.0-macos-arm64.pkg -target /
+    sudo oarbank-node join                                      # prompts for the code, hidden
+    printf '%s' 'OB2-…' | sudo oarbank-node join --code-stdin   # from a script
+    ```
+
+    `sudo oarbank-node join` sets up the system service; without `sudo` (or with `--scope personal`) the node runs for
+    you while you are logged in.
+  </TabItem>
+  <TabItem label="Linux" icon="linux">
+    **Over SSH or in a terminal:**
+
+    ```sh
+    sudo OARBANK_JOIN_CODE='OB2-…' apt install ./oarbank-agent_2.8.0_amd64.deb
+    ```
+
+    or install first and join afterwards (`sudo oarbank-node join` prompts for the code). The package passes
+    `OARBANK_JOIN_CODE` (or `OARBANK_JOIN_CODE_FILE`, a file holding it) to the node and also reads `OARBANK_NAME` and
+    `OARBANK_COORDINATOR`. `sudo` keeps these variables when your sudoers rule allows it (an `ALL` rule does); otherwise
+    join afterwards.
+
+    **On a desktop:** open **Oarbank Node** from your applications, paste the code and choose **Join**; it asks for your
+    password through the desktop's own prompt.
+  </TabItem>
+  <TabItem label="Windows" icon="seti:windows">
+    **By hand:** open the MSI. Paste the code on its join page (it is never written to the installer's log), or leave
+    it empty and use **Oarbank Node** from Start afterwards. **Run container jobs** installs the WSL components
+    containers need.
+
+    **Silently**, from an elevated prompt:
+
+    ```powershell
+    msiexec /i oarbank-agent-2.8.0-windows-x64.msi /qn JOINCODEFILE=C:\path\join-code.txt
+    msiexec /i oarbank-agent-2.8.0-windows-x64.msi /qn JOINCODE=OB2-…
+    ```
+
+    Other properties: `NAME=`, `COORDINATOR=` (join by address), `CONTAINERS=1`, `NOLAUNCH=1` (do not open Oarbank Node
+    after an attended install). `oarbank-node join` works in an elevated prompt as on the other systems.
+  </TabItem>
+</Tabs>
+
+**In one line.** The installer script picks this release's package for the computer, checks its SHA-256 against the
+release's checksum file, installs it and joins. It asks for the code on the terminal, or reads `OARBANK_JOIN_CODE`:
+
+```sh
+curl -fsSL https://github.com/roeehrl/oarbank/releases/latest/download/oarbank-install.sh | sudo sh
+curl -fsSL https://github.com/roeehrl/oarbank/releases/latest/download/oarbank-install.sh | sudo sh -s -- --name build-07 --no-join
+```
+
+```powershell
+irm https://github.com/roeehrl/oarbank/releases/latest/download/oarbank-install.ps1 | iex
+```
+
+**From a link.** On a machine that already has the node, the console's **Open in Oarbank Node** opens the join window
+with the code filled in. A code that arrives this way, rather than one you pasted, is always shown with its
+coordinator first: only continue if it came from your own console.
+
+**Without a code.** Where you cannot paste, join by the coordinator's address:
+
+```sh
+sudo oarbank-node join --coordinator https://coordinator.example.net:7443
+```
+
+The node prints the coordinator's certificate authority fingerprint (the console shows yours under **Approve a machine
+by its code**; they must match), then an 8-letter code such as `WDJB-MJHT`. Enter it on the Fleet page under **Approve
+a machine by its code**, or run `oarbank node approve-code WDJB-MJHT`.
+
+## Many machines: MDM, Intune, Ansible
+
+Deploy the package unchanged and hand the code out through managed policy. A node that has not joined reads the policy
+and joins as the system service. Use a code for many machines; its machines wait for your approval on the Fleet page
+unless you ticked **Approve automatically**.
+
+| Key | Type | Meaning |
+|---|---|---|
+| `JoinCode` | string | The join code |
+| `Coordinator` | string | Join by address instead; approve each machine on the Fleet page |
+| `Name` | string | The node's name |
+| `Containers` | boolean (Windows: DWORD 1) | Install the container prerequisites (Windows) |
+| `AllowUserJoin` | boolean (DWORD 0) | `false` hides **Join** and **Leave** in Oarbank Node |
+| `ManagedByOrganizationName` | string | Shown in Oarbank Node and `oarbank-node status` |
+
+<Tabs syncKey="os">
+  <TabItem label="macOS" icon="apple">
+    Deploy the `.pkg` and a configuration profile with these keys for the preference domain
+    `dev.codonic.oarbank.agent`. **Add machine…** offers a ready `.mobileconfig`: it holds the code and also
+    pre-approves the node's background items, so the person at the Mac sees no "Background Items Added" prompt. The
+    profile can arrive before or after the package. Managed preferences are readable by every account on the Mac, so
+    use a code for many machines with approval, not one that approves automatically.
+  </TabItem>
+  <TabItem label="Linux" icon="linux">
+    Write `/etc/oarbank/policy.json`:
+
+    ```json
+    {"JoinCode": "OB2-…", "Name": "build-07"}
+    ```
+
+    With Ansible:
+
+    ```yaml
+    - name: Install the Oarbank node
+      ansible.builtin.apt: { deb: /tmp/oarbank-agent_2.8.0_amd64.deb }
+    - name: Join the fleet
+      ansible.builtin.shell: printf '%s' "{{ oarbank_join_code }}" | oarbank-node join --code-stdin --no-input --wait 600
+      args: { creates: /var/lib/oarbank/status/joined }
+      no_log: true
+    ```
+  </TabItem>
+  <TabItem label="Windows" icon="seti:windows">
+    Set the keys as values under `HKLM\SOFTWARE\Policies\Codonic\Oarbank\Agent` with Group Policy (the release's
+    `oarbank-agent-2.8.0-windows-admx.zip` holds the administrative template, under **Codonic › Oarbank › Node**) or
+    Intune. To deploy with Intune, add the MSI as a **Win32 app** with the install command
+    `msiexec /i oarbank-agent-2.8.0-windows-x64.msi /qn JOINCODE=OB2-…`, install behavior **System**, and the detection
+    rule "file `%ProgramData%\Oarbank\status\joined` exists". The node writes that file once it has joined, so Intune
+    reports the app as installed only then.
+  </TabItem>
+</Tabs>
+
+Re-running a join on a machine that has joined the same coordinator does nothing and succeeds, so configuration
+management can apply it on every run.
+
+## Follow a machine
+
+`oarbank-node status` (with `--follow` to watch, `--json` for scripts) and **Oarbank Node** read the node's status
+document: `/Library/Application Support/Oarbank/status/node.json` (macOS system service; the personal node keeps its own
+under `~/Library/Application Support/Oarbank/status/`), `/var/lib/oarbank/status/node.json` (Linux),
+`C:\ProgramData\Oarbank\status\node.json` (Windows). It holds no secrets.
+
+| State | Meaning |
+|---|---|
+| `unjoined` | Installed; waiting for a code (or managed policy) |
+| `joining` | Checking and joining |
+| `pending` | Waiting for approval on the Fleet page |
+| `joined`, `connected` | Joined; connected to the coordinator |
+| `offline` | Joined, but the coordinator cannot be reached now |
+| `error` | Joining failed; the error says why |
+
+`oarbank-node check` runs the checks without joining, and `oarbank-node leave` makes the node forget its coordinator.
+
+## When joining fails
+
+Every failure names its check and a code. The join window shows the same message with **Retry** and **Copy
+diagnostics** (a report without the code).
+
+| Code | What happened | What to do |
+|---|---|---|
+| `E_CODE_FORMAT` | The text is not a complete join code | Copy it again from the console |
+| `E_CODE_EXPIRED` | The code expired | Make a new one |
+| `E_CODE_USED` | Already used, or no uses left | Make a new one |
+| `E_CODE_REVOKED` | Revoked in the console | Make a new one |
+| `E_CODE_UNKNOWN` | The coordinator does not know the code | Check it came from this coordinator |
+| `E_DNS` | The coordinator's name does not resolve | Check the machine's network and DNS |
+| `E_TCP` | No answer on the coordinator's port | Check the coordinator is running and a firewall allows outgoing `7443/tcp`; the node keeps trying until the code expires |
+| `E_TLS_PIN_MISMATCH` | The certificate authority is not the one the code pins | A TLS-inspecting proxy is in the way, or the code is for another coordinator; there is no way to skip this check |
+| `E_IDENTITY` | The server is not the coordinator that made the code | As above |
+| `E_CLOCK_SKEW` | This computer's clock is more than 5 minutes off | Turn on automatic time and retry |
+| `E_NOT_ACTIVE` | The address answers with a standby coordinator | Retry in a few minutes |
+| `E_APPROVAL_DENIED` | You declined the machine | Make a new code if that was a mistake |
+| `E_ALREADY_JOINED` | The machine belongs to another coordinator | `oarbank-node leave` first, or `join --force` |
+
+`oarbank-node join` exits with 0 joined (or already joined to this coordinator), 2 malformed code, 3 still waiting for
+approval, 4 code expired, used, revoked or unknown, 5 identity or certificate authority mismatch, 6 network (worth
+retrying), 7 joined to another coordinator, 8 needs root or an administrator.

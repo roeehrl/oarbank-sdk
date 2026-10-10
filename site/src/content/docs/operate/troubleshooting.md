@@ -3,7 +3,7 @@ title: Troubleshooting
 description: Find out why a job waits, a node takes no work or setup stalls, where each computer keeps its logs, and the fixes for the problems people meet most on macOS, Linux and Windows.
 type: troubleshooting
 platforms: [macos, linux, windows]
-core: '2.7.0'
+core: '2.8.0'
 sidebar:
   order: 3
 ---
@@ -63,9 +63,13 @@ configured, running web app does not. The `oarbank` CLI on Windows needs an elev
 
 ## Nodes
 
-**A node does not appear.** A join code is single-use and expires (`--ttl`). Make a new one with
-`oarbank join-code --label <node>`. A node set up with a coordinator URL instead waits for approval: `oarbank fleet`
-lists it under PENDING, and `oarbank node approve <enrollment>` admits it.
+**A node does not join.** Run `oarbank-node status` on it (or look at **Oarbank Node**): it names the check that
+failed and an error code, listed in [Adding machines](/oarbank/operate/adding-machines#when-joining-fails). The usual
+ones: the code expired or was already used (`E_CODE_EXPIRED`, `E_CODE_USED`: make a new one), the port does not answer
+(`E_TCP`: a firewall, or the coordinator is off; the node keeps trying until the code expires), or a TLS-inspecting
+proxy is in the way (`E_TLS_PIN_MISMATCH`). A machine from a multi-use code, or one joined by the coordinator's address,
+waits for approval: `oarbank fleet` lists it under PENDING, and `oarbank node approve <enrollment>` or
+`oarbank node approve-code <CODE>` admits it.
 
 **The coordinator is not found on the local network (macOS).** macOS 15 and later can block the coordinator's
 announcement or the node's search under Local Network privacy. `oarbank-agent discover` says so. Allow the program in
