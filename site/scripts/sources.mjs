@@ -52,6 +52,23 @@ export const PAGES = [
     order: 5,
   },
   {
+    src: 'docs/inbound-listeners.md',
+    dest: 'build/inbound-listeners.md',
+    type: 'how-to',
+    title: 'Accept connections from the internet',
+    description:
+      'Declare an inbound listener the agent owns, serve its connections in an endpoint service, read its announced external address, narrow who may connect, read PROXY v2 headers and test it with the conformance kit.',
+    order: 7,
+  },
+  {
+    src: 'docs/make-a-node-reachable.md',
+    dest: 'operate/make-a-node-reachable.md',
+    type: 'how-to',
+    description:
+      'Assign a module’s inbound listener to a node, let the agent map the port on the router or forward it by hand, and read what the reachability check found and how to fix it.',
+    order: 3,
+  },
+  {
     src: 'docs/compatibility.md',
     dest: 'operate/compatibility.md',
     type: 'reference',
