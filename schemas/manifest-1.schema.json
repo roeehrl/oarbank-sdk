@@ -1725,7 +1725,7 @@
           "title": "Bandwidth Class"
         },
         "capabilities": {
-          "description": "[stable] By intent: cancellable (honours a stop request within stop_grace_s), freeze_ok (safe to freeze at any instruction), cooperative_pause (pauses on control.json), resumable (resumes from its own checkpoint after a restart), progress_events, deterministic_output, cooperative_throttle, checkpoint (writes portable checkpoints, honours a checkpoint-then-stop request and resumes from <W>/checkpoint/; needs requires.core >= 2.5).",
+          "description": "[stable] By intent: cancellable (honours a stop request within stop_grace_s), freeze_ok (safe to freeze at any instruction), cooperative_pause (pauses on control.json), resumable (resumes from its own checkpoint after a restart), progress_events, deterministic_output, cooperative_throttle (honours threads and gpu_duty in control.json; only such GPU runners run beside a protected GPU program), checkpoint (writes portable checkpoints, honours a checkpoint-then-stop request and resumes from <W>/checkpoint/; needs requires.core >= 2.5).",
           "items": {
             "maxLength": 64,
             "pattern": "^[a-z0-9][a-z0-9._-]*$",

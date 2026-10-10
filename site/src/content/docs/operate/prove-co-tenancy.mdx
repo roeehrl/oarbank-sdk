@@ -1,0 +1,108 @@
+---
+title: Prove co-tenancy is safe
+description: Measure what fleet work costs one of your protected programs with the paired on/off harness, read its report, earn a co-tenancy certificate, and let cooperative GPU work run beside a protected GPU program up to the certified duty.
+type: how-to
+core: "2.10.0"
+sidebar:
+  order: 4
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Host protection keeps fleet work from harming the programs you protect. This page shows how to **measure** that it
+does: the paired on/off harness runs the fleet work under test beside one protected program in ON windows and holds it
+in OFF windows, in random order, and decides at your margin whether the program ran as fast with fleet work as without.
+A passing run is a **co-tenancy certificate**.
+
+## Before a run: give the rule a progress source
+
+The harness measures the protected program's own progress, so its rule needs `protect.metric = "progress_rate"` with
+a source: an event file the program writes, counted by event type.
+
+```toml
+[[rule]]
+id        = "trainer"
+match     = { path_prefix = "/Applications/Example Trainer.app/" }
+tree      = "descendants"
+immediate = true
+protect   = { metric = "progress_rate", max_slowdown = 0.05,
+              source = { jsonl = "~/Library/Application Support/Example/events-*.jsonl", event = "step_done" } }
+[[rule.during]]
+source      = { jsonl = "~/Library/Application Support/Example/events-*.jsonl", event = "status",
+                field = "state.phase", on = ["uploading"] }
+pause_fleet = { scope = "gpu" }
+tags        = ["uplink"]
+```
+
+- `jsonl` may end in a glob: the newest matching file is followed, so a program that starts a new file on every restart
+  is picked up at once.
+- `event` counts the lines whose `event` field (or `event_key`, a dotted path) equals it.
+- A `during` block's phase comes from `enter`/`exit` events or from a `field` of one event type; `immediate = true`
+  pauses fleet work the moment the phase begins, between protection's two-second ticks.
+- `~` is your home. On a system install the node's service account cannot read it: your **session helper** (the small
+  helper that runs in your login) reads the file and passes on counts and phase states, never the file's contents.
+
+<Aside type="caution">While nobody is logged in, no session helper reads a source in a home folder. Protection then
+treats the phase as on and the progress as unknown, and holds fleet work back under that rule; the node page says
+**source … needs the session helper**. Put a source outside your home, readable by the service account, if the
+program runs while you are logged out.</Aside>
+
+Check the source reads before a run: the node's **Protection** page, **Co-tenancy** card, shows a rate and who reads
+it (the agent or your session helper).
+
+## Run the harness
+
+```sh
+oarbank protection ab start studio --rule trainer --work cpu
+```
+
+| Option | Default | Meaning |
+|---|---|---|
+| `--work` | `gpu` | the fleet work under test: `gpu`, `cpu`, `all`, a module, or `<module>/<workload>` |
+| `--duty` | none | the `gpu_duty` cooperative GPU work holds in ON windows |
+| `--blocks` | 12 | planned blocks of one ON and one OFF window; raised after the pilot when the margin needs more |
+| `--window`, `--washout` | 300, 60 s | each window, and the seconds discarded after each switch |
+| `--margin` | 0.02 | the slowdown that counts |
+| `--off` | `paused` | how OFF holds the work: `paused`, or `evicted` to free its memory too |
+| `--max-hours` | 8 | the run's cap: a run that cannot reach the margin within it is refused after the pilot |
+
+It is a reviewed change (T2): you see the rule, its source, the work and the planned hours before anything starts.
+Protection stays active throughout, and a collapse of the program's progress in an ON window aborts the run at once
+as a slowdown. Watch it with `oarbank protection ab status studio`, stop it with `oarbank protection ab abort <run>`.
+
+<Aside>Run the harness in a window you choose, for example overnight while the program works. A block is left out and
+repeated, never counted, when something outside the fleet changed: a phase of the rule, a restart of the program,
+sleep, the power source, the memory guard. Heat is not left out: if fleet work makes the machine throttle, that
+slowdown counts against it.</Aside>
+
+## Read the report
+
+`oarbank protection ab show <run>`, or the run's page in the console:
+
+- **No slowdown shown**: the program ran at, say, 99.4 % of its speed without fleet work (90 % interval 98.6–100.3 %),
+  within the 2 % margin. The run becomes a certificate.
+- **Slowdown**: the whole interval is below 100 % and the estimate below the margin.
+- **Inconclusive**: the interval reaches below the margin; the report says about how many more blocks would decide it.
+
+The page plots each block's OFF and ON rate side by side, shows `R` (ON ÷ OFF) with its interval against the margin,
+and lists the blocks left out and why.
+
+## Certificates and certified GPU co-tenancy
+
+A certificate names the node, the rule, the fleet work and duty, `R` with its interval, the margin and the run. It is
+valid for 14 days, and only while the node's hardware, OS major version and agent and the protected program are the
+ones it was earned under: `oarbank protection certificates studio` shows each as valid, expired or stale with why.
+
+To find how much GPU work a protected GPU program tolerates, sweep the duty:
+
+```sh
+oarbank protection ab sweep studio --rule trainer
+```
+
+It runs the harness at `gpu_duty` 0.1, 0.2, 0.35, 0.5, … and stops at the first level that does not pass. Then set the
+node's `gpu_jobs` to `certified` (in its protection section). Fleet GPU work whose runner declares
+`cooperative_throttle` then runs beside the protected program at the certified duty; other GPU work still waits, and
+without a valid certificate `certified` behaves as the default (`when_no_gpu_protected`).
+
+Module authors: a runner that declares `cooperative_throttle` honours `gpu_duty` in its control document
+([runner protocol](/oarbank/spec/runner-protocol#control)).
