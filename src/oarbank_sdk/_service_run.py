@@ -42,6 +42,9 @@ class ServiceRun:
         self.leader: int | None = None
         self.started = False
         self.output = ""
+        self.extra_env: dict = {}                    # more of what the agent gives `start` (listeners)
+        self.extra_fds: list[int] = []               # descriptors `start` inherits besides its channel (listen_fd)
+        self.own_sockets: list[str] = []             # listening sockets the agent made and passed in (not the service's)
 
     def _launch(self, op: str) -> list[str]:
         argv = _argv(self.svc.exec, self.root) + [op]
@@ -71,11 +74,13 @@ class ServiceRun:
     def start(self) -> str | None:
         """Start the service (an endpoint service with its channel) and wait for hello and `ready`: None, or what went
         wrong."""
-        env, kwargs = dict(self.env), {}
+        env, kwargs = {**self.env, **self.extra_env}, {}
         if self.svc.endpoint:
             self.host = H.ServiceHost()
             env.update(self.host.env)
             kwargs = self.host.popen_kwargs
+        if self.extra_fds:
+            kwargs = {**kwargs, "pass_fds": list(kwargs.get("pass_fds", [])) + self.extra_fds}
         if os.name != "nt":
             kwargs = {**kwargs, "start_new_session": True}       # its process group is its container here
         limit = self.svc.start_timeout_s
@@ -150,8 +155,8 @@ class ServiceRun:
         return sorted(out)
 
     def listening(self) -> list[str]:
-        """The listening sockets the service's processes hold, described."""
-        return listening(self.processes())
+        """The listening sockets the service's processes hold, described (not those the agent passed in)."""
+        return [x for x in listening(self.processes()) if not any(p in x for p in self.own_sockets)]
 
     def connect(self, attempt: int):
         return H.connect_here(self.host, attempt)

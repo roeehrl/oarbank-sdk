@@ -1,0 +1,3 @@
+{"listener_specs": [{"name": "one-line", "listener": "echo", "send": "hello\n",
+                     "expect": {"contains": "echo hello 203.0.113.7:9000\n"}},
+                    {"name": "two-lines", "listener": "echo", "send": "a\nb\n", "expect": {"contains": "echo b 203.0.113.7:9000\n"}}]}

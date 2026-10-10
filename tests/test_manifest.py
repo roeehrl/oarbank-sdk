@@ -450,3 +450,7 @@ def test_a_listener_service_may_also_serve_jobs_through_a_pool():
     man = m.Manifest.model_validate(d)
     assert [s.name for s in man.endpoint_services_of(None)] == ["node"]
 
+
+def test_the_listener_example_passes_check(capsys):
+    assert main(["check", str(Path(__file__).parents[1] / "examples" / "publicecho" / "oarbank-module.toml")]) == 0
+    assert "ok  dev.codonic.oarbank.publicecho" in capsys.readouterr().out
