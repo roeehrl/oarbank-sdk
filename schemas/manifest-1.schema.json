@@ -372,6 +372,21 @@
           },
           "title": "Variants",
           "type": "object"
+        },
+        "workload_effects": {
+          "description": "[beta] Effects workload.report may request: the module's own records only (requires the workload.report capability and requires.core >= 2.10).",
+          "items": {
+            "enum": [
+              "store.write",
+              "store.delete",
+              "files.write",
+              "files.put",
+              "files.delete"
+            ],
+            "type": "string"
+          },
+          "title": "Workload Effects",
+          "type": "array"
         }
       },
       "required": [
@@ -1476,6 +1491,14 @@
         "unsupported": {
           "$ref": "#/$defs/Unsupported",
           "description": "[beta] Why the module does not run somewhere, shown by explain and the console. Needs requires.core >= 2.2."
+        },
+        "workload_protocol": {
+          "description": "[beta] Workload protocol majors (only when workloads are declared; spec/workload-protocol.md). Needs requires.core >= 2.10.",
+          "items": {
+            "type": "integer"
+          },
+          "title": "Workload Protocol",
+          "type": "array"
         }
       },
       "required": [
@@ -2783,6 +2806,239 @@
       ],
       "title": "ViewDecl",
       "type": "object"
+    },
+    "Workload": {
+      "additionalProperties": true,
+      "description": "A supervised long-running process that is the work itself: assigned to nodes by the owner, seat-based,\nsandboxed with the module's grants, given its listed secrets, controlled through the runner control document, and\nfleet work in host protection (spec/workload-protocol.md). [beta]",
+      "properties": {
+        "control": {
+          "description": "[beta] What host protection may do besides stopping it: `cooperative_throttle` (it honours the control document's `threads` and `gpu_duty`), `cooperative_pause` (it pauses itself on `pause`), `freeze_ok` (the agent may freeze its process container).",
+          "items": {
+            "enum": [
+              "cooperative_throttle",
+              "cooperative_pause",
+              "freeze_ok"
+            ],
+            "type": "string"
+          },
+          "title": "Control",
+          "type": "array"
+        },
+        "exec": {
+          "description": "[beta] argv (spec/manifest.md, \"Exec\"); the agent appends `run` (the long-running process, cwd its run directory) or `status` (the health check). Usually the SDK's supervisor shim (oarbank_sdk.workload).",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Exec",
+          "type": "array"
+        },
+        "gpu": {
+          "$ref": "#/$defs/ServiceGPU",
+          "description": "[beta] GPU use; not `none` needs sandbox.devices.gpu = 'compute'."
+        },
+        "health": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WorkloadHealth"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "[beta] The `status` op's period; absent: a running process is healthy."
+        },
+        "identity": {
+          "default": "none",
+          "description": "[beta] `per_node`: the seat is named by the node's values of the workload's secrets and runs only under a coordinator seat lease with a fence, so at most one node runs an identity at a time; every secret must be set per node.",
+          "enum": [
+            "none",
+            "per_node"
+          ],
+          "title": "Identity",
+          "type": "string"
+        },
+        "listeners": {
+          "description": "[beta] Inbound listeners it serves through its endpoint channel ([sandbox].net.inbound).",
+          "items": {
+            "maxLength": 64,
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "type": "string"
+          },
+          "title": "Listeners",
+          "type": "array"
+        },
+        "name": {
+          "description": "[beta] Unique among workloads and services; reports name it `<module>/<name>`.",
+          "maxLength": 64,
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "title": "Name",
+          "type": "string"
+        },
+        "pause_tolerance_s": {
+          "anyOf": [
+            {
+              "maximum": 600,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "[beta] The longest pause its peers survive: protection stops and holds it instead of pausing longer. Default: 20 when it can be paused (cooperative_pause or freeze_ok), else 0 (never paused).",
+          "title": "Pause Tolerance S"
+        },
+        "platforms": {
+          "description": "[beta] Only on these platforms (empty: every declared platform).",
+          "items": {
+            "maxLength": 40,
+            "pattern": "^[a-z][a-z0-9]*-[a-z0-9_]+$",
+            "type": "string"
+          },
+          "title": "Platforms",
+          "type": "array"
+        },
+        "reports": {
+          "default": false,
+          "description": "[beta] Its `report` events reach the module's workload.report verb on the coordinator, whose effects keep the module's own records (coordinator.workload_effects).",
+          "title": "Reports",
+          "type": "boolean"
+        },
+        "resources": {
+          "$ref": "#/$defs/WorkloadResources"
+        },
+        "restart": {
+          "$ref": "#/$defs/WorkloadRestart"
+        },
+        "seat": {
+          "default": "node",
+          "description": "[beta] `node`: the owner assigns it to nodes, one seat per node; `fleet`: the owner asks for a count and the coordinator places the seats once on eligible nodes (it never moves one on its own).",
+          "enum": [
+            "node",
+            "fleet"
+          ],
+          "title": "Seat",
+          "type": "string"
+        },
+        "secrets": {
+          "description": "[beta] Declared secrets delivered to this workload only, in OARBANK_SECRETS_FILE.",
+          "items": {
+            "maxLength": 64,
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "type": "string"
+          },
+          "title": "Secrets",
+          "type": "array"
+        },
+        "stop_timeout_s": {
+          "default": 30.0,
+          "description": "[beta] From the stop request to the kill.",
+          "exclusiveMinimum": 0,
+          "maximum": 600,
+          "title": "Stop Timeout S",
+          "type": "number"
+        }
+      },
+      "required": [
+        "name",
+        "exec"
+      ],
+      "title": "Workload",
+      "type": "object"
+    },
+    "WorkloadHealth": {
+      "additionalProperties": true,
+      "description": "The agent's health check: `<exec> status` every period. [beta]",
+      "properties": {
+        "failures": {
+          "default": 3,
+          "description": "[beta] Consecutive unhealthy answers that end the run as a failure.",
+          "maximum": 20,
+          "minimum": 1,
+          "title": "Failures",
+          "type": "integer"
+        },
+        "period_s": {
+          "default": 15.0,
+          "maximum": 3600,
+          "minimum": 5,
+          "title": "Period S",
+          "type": "number"
+        },
+        "timeout_s": {
+          "default": 5.0,
+          "exclusiveMinimum": 0,
+          "maximum": 60,
+          "title": "Timeout S",
+          "type": "number"
+        }
+      },
+      "title": "WorkloadHealth",
+      "type": "object"
+    },
+    "WorkloadResources": {
+      "additionalProperties": true,
+      "description": "What a running workload holds: counted against the node's capacity while it runs. [beta]",
+      "properties": {
+        "cpu_cores": {
+          "default": 1.0,
+          "description": "[beta] Cores it uses at full speed.",
+          "maximum": 1024,
+          "minimum": 0,
+          "title": "Cpu Cores",
+          "type": "number"
+        },
+        "mem_gb": {
+          "default": 0.5,
+          "description": "[beta] Memory it holds (GB).",
+          "maximum": 4096,
+          "minimum": 0,
+          "title": "Mem Gb",
+          "type": "number"
+        }
+      },
+      "title": "WorkloadResources",
+      "type": "object"
+    },
+    "WorkloadRestart": {
+      "additionalProperties": true,
+      "description": "How the agent restarts a workload that exits or fails its health check. [beta]",
+      "properties": {
+        "backoff_initial_s": {
+          "default": 10.0,
+          "exclusiveMinimum": 0,
+          "title": "Backoff Initial S",
+          "type": "number"
+        },
+        "backoff_max_s": {
+          "default": 600.0,
+          "exclusiveMinimum": 0,
+          "title": "Backoff Max S",
+          "type": "number"
+        },
+        "jitter": {
+          "default": "full",
+          "description": "[beta] `full`: each delay is uniform between 0 and the exponential backoff (AWS full jitter).",
+          "enum": [
+            "full",
+            "none"
+          ],
+          "title": "Jitter",
+          "type": "string"
+        },
+        "max_failures": {
+          "default": 5,
+          "description": "[beta] Consecutive failures before it is withdrawn (until a restart operation, a new version or a reassignment).",
+          "minimum": 1,
+          "title": "Max Failures",
+          "type": "integer"
+        }
+      },
+      "title": "WorkloadRestart",
+      "type": "object"
     }
   },
   "$id": "https://codonic.dev/oarbank/schemas/manifest-1.schema.json",
@@ -2898,6 +3154,14 @@
     },
     "ui": {
       "$ref": "#/$defs/UISection"
+    },
+    "workloads": {
+      "description": "[beta] Supervised long-running processes that are the work itself. Needs requires.core >= 2.10.",
+      "items": {
+        "$ref": "#/$defs/Workload"
+      },
+      "title": "Workloads",
+      "type": "array"
     }
   },
   "required": [
