@@ -39,6 +39,11 @@ jobs:
       - run: npm ci
       - run: npm run check
       - run: npm run build
+      - name: the agent skill is valid and every page it routes to is built
+        working-directory: .
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: python3 scripts/check_skill.py --llms site/deploy/oarbank/llms.txt ${BASE:+--base "$BASE"}
   dco:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest

@@ -1,0 +1,11 @@
+{
+  "name": "oarbank",
+  "version": "1.0.0",
+  "description": "Install, run, troubleshoot and build modules for Oarbank with your coding agent. The skill reads the current docs at docs.codonic.dev/oarbank.",
+  "author": { "name": "Codonic", "url": "https://codonic.dev" },
+  "homepage": "https://docs.codonic.dev/oarbank/get-started#use-oarbank-with-an-ai-agent",
+  "repository": "https://github.com/roeehrl/oarbank-sdk",
+  "license": "Apache-2.0",
+  "keywords": ["oarbank", "orchestration", "batch-jobs", "fleet", "sdk"],
+  "skills": ["./skills/oarbank"]
+}

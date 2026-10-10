@@ -1,0 +1,13 @@
+{
+  "name": "codonic",
+  "owner": { "name": "Codonic", "url": "https://codonic.dev" },
+  "metadata": { "description": "Codonic's plugins for coding agents." },
+  "plugins": [
+    {
+      "name": "oarbank",
+      "source": "./",
+      "description": "Install, run, troubleshoot and build modules for Oarbank with your coding agent.",
+      "category": "development"
+    }
+  ]
+}

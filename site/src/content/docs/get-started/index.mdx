@@ -154,6 +154,79 @@ uv run oarbank-sdk conform examples/toy   # must end with "0 failed"
 The conformance kit runs your module's runner as each platform would, so you can test a module before you install it
 on a fleet. [Build a module in a day](/oarbank/build/tutorial) builds a complete module step by step.
 
+## Use Oarbank with an AI agent
+
+The **Oarbank skill** lets a coding agent (Claude Code, Codex, Cursor, GitHub Copilot, Gemini CLI and others) install,
+run, troubleshoot and build modules for Oarbank. It is short on purpose: it tells the agent to read these docs live,
+check which versions you run, and ask you before it changes anything. Elevated steps, passwords and join codes stay
+with you. The skill is Apache-2.0, in [roeehrl/oarbank-sdk](https://github.com/roeehrl/oarbank-sdk/tree/main/skills/oarbank).
+
+<Tabs syncKey="agent">
+  <TabItem label="Any agent">
+    With Node.js installed, this asks which of your agents to add it to:
+
+    ```sh
+    npx skills add roeehrl/oarbank-sdk --skill oarbank -g
+    ```
+
+    `-a claude-code -a codex` picks the agents instead; without `-g` it installs into the current project only.
+    Check with `npx skills list -g`, update with `npx skills update -g`, remove with
+    `npx skills remove oarbank -g`. Updates are never automatic.
+
+  </TabItem>
+  <TabItem label="Claude Code">
+    In a Claude Code session:
+
+    ```text
+    /plugin marketplace add roeehrl/oarbank-sdk
+    /plugin install oarbank@codonic
+    ```
+
+    From a terminal: `claude plugin marketplace add roeehrl/oarbank-sdk`, then `claude plugin install oarbank@codonic`.
+    Check with `claude plugin list`. Update with `claude plugin update oarbank@codonic`, or turn on automatic updates
+    under `/plugin`, **Marketplaces**, **codonic** (they are off by default for marketplaces outside Anthropic's).
+    Remove with `claude plugin uninstall oarbank@codonic`.
+
+  </TabItem>
+  <TabItem label="Codex">
+    ```sh
+    codex plugin marketplace add roeehrl/oarbank-sdk
+    codex plugin add oarbank@codonic
+    ```
+
+    Restart Codex, then check with `codex plugin list`. Update with `codex plugin marketplace upgrade codonic` and a
+    restart. Remove with `codex plugin remove oarbank@codonic`.
+
+  </TabItem>
+  <TabItem label="Claude app">
+    Download `oarbank-skill.zip` from the latest
+    [skill release](https://github.com/roeehrl/oarbank-sdk/releases?q=skill-v&expanded=true), then in Claude open
+    **Customize**, **Skills**, **+**, **Upload a skill**, and choose the file. Code execution must be on. Upload a
+    newer zip to update.
+
+  </TabItem>
+</Tabs>
+
+To pin a version, add the skill's release tag: `/plugin marketplace add roeehrl/oarbank-sdk#skill-v1.0.0` in Claude
+Code, `--ref skill-v1.0.0` for Codex. Read [SKILL.md](https://github.com/roeehrl/oarbank-sdk/blob/main/skills/oarbank/SKILL.md)
+before installing: it is short and has no scripts.
+
+**Without the skill**, paste this into any agent:
+
+```text
+Read https://docs.codonic.dev/oarbank/llms.txt and the pages it lists that fit my question, and use them to help me
+with Oarbank. Check which Oarbank version I run first, and ask me before changing anything.
+```
+
+**In a module's repository**, add these lines to `AGENTS.md` or `CLAUDE.md` so every agent working on it knows where
+the contracts are:
+
+```markdown
+This is an Oarbank module. Oarbank docs: https://docs.codonic.dev/oarbank/llms.txt (Markdown pages;
+build/tutorial.md, reference/manifest.md, spec/sandbox.md). Run `oarbank-sdk check .` and `oarbank-sdk conform .`
+before bundling; conform must end with "0 failed".
+```
+
 ## Next
 
 - [How Oarbank works](/oarbank/concepts/how-oarbank-works): the coordinator, nodes, join codes, modules,
@@ -161,6 +234,7 @@ on a fleet. [Build a module in a day](/oarbank/build/tutorial) builds a complete
 - [Requirements](/oarbank/operate/requirements): what each computer and the network need.
 - [Command-line reference](/oarbank/reference/cli) and [Troubleshooting](/oarbank/operate/troubleshooting): run and
   fix a fleet.
+- [Use Oarbank with an AI agent](#use-oarbank-with-an-ai-agent): let Claude Code, Codex or another coding agent help.
 - [Build a module in a day](/oarbank/build/tutorial): write your own job type.
 - The [specification](/oarbank/spec) and the [JSON Schemas](/oarbank/reference/schemas): everything a module can rely
   on.

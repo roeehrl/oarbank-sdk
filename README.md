@@ -9,6 +9,23 @@ console) knows nothing about any particular workload. Everything a job type need
 result, which nodes may run it, what the console shows) lives in a module, and a module talks to the core **only**
 through the versioned contracts in this repository.
 
+Documentation: **[docs.codonic.dev/oarbank](https://docs.codonic.dev/oarbank/)** (for agents:
+[llms.txt](https://docs.codonic.dev/oarbank/llms.txt)).
+
+## Use it with an AI agent
+
+The [Oarbank skill](skills/oarbank/SKILL.md) lets Claude Code, Codex and other coding agents install, run,
+troubleshoot and build modules for Oarbank, reading the current docs as they go:
+
+```sh
+npx skills add roeehrl/oarbank-sdk --skill oarbank -g          # any agent
+claude plugin marketplace add roeehrl/oarbank-sdk && claude plugin install oarbank@codonic   # Claude Code
+codex plugin marketplace add roeehrl/oarbank-sdk && codex plugin add oarbank@codonic         # Codex
+```
+
+Updating, removing, the Claude app and pinning a version:
+[Use Oarbank with an AI agent](https://docs.codonic.dev/oarbank/get-started#use-oarbank-with-an-ai-agent).
+
 ## What is in the SDK
 
 | Part | What it covers | Spec |
