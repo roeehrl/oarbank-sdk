@@ -2254,7 +2254,7 @@
         },
         "bootstrap": {
           "default": false,
-          "description": "[beta] A bootstrap stage: its jobs run on nodes whose module doctor is healthy before the goldens pass, with only the module's egress allowlist (no tools, GPU, containers, module data or settings), and the host registers their output only when it is exactly datasets of [[datasets.pinned]]. A standalone stage, not the default one, with determinism none and no pools. Needs requires.core >= 2.4.",
+          "description": "[beta] A bootstrap stage: its jobs run on nodes where the module's runner starts, before the goldens pass, with only the module's egress allowlist (no tools, GPU, containers, module data or settings), and the host registers their output only when it is exactly datasets of [[datasets.pinned]]. A standalone stage, not the default one, with determinism none and no pools. Needs requires.core >= 2.4.",
           "title": "Bootstrap",
           "type": "boolean"
         },
@@ -2291,7 +2291,7 @@
             }
           ],
           "default": null,
-          "description": "[beta] This stage's determinism (absent: results.determinism). `none`: its results depend on when it ran (an ingestion job pulling a moving feed), so the host never replicates, compares, caches or golden-tests them. Only a standalone stage sets it (a chain compares as results.determinism). Needs requires.core >= 2.3.",
+          "description": "[beta] This stage's determinism (absent: results.determinism). `none`: its results depend on when it ran (an ingestion job pulling a moving feed), so the host never replicates, compares, caches or golden-tests them; when the stage also needs no capability and no pool, its jobs run before the module is certified on a node, wherever its runner starts. Only a standalone stage sets it (a chain compares as results.determinism). Needs requires.core >= 2.3.",
           "title": "Determinism"
         },
         "name": {

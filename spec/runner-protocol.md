@@ -258,9 +258,24 @@ selects nothing yet.
 
 `doctor --json` prints a `DoctorOutput` to stdout and exits 0, even when unhealthy. It reports:
 - `runner_protocol.supported`: the protocol majors the runner speaks;
-- `health`: `healthy`, `unhealthy` (should work here but something is broken; this alerts) or `undetected` (this node
-  cannot run it; no alert, never offered);
-- `capabilities`, `attrs` (include `platform`) and per-check details.
+- `health`, the verdict on the module as a whole: `healthy`, `unhealthy` (should work here but something is broken;
+  this alerts) or `undetected` (this node cannot do the module's work; no alert). Only a `healthy` module is certified
+  on the node (its goldens run), so only then do the stages that need certification run there;
+- `capabilities`, `attrs` (include `platform`) and `checks`, each `{name, ok, detail}`.
+
+A doctor that prints a `DoctorOutput` shows that the module's runner starts on the node, so the agent offers the module
+whatever its health, and the stages that need no certification (bootstrap stages, and stages that compare nothing and
+need no capability or pool: [manifest.md](manifest.md#stages-that-run-before-certification)) run there. Checks decide
+which: **a check named after a capability** (a probe's name, or a capability one of the module's services provides)
+proves that capability for the module, and when it fails the node lacks it for the module's stages, whatever the probe
+or service reports; a stage requiring it waits, any other stage keeps running. Name a check after the capability it
+proves (`java17` for the JDK a `java17` probe also finds), and give checks that no stage depends on other names.
+`runner_protocol.disproved_capabilities(checks)` is the reference. A doctor that crashes, hangs or prints no
+`DoctorOutput` gets the module offered nowhere on that node.
+
+`detail` says why, in full: the agent and the coordinator keep it as it is and show it whole (`oarbank node show`, the
+console's node page). If a runner shortens a long one, it keeps the end, where the cause of a failed import or command
+usually is.
 
 The agent runs doctor at install, after upgrades, when capabilities change, and on a slow timer. It must finish within
 60 s.

@@ -548,13 +548,15 @@ class Stage(Contract):
     after: Name | None = Field(None, description="[stable] Stage whose output this stage consumes (its artifacts become inputs).")
     determinism: Determinism | None = Field(None, description=(
         "[beta] This stage's determinism (absent: results.determinism). `none`: its results depend on when it ran (an "
-        "ingestion job pulling a moving feed), so the host never replicates, compares, caches or golden-tests them. Only a "
-        "standalone stage sets it (a chain compares as results.determinism). Needs requires.core >= 2.3."))
+        "ingestion job pulling a moving feed), so the host never replicates, compares, caches or golden-tests them; when "
+        "the stage also needs no capability and no pool, its jobs run before the module is certified on a node, wherever "
+        "its runner starts. Only a standalone stage sets it (a chain compares as results.determinism). Needs "
+        "requires.core >= 2.3."))
     default: bool = Field(False, description=(
         "[beta] The default stage: what a job runs when it names no stage (the single-stage form). Only a standalone stage "
         "sets it; exactly one does when several stages are standalone. Needs requires.core >= 2.3."))
     bootstrap: bool = Field(False, description=(
-        "[beta] A bootstrap stage: its jobs run on nodes whose module doctor is healthy before the goldens pass, with only "
+        "[beta] A bootstrap stage: its jobs run on nodes where the module's runner starts, before the goldens pass, with only "
         "the module's egress allowlist (no tools, GPU, containers, module data or settings), and the host registers their "
         "output only when it is exactly datasets of [[datasets.pinned]]. A standalone stage, not the default one, with "
         "determinism none and no pools. Needs requires.core >= 2.4."))
@@ -886,6 +888,24 @@ class Manifest(Contract):
     def compares(self, stage: str | None) -> bool:
         """Whether the host compares this stage's results (replicas, disputes, the result cache, goldens)."""
         return self.determinism_of(stage) != "none"
+
+    def certification_exempt(self, stage: str | None) -> bool:
+        """Whether jobs of this stage run on a node before the module is certified there (spec/manifest.md, "Stages that
+        run before certification"; None: the default stage): a bootstrap stage, or a stage that compares nothing
+        (effective determinism `none`) and needs no node capability and no pool. Such jobs run on any node where the
+        module's runner starts (its doctor ran), unless a failed doctor check proves a capability the stage requires."""
+        st = self.stage(stage or self.default_stage() or "")
+        if st is None:
+            return False
+        if st.bootstrap:
+            return True
+        r = st.requires
+        return not self.compares(st.name) and not (r.capabilities or r.pools or r.needs_pools)
+
+    def capability_names(self) -> set[str]:
+        """Every node capability the module names: its probes and what its services provide (rule 2: a stage requires
+        only these). A doctor check of the same name proves the capability (runner_protocol.DoctorCheck)."""
+        return {c for svc in self.services for c in svc.provides.capabilities} | {p.name for p in self.probes}
 
     def secrets_of(self, stage: str | None) -> list[str]:
         """The secrets a stage's runner receives (None: the default stage)."""
