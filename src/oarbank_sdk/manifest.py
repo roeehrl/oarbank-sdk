@@ -37,6 +37,7 @@ SDK13_KEYS_CORE = (2, 3)          # stage determinism and default, structured ti
 BOOTSTRAP_KEYS_CORE = (2, 4)      # bootstrap stages and the pinned dataset table (SDK 1.4)
 SDK15_KEYS_CORE = (2, 5)          # SDK 1.5: secrets, signed container image sets, the container GPU pool, service
                                   # endpoints and GPU use, folder grants, portable checkpoints, artifact_ref
+SDK16_KEYS_CORE = (2, 10)         # SDK 1.6: workloads (supervised long-running daemons, seat leases) and workload reports
 KNOWN_FEATURES = ("placement",)          # requires.features this SDK understands (must-understand)
 ENV_NAME = r"^[A-Z][A-Z0-9_]*$"
 # Variables the agent or the host sets itself (spec/runner-protocol.md, spec/platforms.md "Environment per OS"); a
@@ -171,6 +172,9 @@ class Requires(Contract):
     module_protocol: list[int] = Field(description="[stable] Module protocol majors the coordinator side speaks.")
     runner_protocol: list[int] = Field(default_factory=lambda: [1], description="[stable] Runner protocol majors the runner speaks.")
     service_protocol: list[int] = Field(default_factory=list, description="[stable] Service protocol majors (only when services/probes are declared).")
+    workload_protocol: list[int] = Field(default_factory=list, description=(
+        "[beta] Workload protocol majors (only when workloads are declared; spec/workload-protocol.md). Needs "
+        "requires.core >= 2.10."))
     experimental: list[str] = Field(default_factory=list, description="[stable] Opt-ins to experimental contract items; any opt-in blocks the verified badge.")
     ui_contract: VersionRange | None = Field(None, description="[beta] UI contract versions the module's pages use, e.g. '>=1.0,<2' (spec/ui-contract.md).")
     coordinator_platforms: list[PlatformToken] | None = Field(None, min_length=1, description=(
@@ -459,6 +463,10 @@ class Coordinator(Contract):
         default_factory=lambda: {"default": 10.0}, description="[stable] Per-verb timeouts; key `default` applies to unlisted verbs.")
     permissions: list[Permission] = Field(default_factory=list, description="[stable] Host callbacks the module may call; everything else is denied.")
     campaign_effects: list[EffectKind] = Field(default_factory=list, description="[beta] Effects campaign.tick may request (requires the campaign.tick capability).")
+    workload_effects: list[Literal["store.write", "store.delete", "files.write", "files.put", "files.delete"]] = Field(
+        default_factory=list, description=(
+            "[beta] Effects workload.report may request: the module's own records only (requires the workload.report "
+            "capability and requires.core >= 2.10)."))
     move: MoveSection = Field(default_factory=MoveSection)
     env: EnvMap = Field(default_factory=dict, description=(
         "[beta] Extra environment for the coordinator process (names `^[A-Z][A-Z0-9_]*$`, never a reserved name). The host "
@@ -666,6 +674,74 @@ class Probe(Contract):
     platforms: list[PlatformToken] = Field(default_factory=list, description="[beta] Only on these platforms (empty: every declared platform).")
 
 
+WORKLOAD_CONTROL = ("cooperative_throttle", "cooperative_pause", "freeze_ok")   # what a workload lets the agent do
+WORKLOAD_REPORT = "workload.report"                                            # the coordinator capability
+
+
+class WorkloadResources(Contract):
+    """What a running workload holds: counted against the node's capacity while it runs. [beta]"""
+    cpu_cores: Annotated[float, Field(ge=0, le=1024)] = Field(1.0, description="[beta] Cores it uses at full speed.")
+    mem_gb: Annotated[float, Field(ge=0, le=4096)] = Field(0.5, description="[beta] Memory it holds (GB).")
+
+
+class WorkloadRestart(Contract):
+    """How the agent restarts a workload that exits or fails its health check. [beta]"""
+    backoff_initial_s: Annotated[float, Field(gt=0)] = 10.0
+    backoff_max_s: Annotated[float, Field(gt=0)] = 600.0
+    max_failures: Annotated[int, Field(ge=1)] = Field(5, description="[beta] Consecutive failures before it is withdrawn (until a restart operation, a new version or a reassignment).")
+    jitter: Literal["full", "none"] = Field("full", description="[beta] `full`: each delay is uniform between 0 and the exponential backoff (AWS full jitter).")
+
+
+class WorkloadHealth(Contract):
+    """The agent's health check: `<exec> status` every period. [beta]"""
+    period_s: Annotated[float, Field(ge=5, le=3600)] = 15.0
+    timeout_s: Annotated[float, Field(gt=0, le=60)] = 5.0
+    failures: Annotated[int, Field(ge=1, le=20)] = Field(3, description="[beta] Consecutive unhealthy answers that end the run as a failure.")
+
+
+class Workload(Contract):
+    """A supervised long-running process that is the work itself: assigned to nodes by the owner, seat-based,
+    sandboxed with the module's grants, given its listed secrets, controlled through the runner control document, and
+    fleet work in host protection (spec/workload-protocol.md). [beta]"""
+    name: Name = Field(description="[beta] Unique among workloads and services; reports name it `<module>/<name>`.")
+    exec: Exec = Field(description=(
+        "[beta] argv (spec/manifest.md, \"Exec\"); the agent appends `run` (the long-running process, cwd its run "
+        "directory) or `status` (the health check). Usually the SDK's supervisor shim (oarbank_sdk.workload)."))
+    platforms: list[PlatformToken] = Field(default_factory=list, description="[beta] Only on these platforms (empty: every declared platform).")
+    seat: Literal["node", "fleet"] = Field("node", description=(
+        "[beta] `node`: the owner assigns it to nodes, one seat per node; `fleet`: the owner asks for a count and the "
+        "coordinator places the seats once on eligible nodes (it never moves one on its own)."))
+    identity: Literal["none", "per_node"] = Field("none", description=(
+        "[beta] `per_node`: the seat is named by the node's values of the workload's secrets and runs only under a "
+        "coordinator seat lease with a fence, so at most one node runs an identity at a time; every secret must be set "
+        "per node."))
+    secrets: list[Name] = Field(default_factory=list, description="[beta] Declared secrets delivered to this workload only, in OARBANK_SECRETS_FILE.")
+    listeners: list[Name] = Field(default_factory=list, description="[beta] Inbound listeners it serves through its endpoint channel ([sandbox].net.inbound).")
+    resources: WorkloadResources = Field(default_factory=WorkloadResources)
+    gpu: ServiceGPU = Field(default_factory=ServiceGPU, description="[beta] GPU use; not `none` needs sandbox.devices.gpu = 'compute'.")
+    control: list[Literal["cooperative_throttle", "cooperative_pause", "freeze_ok"]] = Field(default_factory=list, description=(
+        "[beta] What host protection may do besides stopping it: `cooperative_throttle` (it honours the control "
+        "document's `threads` and `gpu_duty`), `cooperative_pause` (it pauses itself on `pause`), `freeze_ok` (the "
+        "agent may freeze its process container)."))
+    pause_tolerance_s: Annotated[float, Field(ge=0, le=600)] | None = Field(None, description=(
+        "[beta] The longest pause its peers survive: protection stops and holds it instead of pausing longer. Default: 20 "
+        "when it can be paused (cooperative_pause or freeze_ok), else 0 (never paused)."))
+    stop_timeout_s: Annotated[float, Field(gt=0, le=600)] = Field(30.0, description="[beta] From the stop request to the kill.")
+    restart: WorkloadRestart = Field(default_factory=WorkloadRestart)
+    health: WorkloadHealth | None = Field(None, description="[beta] The `status` op's period; absent: a running process is healthy.")
+    reports: bool = Field(False, description=(
+        "[beta] Its `report` events reach the module's workload.report verb on the coordinator, whose effects keep the "
+        "module's own records (coordinator.workload_effects)."))
+
+    def pausable(self) -> bool:
+        return "cooperative_pause" in self.control or "freeze_ok" in self.control
+
+    def effective_pause_tolerance_s(self) -> float:
+        if self.pause_tolerance_s is not None:
+            return self.pause_tolerance_s
+        return 20.0 if self.pausable() else 0.0
+
+
 class Secret(Contract):
     """A credential the owner sets through the core, write-only (spec/manifest.md, "Secrets"): stored encrypted on the
     coordinator, never shown, delivered only to the runners of stages that list it and, with `secrets:read:self`, to
@@ -823,6 +899,7 @@ class Manifest(Contract):
     stages: list[Stage] = Field(min_length=1)
     services: list[Service] = Field(default_factory=list)
     probes: list[Probe] = Field(default_factory=list)
+    workloads: list[Workload] = Field(default_factory=list, description="[beta] Supervised long-running processes that are the work itself. Needs requires.core >= 2.10.")
     settings: Settings = Field(default_factory=Settings)
     secrets: list[Secret] = Field(default_factory=list, description="[beta] Write-only credentials. Needs requires.core >= 2.5.")
     results: Results
@@ -839,6 +916,7 @@ class Manifest(Contract):
         out = [self.coordinator.exec] + [v.exec for v in self.coordinator.variants.values() if v.exec]
         out += [self.runner.exec] + [v.exec for v in self.runner.variants.values() if v.exec]
         out += [s.exec for s in self.services] + [p.exec for p in self.probes] + ([self.cli.exec] if self.cli else [])
+        out += [w.exec for w in self.workloads]
         return out
 
     def core_keys_used(self) -> list[tuple[str, tuple[int, int]]]:
@@ -885,8 +963,14 @@ class Manifest(Contract):
             ("runner capability checkpoint", "checkpoint" in self.runner.capabilities),
             ("ui.views.columns[].type artifact_ref", any(c.type == "artifact_ref" for v in self.ui.views.values() for c in v.columns)),
         ]
+        sdk16 = [
+            ("workloads", bool(self.workloads)),
+            ("requires.workload_protocol", bool(self.requires.workload_protocol)),
+            ("the workload.report capability", WORKLOAD_REPORT in self.coordinator.capabilities),
+            ("coordinator.workload_effects", bool(self.coordinator.workload_effects)),
+        ]
         return (out + [(k, SDK13_KEYS_CORE) for k, on in sdk13 if on] + [(k, BOOTSTRAP_KEYS_CORE) for k, on in sdk14 if on]
-                + [(k, SDK15_KEYS_CORE) for k, on in sdk15 if on])
+                + [(k, SDK15_KEYS_CORE) for k, on in sdk15 if on] + [(k, SDK16_KEYS_CORE) for k, on in sdk16 if on])
 
     # ------------------------------------------------------------------------ stages
 
@@ -1002,7 +1086,7 @@ class Manifest(Contract):
             if key not in declared and key not in declared_os:
                 raise ValueError(f"runner variant {key!r} is neither a declared platform nor an OS of one")
         self._platform_rules(declared)
-        for what, items in (("service", self.services), ("probe", self.probes), ("stage", self.stages)):
+        for what, items in (("service", self.services), ("probe", self.probes), ("stage", self.stages), ("workload", self.workloads)):
             for it in items:
                 plats = it.requires.platforms if what == "stage" else it.platforms
                 bad = sorted(set(plats) - declared)
@@ -1069,6 +1153,7 @@ class Manifest(Contract):
         self._trust_rules()
         self._checkpoint_rules()
         self._gpu_api_rules()
+        self._workload_rules()
         if len(self.stages) > 1 and "result.merge" not in self.coordinator.capabilities:
             raise ValueError("a multi-stage module must implement result.merge (coordinator.capabilities)")
         if self.goldens and self.goldens.compare == "verb" and "golden.compare" not in self.coordinator.capabilities:
@@ -1233,10 +1318,58 @@ class Manifest(Contract):
                 raise ValueError(f"stage {st.name!r} reserves the gpu pool: declare runner.gpu.in_container = true and "
                                  "runner.gpu.use = 'shared' or 'exclusive' (GPU admission applies to its jobs)")
 
+    def _workload_rules(self):
+        """Workloads (spec/manifest.md, rule 23)."""
+        names = [w.name for w in self.workloads]
+        if len(set(names)) != len(names):
+            raise ValueError("workload names must be unique")
+        clash = sorted(set(names) & {s.name for s in self.services})
+        if clash:
+            raise ValueError(f"workloads {clash} share a name with a service: both are reported as <module>/<name>")
+        declared = {s.name for s in self.secrets}
+        inbound = {getattr(i, "name", None) for i in getattr(self.sandbox.net, "inbound", None) or []}
+        for w in self.workloads:
+            if len(set(w.secrets)) != len(w.secrets):
+                raise ValueError(f"workload {w.name!r}: a secret is listed twice")
+            unknown = [x for x in w.secrets if x not in declared]
+            if unknown:
+                raise ValueError(f"workload {w.name!r}: secrets {unknown} are not declared in [[secrets]]")
+            if w.identity == "per_node" and not w.secrets:
+                raise ValueError(f"workload {w.name!r}: identity = 'per_node' names its seat by the node's secrets, so it "
+                                 "lists at least one secret")
+            if w.gpu.use != "none" and self.sandbox.devices.gpu != "compute":
+                raise ValueError(f"workload {w.name!r}: gpu.use {w.gpu.use!r} needs sandbox.devices.gpu = 'compute'")
+            if w.gpu.apis_any and w.gpu.use == "none":
+                raise ValueError(f"workload {w.name!r}: gpu.apis_any needs use = 'shared' or 'exclusive'")
+            if len(set(w.control)) != len(w.control):
+                raise ValueError(f"workload {w.name!r}: a control item is listed twice")
+            missing = [x for x in w.listeners if x not in inbound]
+            if missing:
+                raise ValueError(f"workload {w.name!r}: listeners {missing} are not [sandbox].net.inbound entries")
+            if w.restart.backoff_max_s < w.restart.backoff_initial_s:
+                raise ValueError(f"workload {w.name!r}: restart.backoff_max_s is below backoff_initial_s")
+            if w.pause_tolerance_s and w.pause_tolerance_s > 0 and not w.pausable():
+                raise ValueError(f"workload {w.name!r}: pause_tolerance_s > 0 needs control cooperative_pause or freeze_ok "
+                                 "(a workload that cannot be paused is never paused)")
+        if self.workloads and not self.requires.workload_protocol:
+            raise ValueError("workloads are declared, so requires.workload_protocol must list a major")
+        reporting = [w.name for w in self.workloads if w.reports]
+        cap = WORKLOAD_REPORT in self.coordinator.capabilities
+        if reporting and not cap:
+            raise ValueError(f"workloads {reporting} send reports, so coordinator.capabilities lists {WORKLOAD_REPORT}")
+        if cap and not reporting:
+            raise ValueError(f"the {WORKLOAD_REPORT} capability needs a workload with reports = true")
+        if self.coordinator.workload_effects and not cap:
+            raise ValueError(f"coordinator.workload_effects requires the {WORKLOAD_REPORT} capability")
+
+    def workload(self, name: str) -> "Workload | None":
+        return next((w for w in self.workloads if w.name == name), None)
+
     def _gpu_api_rules(self):
         """GPU APIs select nodes only for GPU work (spec/manifest.md, rule 21)."""
         needs = [("runner.gpu", self.runner.gpu)] + [(f"runner.variants.{k}.gpu", v.gpu) for k, v in self.runner.variants.items() if v.gpu]
         needs += [(f"services.{s.name}.gpu", s.gpu) for s in self.services]
+        needs += [(f"workloads.{w.name}.gpu", w.gpu) for w in self.workloads]
         for where, g in needs:
             if g.apis_any and g.use == "none":
                 raise ValueError(f"{where}.apis_any needs use = 'shared' or 'exclusive': it places GPU work, and with "
@@ -1296,6 +1429,7 @@ class Manifest(Contract):
                 execs = [("runner", self.runner.for_platform(p).exec)]
                 execs += [(f"service {s.name}", s.exec) for s in self.services if pf.matches(p, s.platforms)]
                 execs += [(f"probe {x.name}", x.exec) for x in self.probes if pf.matches(p, x.platforms)]
+                execs += [(f"workload {w.name}", w.exec) for w in self.workloads if pf.matches(p, w.platforms)]
                 for what, argv in execs:               # argv[0], and the script a `python` exec runs
                     for a in argv:
                         if a.startswith(BUNDLE_TOKEN + "/") and not self.bundle.receives(a[len(BUNDLE_TOKEN) + 1:], p):
@@ -1344,6 +1478,13 @@ def lint(man: Manifest) -> list[str]:
                    "egress-allowlist naming only the service the key is for limits that")
     gpus = [("runner.gpu", man.runner.gpu)] + [(f"runner.variants.{k}.gpu", v.gpu) for k, v in man.runner.variants.items() if v.gpu]
     gpus += [(f"services.{s.name}.gpu", s.gpu) for s in man.services]
+    gpus += [(f"workloads.{w.name}.gpu", w.gpu) for w in man.workloads]
+    if man.workloads and man.sandbox.net.mode == "egress-any" and "linux" in man.requires.os_platforms():
+        out.append("workloads run with sandbox.net.mode 'egress-any', which Linux nodes cannot enforce: the core places them "
+                   "on macOS and Windows nodes only")
+    if man.sandbox.net.mode == "egress-any" and any(w.secrets for w in man.workloads):
+        out.append("workloads receive secrets while sandbox.net.mode is 'egress-any': a leaked key can reach any host; an "
+                   "egress-allowlist naming only the endpoints the key is for limits that")
     for where, g in gpus:
         unknown = [a for a in g.apis_any if a not in gpu.KNOWN_APIS]
         if unknown:

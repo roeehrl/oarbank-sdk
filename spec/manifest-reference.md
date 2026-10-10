@@ -28,6 +28,7 @@ Cross-field rules are in [manifest.md](manifest.md).
 | `requires.module_protocol` | list of int | required | [stable] Module protocol majors the coordinator side speaks. |
 | `requires.runner_protocol` | list of int | `[1]` | [stable] Runner protocol majors the runner speaks. |
 | `requires.service_protocol` | list of int | `[]` | [stable] Service protocol majors (only when services/probes are declared). |
+| `requires.workload_protocol` | list of int | `[]` | [beta] Workload protocol majors (only when workloads are declared; spec/workload-protocol.md). Needs requires.core >= 2.10. |
 | `requires.experimental` | list of str | `[]` | [stable] Opt-ins to experimental contract items; any opt-in blocks the verified badge. |
 | `requires.ui_contract` | str (optional) |  | [beta] UI contract versions the module's pages use, e.g. '>=1.0,<2' (spec/ui-contract.md). |
 | `requires.coordinator_platforms` | list of str (optional) |  | [beta] Platforms the coordinator side runs on (the coordinator host's platform); `platforms` lists node platforms only. Absent: any platform. A core refuses to install or enable the module on a coordinator host not listed, and blocks a coordinator move to one. Needs requires.core >= 2.2. |
@@ -46,6 +47,7 @@ Cross-field rules are in [manifest.md](manifest.md).
 | `coordinator.timeouts_s` | table str → float | `{"default": 10.0}` | [stable] Per-verb timeouts; key `default` applies to unlisted verbs. |
 | `coordinator.permissions` | list of `"datasets:read"` \| `"blobs:stat"` \| `"settings:read:self"` \| `"store:read:self"` \| `"nodes:read"` \| `"jobs:read:self"` \| `"files:read:self"` \| `"secrets:read:self"` | `[]` | [stable] Host callbacks the module may call; everything else is denied. |
 | `coordinator.campaign_effects` | list of `"jobs.enqueue"` \| `"jobs.cancel"` \| `"campaigns.create"` \| `"campaigns.update"` \| `"campaigns.cancel"` \| `"datasets.create"` \| `"datasets.update"` \| `"datasets.delete"` \| `"module_settings.update"` \| `"store.write"` \| `"store.delete"` \| `"files.write"` \| `"files.put"` \| `"files.delete"` \| `"external"` | `[]` | [beta] Effects campaign.tick may request (requires the campaign.tick capability). |
+| `coordinator.workload_effects` | list of `"store.write"` \| `"store.delete"` \| `"files.write"` \| `"files.put"` \| `"files.delete"` | `[]` | [beta] Effects workload.report may request: the module's own records only (requires the workload.report capability and requires.core >= 2.10). |
 | `coordinator.move` | MoveSection | `"rules=[] effects=[]"` |  |
 | `coordinator.move.rules` | list of MoveRule | `[]` | [beta] The first matching rule wins; unmatched state is carried. |
 | `coordinator.move.rules[].files` | str (optional) |  | [beta] A path prefix in the module's files ('' = all of them). |
@@ -150,6 +152,33 @@ Cross-field rules are in [manifest.md](manifest.md).
 | `probes[].exec` | list of str | required |  |
 | `probes[].period_s` | float | `3600.0` |  |
 | `probes[].platforms` | list of str | `[]` | [beta] Only on these platforms (empty: every declared platform). |
+| `workloads` | list of Workload | `[]` | [beta] Supervised long-running processes that are the work itself. Needs requires.core >= 2.10. |
+| `workloads[].name` | str | required | [beta] Unique among workloads and services; reports name it `<module>/<name>`. |
+| `workloads[].exec` | list of str | required | [beta] argv (spec/manifest.md, "Exec"); the agent appends `run` (the long-running process, cwd its run directory) or `status` (the health check). Usually the SDK's supervisor shim (oarbank_sdk.workload). |
+| `workloads[].platforms` | list of str | `[]` | [beta] Only on these platforms (empty: every declared platform). |
+| `workloads[].seat` | `"node"` \| `"fleet"` | `"node"` | [beta] `node`: the owner assigns it to nodes, one seat per node; `fleet`: the owner asks for a count and the coordinator places the seats once on eligible nodes (it never moves one on its own). |
+| `workloads[].identity` | `"none"` \| `"per_node"` | `"none"` | [beta] `per_node`: the seat is named by the node's values of the workload's secrets and runs only under a coordinator seat lease with a fence, so at most one node runs an identity at a time; every secret must be set per node. |
+| `workloads[].secrets` | list of str | `[]` | [beta] Declared secrets delivered to this workload only, in OARBANK_SECRETS_FILE. |
+| `workloads[].listeners` | list of str | `[]` | [beta] Inbound listeners it serves through its endpoint channel ([sandbox].net.inbound). |
+| `workloads[].resources` | WorkloadResources | `"cpu_cores=1.0 mem_gb=0.5"` |  |
+| `workloads[].resources.cpu_cores` | float | `1.0` | [beta] Cores it uses at full speed. |
+| `workloads[].resources.mem_gb` | float | `0.5` | [beta] Memory it holds (GB). |
+| `workloads[].gpu` | ServiceGPU | `"use='none' apis_any=[]"` | [beta] GPU use; not `none` needs sandbox.devices.gpu = 'compute'. |
+| `workloads[].gpu.use` | `"none"` \| `"shared"` \| `"exclusive"` | `"none"` | [beta] A running service that is not `none` is GPU-resident fleet work: host protection stops it, when yieldable, while GPU work may not run, and a job reserving one of its pools is a GPU job. Needs sandbox.devices.gpu = 'compute' and requires.core >= 2.5. |
+| `workloads[].gpu.apis_any` | list of str | `[]` | [beta] Any of these GPU APIs; jobs run only on nodes providing one (open set; detected: cuda, directml, metal, opencl, rocm, vulkan). Needs `use` shared or exclusive and requires.core >= 2.5. |
+| `workloads[].control` | list of `"cooperative_throttle"` \| `"cooperative_pause"` \| `"freeze_ok"` | `[]` | [beta] What host protection may do besides stopping it: `cooperative_throttle` (it honours the control document's `threads` and `gpu_duty`), `cooperative_pause` (it pauses itself on `pause`), `freeze_ok` (the agent may freeze its process container). |
+| `workloads[].pause_tolerance_s` | float (optional) |  | [beta] The longest pause its peers survive: protection stops and holds it instead of pausing longer. Default: 20 when it can be paused (cooperative_pause or freeze_ok), else 0 (never paused). |
+| `workloads[].stop_timeout_s` | float | `30.0` | [beta] From the stop request to the kill. |
+| `workloads[].restart` | WorkloadRestart | `"backoff_initial_s=10.0 backoff_max_s=600.0 max_failures=5 jitter='full'"` |  |
+| `workloads[].restart.backoff_initial_s` | float | `10.0` |  |
+| `workloads[].restart.backoff_max_s` | float | `600.0` |  |
+| `workloads[].restart.max_failures` | int | `5` | [beta] Consecutive failures before it is withdrawn (until a restart operation, a new version or a reassignment). |
+| `workloads[].restart.jitter` | `"full"` \| `"none"` | `"full"` | [beta] `full`: each delay is uniform between 0 and the exponential backoff (AWS full jitter). |
+| `workloads[].health` | WorkloadHealth (optional) |  | [beta] The `status` op's period; absent: a running process is healthy. |
+| `workloads[].health.period_s` | float | `15.0` |  |
+| `workloads[].health.timeout_s` | float | `5.0` |  |
+| `workloads[].health.failures` | int | `3` | [beta] Consecutive unhealthy answers that end the run as a failure. |
+| `workloads[].reports` | bool | `false` | [beta] Its `report` events reach the module's workload.report verb on the coordinator, whose effects keep the module's own records (coordinator.workload_effects). |
 | `settings` | Settings | `"schema_=None"` |  |
 | `settings.schema` | str (optional) |  | [stable] JSON Schema (bundle path) whose properties are the module's settings: each one's type, default and constraints, title and description, and an `x-oarbank` annotation (scope fleet or node, required, unit, advanced, campaign). The core validates every value against it and hands node-scoped values to the module's runners and services (spec/manifest.md, "Settings"). |
 | `secrets` | list of Secret | `[]` | [beta] Write-only credentials. Needs requires.core >= 2.5. |
