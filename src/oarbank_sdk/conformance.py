@@ -455,6 +455,7 @@ def check_protocol(root: Path, man, fx: dict, r: Report):
                 if good:
                     runs.append((nc, g, st, b1["specs"][0]))
         check_lifecycle_verbs(cli, man, adv, r)
+        check_workload_report(cli, man, fx, adv, r)
         if man.secrets:
             leaked = _leaked([_canon(a) for a in answers], fx.get(CANARIES) or {})
             r.add("protocol", "no secret in any verb's answer (specs, goldens, plans)", not leaked,
@@ -497,6 +498,32 @@ def check_lifecycle_verbs(cli, man, adv: set, r: Report):
         if verb == "integrity.check":
             r.add("protocol", "integrity.check passes on the fixtures", res.ok,
                   "; ".join(f"{c.name}: {c.detail}" for c in res.checks if not c.ok and c.severity == "error")[:300])
+
+
+def check_workload_report(cli, man, fx: dict, adv: set, r: Report):
+    """`workload.report` (spec/module-protocol.md, "Workload reports"): fed the fixtures' `workload_reports` (report
+    `data` objects) as one delivery from a reporting workload, it answers a valid result, is pure (a repeated delivery
+    asks for the same effects) and asks only for the effects coordinator.workload_effects declares."""
+    if mf.WORKLOAD_REPORT not in adv:
+        return
+    w = next((w for w in man.workloads if w.reports), None)
+    datas = fx.get("workload_reports") or []
+    if w is None or not datas:
+        r.add("protocol", "workload.report", None, "the fixtures name no `workload_reports` (report data objects) to deliver")
+        return
+    params = {"workload": w.name, "node": "n_conform", "seat_id": "s_conform" if w.identity == "per_node" else None,
+              "fence": 1 if w.identity == "per_node" else None,
+              "events": [{"seq": i + 1, "t": 1_700_000_000.0 + i, "data": d} for i, d in enumerate(datas)]}
+    try:
+        a, b = cli.call("workload.report", params), cli.call("workload.report", params)
+        res = mp.WorkloadReportResult.model_validate(a)
+    except Exception as e:                              # noqa: BLE001
+        r.add("protocol", "workload.report answers", False, f"{type(e).__name__}: {e}"[:300])
+        return
+    r.add("protocol", "workload.report pure (a repeated delivery asks for the same effects)", _canon(a) == _canon(b))
+    bad = sorted({e.kind for e in res.effects} - set(man.coordinator.workload_effects))
+    r.add("protocol", "workload.report effects declared", not bad,
+          f"not in coordinator.workload_effects: {bad}" if bad else f"{len(res.effects)} effect(s) for {len(datas)} report(s)")
 
 
 def check_operations(cli, man, fx: dict, r: Report):

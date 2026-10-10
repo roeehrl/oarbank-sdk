@@ -115,3 +115,47 @@ def test_the_cli_runs_only_the_workload_suite(capsys):
 def test_a_module_without_workloads_skips_the_suite():
     rep = C.conform_workloads(Path(__file__).parents[1] / "examples" / "toy")
     assert rep.ok and names(rep, "skip") == {"workloads"}
+
+
+EXAMPLE = Path(__file__).parents[1] / "examples" / "workload"
+
+
+@POSIX
+def test_the_workload_reference_module_conforms():
+    """examples/workload passes every suite, the workload suite and workload.report included."""
+    rep = C.conform(EXAMPLE)
+    assert rep.ok, rep.text()
+    passed = names(rep, "pass")
+    assert {"workload worker: keeps running after it starts", "workload worker: `status` answers healthy within "
+            "health.timeout_s", "workload worker: survives a freeze of its process container (freeze_ok)",
+            "workload worker: stays in its process container", "workload worker: never listens",
+            "workload worker: a stop ends it within stop_timeout_s", "workload.report effects declared",
+            "workload.report pure (a repeated delivery asks for the same effects)"} <= passed, rep.text()
+    assert {c.suite for c in rep.checks} >= {"manifest", "bundle", "protocol", "ui", "runner", "workload"}
+    assert not strays()
+
+
+def test_workload_report_effects_outside_workload_effects_fail(tmp_path):
+    d = tmp_path / "workload"
+    shutil.copytree(EXAMPLE, d, ignore=shutil.ignore_patterns("__pycache__"))
+    m = (d / "oarbank-module.toml").read_text(encoding="utf-8").replace('workload_effects = ["store.write"]',
+                                                                         'workload_effects = ["files.write"]')
+    (d / "oarbank-module.toml").write_text(m, encoding="utf-8", newline="\n")
+    rep = C.conform(d, runner=False)
+    assert "workload.report effects declared" in names(rep, "fail"), rep.text()
+
+
+def test_the_example_records_one_document_per_report_keyed_by_seq():
+    import sys
+    from oarbank_sdk.client import ModuleClient
+    cli = ModuleClient.spawn([sys.executable, "-I", str(EXAMPLE / "workload_module.py")], cwd=EXAMPLE)
+    try:
+        cli.initialize()
+        out = cli.call("workload.report", {"workload": "worker", "node": "n_a", "events": [
+            {"seq": 7, "t": 1.0, "data": {"unit": "s-1", "amount": 137}},
+            {"seq": 8, "t": 2.0, "data": {"note": "not a unit"}}]})
+    finally:
+        cli.close()
+    assert [(e["kind"], e["args"]["collection"], e["args"]["key"]) for e in out["effects"]] == [
+        ("store.write", "units", "n_a.worker.7")]
+    assert out["effects"][0]["args"]["doc"]["amount"] == 137 and "1 report(s) skipped" in out["message"]
