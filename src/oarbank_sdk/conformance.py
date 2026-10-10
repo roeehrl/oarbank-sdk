@@ -268,7 +268,8 @@ def check_settings(root: Path, man, fx: dict, r: Report) -> dict:
     r.add("settings", "fixtures validate", not bad, "; ".join(bad[:3]))
     missing = [k.name for k in sch.keys if k.required and k.name not in given]
     r.add("settings", "required settings have fixture values", not missing,
-          f"set {', '.join(missing)} in the fixtures' settings (the core holds the module's work until the owner sets them)")
+          f"set {', '.join(missing)} in the fixtures' settings (the core holds the module's work until the owner sets them)"
+          if missing else "")
     return {"settings": S.effective(sch.keys, given), NODE_SETTINGS: S.effective(sch.keys, given, "node")}
 
 
