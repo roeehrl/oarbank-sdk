@@ -33,6 +33,13 @@ def test_keys_carry_type_scope_default_and_the_owners_words():
     assert S.SettingKey.from_dict(vm.as_dict()) == vm
 
 
+def test_a_key_a_campaign_may_override():
+    (k, j) = S.parse(schema(depth={"type": "integer", "default": 2, "x-oarbank": {"scope": "node", "campaign": True}},
+                            n={"type": "integer"})).keys
+    assert (k.campaign, j.campaign) == (True, False)
+    assert S.SettingKey.from_dict(k.as_dict()) == k
+
+
 def test_the_schemas_required_list_marks_keys_required():
     sch = S.parse({**schema(token_count={"type": "integer"}, x={"type": "boolean"}), "required": ["token_count"]})
     assert [k.required for k in sch.keys] == [True, False]
@@ -50,7 +57,8 @@ def test_values_validate_against_the_whole_property_schema():
 @pytest.mark.parametrize("props, match", [
     ({"Bad-Name": {"type": "integer"}}, "lower-case"),
     ({"n": {"type": "integer", "x-oarbank": {"scope": "group"}}}, "scope must be fleet or node"),
-    ({"n": {"type": "integer", "x-oarbank": {"campaign": True}}}, "unknown x-oarbank fields"),
+    ({"n": {"type": "integer", "x-oarbank": {"campaigns": True}}}, "unknown x-oarbank fields"),
+    ({"n": {"type": "integer", "x-oarbank": {"campaign": "yes"}}}, "campaign must be true or false"),
     ({"n": {"type": "integer", "default": "x"}}, "default does not validate"),
     ({"n": {"type": "integer", "default": 1, "x-oarbank": {"required": True}}}, "required setting has no default"),
     ({"n": {"type": ["integer", "string"]}}, "type must be one of"),

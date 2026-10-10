@@ -21,7 +21,7 @@ def test_old_messages_still_validate_and_new_fields_are_optional():
     with pytest.raises(ValidationError):
         mp.PlanItem(key_inputs={}, platforms=["Linux"])
     assert set(mp.HOST_CAPABILITIES) == {"placement.v1", "nodes.platform", "goldens.by_platform", "coordinator.variants", "jobs.stage",
-                                         "datasets.origins"}
+                                         "datasets.origins", "campaign_settings.v1"}
 
 
 def test_golden_resolution_per_platform():
@@ -62,6 +62,8 @@ def test_effect_builders_for_placement():
     assert e.kind == "campaigns.create" and e.args == {"campaign_id": "c_bench_linux_amd64", "name": "bench linux", "priority": 0,
                                                        "weight": 1, "placement": {"mix": "same-platform", "pin": "linux-amd64"}}
     assert "placement" not in fx.campaign_create("c_old", "x").args
+    assert fx.campaign_create("c_deep", "x", settings={"depth": 4}).args["settings"] == {"depth": 4}
+    assert fx.campaign_settings("c_deep", {"depth": None}).kind == "campaigns.update"
     with pytest.raises(ValueError):
         fx.campaign_create("Bad-Id", "x")
     j = fx.job("k" * 64, {"n": 1}, group="atrium", platforms=["linux", "darwin-arm64"], labels={"n": 1})

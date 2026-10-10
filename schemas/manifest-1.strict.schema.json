@@ -2227,7 +2227,7 @@
             }
           ],
           "default": null,
-          "description": "[stable] JSON Schema (bundle path) whose properties are the module's settings: each one's type, default and constraints, title and description, and an `x-oarbank` annotation (scope fleet or node, required, unit, advanced). The core validates every value against it and hands node-scoped values to the module's runners and services (spec/manifest.md, \"Settings\").",
+          "description": "[stable] JSON Schema (bundle path) whose properties are the module's settings: each one's type, default and constraints, title and description, and an `x-oarbank` annotation (scope fleet or node, required, unit, advanced, campaign). The core validates every value against it and hands node-scoped values to the module's runners and services (spec/manifest.md, \"Settings\").",
           "title": "Schema"
         }
       },

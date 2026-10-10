@@ -15,6 +15,9 @@ JSON Schema (type, `default`, `minimum`, `enum`, `pattern`, ... ) is what the co
 - `required`: the owner must set it before the module's work runs (also accepted: the schema's own `required` list).
   A required key has no default.
 - `unit` (a short word beside the value), `advanced` (shown under the section's Advanced disclosure).
+- `campaign`: a campaign of the module may override it while it runs (`campaigns.create` / `campaigns.update`
+  `settings`, or the owner on the campaign's page), bounded by the owner's locks. A campaign's value reaches that
+  campaign's jobs only: its runners (a `node` key, in `OARBANK_SETTINGS_FILE`) and `campaign.tick` (`campaign.settings`).
 
 Credentials are never settings: settings are stored and shown in clear. Declare them in `[[secrets]]`.
 
@@ -30,7 +33,7 @@ from typing import Any
 SCOPES = ("fleet", "node")
 TYPES = ("boolean", "integer", "number", "string", "array", "object")
 NAME = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
-ANNOTATIONS = {"scope", "required", "unit", "advanced"}
+ANNOTATIONS = {"scope", "required", "unit", "advanced", "campaign"}
 MAX_KEYS = 128
 # keys the core already has per module: the owner sets them as `[module] <key>` (spec/manifest.md, "Settings")
 CORE_QUALIFIED = ("enabled", "pipeline", "replica_rate", "services")
@@ -59,11 +62,13 @@ class SettingKey:
     advanced: bool = False
     default: Any = None
     has_default: bool = False
+    campaign: bool = False            # a campaign may override it while it runs
 
     def as_dict(self) -> dict:
         return {"name": self.name, "schema": self.schema, "type": self.type, "nullable": self.nullable, "scope": self.scope,
                 "required": self.required, "label": self.label, "help": self.help, "unit": self.unit,
-                "advanced": self.advanced, "default": self.default, "has_default": self.has_default}
+                "advanced": self.advanced, "default": self.default, "has_default": self.has_default,
+                "campaign": self.campaign}
 
     @classmethod
     def from_dict(cls, d: dict) -> "SettingKey":
@@ -161,6 +166,10 @@ def parse(doc, source: str = "settings schema") -> SettingsSchema:
         if not isinstance(advanced, bool):
             errors.append(f"{where}: x-oarbank.advanced must be true or false")
             continue
+        campaign = ann.get("campaign", False)
+        if not isinstance(campaign, bool):
+            errors.append(f"{where}: x-oarbank.campaign must be true or false")
+            continue
         label, help_ = p.get("title") or "", p.get("description") or ""
         if not isinstance(label, str) or not isinstance(help_, str) or len(label) > 80 or len(help_) > 500:
             errors.append(f"{where}: title (at most 80 characters) and description (at most 500) are text")
@@ -168,7 +177,7 @@ def parse(doc, source: str = "settings schema") -> SettingsSchema:
         has_default = "default" in p
         k = SettingKey(name=name, schema=p, type=real[0], nullable="null" in ts, scope=scope, required=required,
                        label=label or name.replace("_", " ").capitalize(), help=help_, unit=unit, advanced=advanced,
-                       default=copy.deepcopy(p.get("default")), has_default=has_default)
+                       default=copy.deepcopy(p.get("default")), has_default=has_default, campaign=campaign)
         if has_default:
             why = check_value(k, k.default)
             if why:
