@@ -1,0 +1,69 @@
+# workload: the reference module for workloads (spec/workload-protocol.md). A workload `worker` runs a stand-in
+# third-party daemon (unitd.py, which processes work units in a loop) under the SDK's supervisor shim (worker.py): the
+# agent may throttle it (a thread limit the daemon is restarted with) and freeze it, asks it `status`, and every unit it
+# finishes becomes a report the coordinator keeps in the module's own `units` records. A `tally` stage adds up amounts,
+# so the module also has jobs, goldens and a runner like any other.
+manifest = 1
+
+[module]
+id = "dev.codonic.oarbank.workload"
+version = "0.1.0"
+compat = "workload1"
+publisher = "oarbank"
+license = "Apache-2.0"
+codeowners = ["roeehrl"]
+stability = "beta"
+description = "A supervised long-running workload whose units of work become the module's own records"
+
+[requires]
+core = ">=2.10,<3"
+platforms = ["darwin-arm64", "darwin-amd64", "linux-arm64", "linux-amd64", "windows-arm64", "windows-amd64"]
+module_protocol = [1]
+runner_protocol = [1]
+workload_protocol = [1]
+ui_contract = ">=1.0,<2"
+
+[coordinator]
+exec = ["python", "-I", "{bundle}/workload_module.py"]
+runtime = { kind = "python" }
+capabilities = ["workload.report"]
+workload_effects = ["store.write"]
+
+[runner]
+exec = ["python", "-I", "{bundle}/workload_runner.py"]
+runtime = { kind = "python" }
+capabilities = ["deterministic_output"]
+
+[[stages]]
+name = "tally"
+timeout_s = 60
+requires.resources = { cpu = 1, mem_gb = 0.1 }
+
+[[workloads]]
+name = "worker"
+exec = ["python", "-I", "{bundle}/worker.py"]       # the agent appends `run` or `status`
+seat = "node"
+identity = "none"
+resources = { cpu_cores = 1, mem_gb = 0.2 }
+control = ["cooperative_throttle", "freeze_ok"]     # a thread limit, and the agent may freeze its container
+pause_tolerance_s = 60
+stop_timeout_s = 15
+restart = { backoff_initial_s = 10, backoff_max_s = 600, max_failures = 5, jitter = "full" }
+health = { period_s = 15, timeout_s = 5, failures = 3 }
+reports = true                                       # each finished unit reaches workload.report
+
+[results]
+schema = "schemas/result.schema.json"
+schema_version = 1
+determinism = "exact"
+digest = { version = 1, over = ["total"] }
+value = { field = "total", direction = "maximize" }
+fields = [{ name = "total", type = "integer", ui = { column = "Total", format = ",d" } }]
+
+[goldens]
+fixtures = "goldens/*.json"
+
+[ui]
+digest_line = "total = {total:,d}"
+icon = "bolt"
+pages = [{ id = "overview", title = "Work units", slot = "module.overview", file = "ui/pages/overview.json" }]

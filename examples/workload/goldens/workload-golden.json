@@ -1,0 +1,14 @@
+{
+ "name": "workload-golden",
+ "key_inputs": {
+  "amounts": [1200, 800, 450]
+ },
+ "expected": {
+  "digest": "b0b03d744a85f4459c71437fe196dd925a299a06ae7a425615c903c97c36b8fb",
+  "digest_version": 1
+ },
+ "stages": [
+  "tally"
+ ],
+ "datasets": []
+}
