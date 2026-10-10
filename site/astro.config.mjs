@@ -78,11 +78,11 @@ export default defineConfig({
           // The default collapses all prose whitespace, which turns tables and
           // step lists into one line per page. Keep the line structure.
           minify: { whitespace: false },
-          // The abridged set is the guides without the normative specification,
-          // which has its own set and is most of the text.
-          exclude: ['spec/**', 'reference/**'],
+          // The abridged set is the guides and the operator references, without the
+          // normative specification and schemas, which have their own set and are most of the text.
+          exclude: ['spec/**', 'reference/manifest', 'reference/schemas/**'],
           customSets: [
-            { label: 'Operate', description: 'Install, run and maintain an Oarbank fleet.', paths: ['operate/**', 'get-started/**', 'concepts/**'] },
+            { label: 'Operate', description: 'Install, run and maintain an Oarbank fleet.', paths: ['operate/**', 'get-started/**', 'concepts/**', 'reference/cli', 'reference/reason-codes'] },
             { label: 'Build modules', description: 'Write, test and ship modules with the open SDK.', paths: ['build/**'] },
             { label: 'Specification', description: 'The normative public contracts.', paths: ['spec/**', 'reference/**'] },
           ],

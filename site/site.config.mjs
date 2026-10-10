@@ -102,7 +102,7 @@ export const SECTIONS = [
   { dir: 'concepts', label: 'Concepts' },
   { dir: 'operate', label: 'Operate' },
   { dir: 'build', label: 'Build modules' },
-  { dir: 'reference', label: 'Reference', pages: ['reference/manifest'], groups: [{ dir: 'schemas', label: 'JSON Schemas' }] },
+  { dir: 'reference', label: 'Reference', pages: ['reference/cli', 'reference/reason-codes', 'reference/manifest'], groups: [{ dir: 'schemas', label: 'JSON Schemas' }] },
   { dir: 'spec', label: 'Specification' },
 ];
 
