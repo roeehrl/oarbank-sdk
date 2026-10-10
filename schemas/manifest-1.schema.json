@@ -764,6 +764,134 @@
       "title": "IframeDecl",
       "type": "object"
     },
+    "InboundListener": {
+      "additionalProperties": true,
+      "description": "A listener the agent opens on nodes the owner assigns: it accepts TCP connections from the internet and hands each\none to the endpoint service that lists the listener (spec/sandbox.md, \"Inbound listeners\"). Module code still never\nlistens. The limits are the module's ceilings; the owner may lower them per node, never raise them. [beta]",
+      "properties": {
+        "handover": {
+          "default": "connections",
+          "description": "[beta] `connections`: each connection arrives on the service's endpoint channel (every OS). `listen_fd` (macOS and Linux): the service's `start` inherits a listening unix socket the agent made, in OARBANK_LISTEN_FD_<NAME>, and only accepts on it (a third-party server that serves on an inherited socket); Windows nodes refuse such a listener.",
+          "enum": [
+            "connections",
+            "listen_fd"
+          ],
+          "title": "Handover",
+          "type": "string"
+        },
+        "idle_timeout_s": {
+          "default": 120.0,
+          "description": "[beta] A connection with no bytes either way for this long is closed.",
+          "maximum": 86400,
+          "minimum": 1,
+          "title": "Idle Timeout S",
+          "type": "number"
+        },
+        "max_bytes_per_s": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "[beta] A byte-rate cap for the listener, both directions together. Absent: none.",
+          "title": "Max Bytes Per S"
+        },
+        "max_conns": {
+          "default": 256,
+          "description": "[beta] Open connections at once.",
+          "maximum": 65535,
+          "minimum": 1,
+          "title": "Max Conns",
+          "type": "integer"
+        },
+        "max_conns_per_ip": {
+          "default": 16,
+          "description": "[beta] Open connections at once from one client address (IPv6: per /64).",
+          "maximum": 65535,
+          "minimum": 1,
+          "title": "Max Conns Per Ip",
+          "type": "integer"
+        },
+        "name": {
+          "description": "[beta] The listener's name, unique in the module; the node statement and every report call it `<module>/<name>`. Needs requires.core >= 2.10.",
+          "maxLength": 64,
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "title": "Name",
+          "type": "string"
+        },
+        "new_conns_per_ip_per_s": {
+          "default": 4.0,
+          "description": "[beta] New connections per second from one client address (a token bucket with a burst of twice the rate).",
+          "exclusiveMinimum": 0,
+          "title": "New Conns Per Ip Per S",
+          "type": "number"
+        },
+        "port_hint": {
+          "anyOf": [
+            {
+              "maximum": 65535,
+              "minimum": 1024,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "[beta] The external port the module would like; the owner decides the real one per node.",
+          "title": "Port Hint"
+        },
+        "port_policy": {
+          "default": "stable",
+          "description": "[beta] `stable`: the external port is published somewhere costly to change (a chain, a registry), so a port someone else holds on the router is refused rather than replaced; `flexible`: the agent may take the next free port of a small range. The owner may override it per node.",
+          "enum": [
+            "stable",
+            "flexible"
+          ],
+          "title": "Port Policy",
+          "type": "string"
+        },
+        "protocol": {
+          "const": "tcp",
+          "default": "tcp",
+          "description": "[beta] `tcp` only (UDP is not built).",
+          "title": "Protocol",
+          "type": "string"
+        },
+        "proxy_protocol": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "[beta] The agent writes a PROXY protocol v2 header before the first byte of each connection. Absent: true with handover `listen_fd` (the header is then the only way a server learns the client's address), else false (the address arrives in the `connection` message).",
+          "title": "Proxy Protocol"
+        },
+        "tls": {
+          "default": "passthrough",
+          "description": "[beta] The agent relays bytes untouched either way; the service terminates its own TLS, if any.",
+          "enum": [
+            "passthrough",
+            "none"
+          ],
+          "title": "Tls",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "InboundListener",
+      "type": "object"
+    },
     "LinuxRequirements": {
       "additionalProperties": true,
       "properties": {
@@ -1965,6 +2093,14 @@
           "title": "Allow",
           "type": "array"
         },
+        "inbound": {
+          "description": "[beta] Listeners the agent opens on nodes the owner assigns, each served by one endpoint service that lists it (`services[].listeners`); module code never listens. A grant approved by digest, independent of `mode` (answering an accepted connection is not egress). Needs requires.core >= 2.10.",
+          "items": {
+            "$ref": "#/$defs/InboundListener"
+          },
+          "title": "Inbound",
+          "type": "array"
+        },
         "mode": {
           "default": "none",
           "description": "[beta] Open set. `none`; `egress-allowlist`: only the `allow` hosts, through the agent's local proxy (the SDK sets HTTPS_PROXY/ALL_PROXY); `egress-any`: any public address, a separately approved full-trust grant. Never loopback or link-local, never listening.",
@@ -2066,7 +2202,7 @@
       "properties": {
         "endpoint": {
           "default": false,
-          "description": "[beta] Jobs reach the service: each attempt whose stage reserves one of its pools gets OARBANK_SERVICE_<NAME>, and the agent hands the service every connection over its endpoint channel; the service never listens (spec/service-protocol.md, \"Endpoints\"). Provides at least one pool; lifecycle on_demand or always. Needs requires.core >= 2.5.",
+          "description": "[beta] Jobs reach the service: each attempt whose stage reserves one of its pools gets OARBANK_SERVICE_<NAME>, and the agent hands the service every connection over its endpoint channel; the service never listens (spec/service-protocol.md, \"Endpoints\"). Provides at least one pool or lists at least one listener; lifecycle on_demand or always. Needs requires.core >= 2.5.",
           "title": "Endpoint",
           "type": "boolean"
         },
@@ -2105,6 +2241,16 @@
           ],
           "title": "Lifecycle",
           "type": "string"
+        },
+        "listeners": {
+          "description": "[beta] `[sandbox].net.inbound` listeners this service serves: the agent hands it each connection a listener accepts (or, for handover `listen_fd`, the listening socket) and announces each listener's external address on its endpoint channel. Needs endpoint = true, lifecycle always and requires.core >= 2.10.",
+          "items": {
+            "maxLength": 64,
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "type": "string"
+          },
+          "title": "Listeners",
+          "type": "array"
         },
         "name": {
           "maxLength": 64,
