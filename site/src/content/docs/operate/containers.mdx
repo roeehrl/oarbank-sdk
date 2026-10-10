@@ -1,0 +1,142 @@
+---
+title: Containers on nodes
+description: What a node needs to run modules' container jobs on macOS (Colima, Docker and Rosetta), Linux (Podman or Docker Engine) and Windows (WSL), what the node sets up itself, and how to see whether its container runtime is ready.
+type: how-to
+platforms: [macos, linux, windows]
+core: '2.9.0'
+sidebar:
+  order: 8
+---
+
+import { Aside, TabItem, Tabs } from '@astrojs/starlight/components';
+
+A module never runs containers itself: the node's agent runs them for it, through its broker, with images you approved
+by digest. Each node uses a container runtime of its own and offers container work (the `containers` pool) **only while
+that runtime is ready**. This page covers Oarbank 2.9.0.
+
+## See where a node stands
+
+```sh
+oarbank node show build-07       # containers: colima ready · or missing, with each piece and its fix · or failed, with why
+```
+
+The node page shows the same, and the module's readiness checklist names the nodes a stage cannot run on because
+they have no container runtime. A node that lacks something is simply not offered container jobs; nothing waits on it.
+
+## macOS
+
+From 2.9 a Mac node reports its container runtime and brings it up itself. You install the tools once; the agent does
+the rest.
+
+### What you install
+
+On each Mac, as the administrator who owns Homebrew:
+
+```sh
+brew install colima docker                                         # Colima brings Lima; Docker Desktop is not needed
+softwareupdate --install-rosetta --agree-to-license                # Apple silicon: linux/amd64 images run under Rosetta
+brew tap slp/krun && brew trust slp/krun && brew install krunkit   # optional, Apple silicon: GPU containers (Vulkan)
+```
+
+Nothing else: no `colima start`, no Docker Desktop, no setting. The agent looks for the tools in `/opt/homebrew/bin`,
+`/usr/local/bin` and its PATH. A tool installed only in a person's home is not one the node's `_oarbank` account may
+run, and is reported as such. Homebrew asks you to trust the third-party tap for krunkit.
+
+### What the node does itself
+
+1. **No module wants containers yet:** no virtual machine is created. The node still reports what is missing
+   (`absent`), so you can prepare it before deploying a container module.
+2. **A release arrives with a module approved for containers:** the agent checks the prerequisites. If something is
+   missing it reports `missing`, each piece with its fix, and starts nothing. Otherwise it creates and starts its own
+   Colima profile, `oarbank`, in the background (`starting`): a Virtualization.framework VM with Rosetta for amd64
+   images, sized from the Mac's memory (8 GB on Macs with up to 32 GB, 12 GB up to 96 GB, 32 GB above, and never more
+   than half the memory), mounting only the agent's work and module-data directories. The first start downloads the VM
+   image and takes a few minutes.
+3. **Ready:** the node reports `ready` with the platforms it runs (`linux/arm64`, `linux/amd64`) and starts offering
+   the `containers` pool. If the start fails, it reports `failed` with the end of Colima's log, and tries again with
+   the next release or agent restart.
+4. **GPU containers** use a second profile, `oarbank-gpu`, on krunkit. The node offers them (`virtio-gpu:venus`,
+   Vulkan in containers) only once the CPU runtime is ready and krunkit is installed on Apple silicon; that VM starts
+   with the first GPU job, and a failed start withdraws the GPU until the next release or restart.
+
+The VMs live in the agent's own home: `/Library/Application Support/Oarbank/agent/colima` for a system install,
+`~/.colima` for a personal one. **Never start or delete the `oarbank` or `oarbank-gpu` profiles yourself**; your own
+Colima profiles are untouched. Intel Macs get an x86_64 VM without Rosetta.
+
+### Check a Mac on the spot
+
+Run the doctor as the agent's account (its home is private to it):
+
+```sh
+sudo -u _oarbank /Library/Oarbank/bin/oarbank-agent --home "/Library/Application Support/Oarbank/agent" containers doctor
+sudo -u _oarbank /Library/Oarbank/bin/oarbank-agent --home "/Library/Application Support/Oarbank/agent" containers doctor --probe --gpu
+```
+
+It prints the agent's last report with the prerequisites as they are now, and exits 3 while anything is missing.
+`--probe` brings the runtime up and runs real containers through it; `--gpu` also tries the GPU profile.
+
+| Missing | Means | Fix |
+|---|---|---|
+| `colima`, `docker`, `lima` | not in `/opt/homebrew/bin`, `/usr/local/bin` or the PATH | `brew install colima docker` |
+| `account_access` | the tool exists, but the agent's account may not run it (a prefix in a person's home) | install with Homebrew in `/opt/homebrew` or `/usr/local`, or make the custom prefix readable (`chmod o+rx`) |
+| `rosetta` | Apple silicon without Rosetta 2 | `softwareupdate --install-rosetta --agree-to-license` |
+| `colima_home` | the agent's account may not write its `colima` directory | give the account its home back (`chown -R`), or reinstall |
+| `socket_path` | a socket path would be longer than macOS allows (103 bytes) | use a shorter agent home |
+| `account` | the doctor was run by another account than the agent's | run it with `sudo -u _oarbank` as above |
+| `krunkit`, `apple_silicon` (GPU only) | no GPU in containers | `brew tap slp/krun && brew trust slp/krun && brew install krunkit` |
+
+<Aside type="caution" title="Known limitations in 2.9.0">
+  Bringing the VM up from the node's system service was built for 2.9 and tested in code, but has not yet been
+  verified end to end on every kind of Mac. Still to be confirmed on real system installs: a Virtualization.framework
+  VM created by the hidden `_oarbank` account from a launchd daemon, krunkit's GPU access from a daemon, amd64 images
+  under Rosetta in that VM, and the VM surviving an agent restart. If a Mac reports `failed` with a virtualization or
+  Metal error, please report it on [roeehrl/oarbank](https://github.com/roeehrl/oarbank/issues) with the doctor's
+  output.
+</Aside>
+
+## Linux
+
+Containers use rootless Podman when it is installed, otherwise Docker Engine. With Podman, the `oarbank` account
+needs subordinate user and group ids:
+
+```sh
+sudo usermod --add-subuids 100000-165535 --add-subgids 100000-165535 oarbank
+```
+
+The node reports its runtime (`podman` or `docker`) as `installed`, or `absent`. GPU containers need the `oarbank`
+account in the groups that own the GPU device files ([Place work by GPU API](/oarbank/build/gpu-placement)).
+
+## Windows
+
+Containers run in a WSL containers session the agent creates and owns (a VM of its own). They need Windows 10 version
+2004 or later, WSL 2.9.3 or later and the Virtual Machine Platform, on a machine with hardware virtualization (nested
+virtualization in a VM).
+
+From 2.9 the MSI never installs them inside its own installation. `CONTAINERS=1` on the `msiexec` command line, the
+join page's **Run container jobs** box, or a join code made for container jobs (`oarbank join-code --containers`)
+registers a one-shot task, `OarbankContainerSupport`, which runs as SYSTEM right after the installer has finished,
+installs the pieces, records the outcome and deletes itself. The MSI exits 0 either way. Oarbank Node and
+`oarbank-node status` then show "Restart Windows to finish container support" or "Container support failed: …" until
+it is done (the record is under `HKLM\SOFTWARE\Codonic\Oarbank\ContainerSupport`).
+
+<Tabs>
+  <TabItem label="Install later">
+    ```powershell
+    oarbank-agent containers install          # as an administrator
+    ```
+  </TabItem>
+  <TabItem label="Check">
+    ```powershell
+    oarbank-agent containers doctor           # the runtime's state and each missing piece with its fix
+    oarbank-agent containers doctor --probe   # also runs a container through it
+    ```
+  </TabItem>
+</Tabs>
+
+A Windows node runs container images of its own architecture.
+
+## Container GPU APIs only beside a runtime
+
+From 2.9 a node lists GPU APIs in containers only when it has a container runtime: `oarbank node show` prints the
+runtime (or "containers: none") next to them, and a node without a runtime never offers container GPU work, whatever
+an older doctor report said.

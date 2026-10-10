@@ -16,7 +16,7 @@ This page explains the ideas. For what each computer needs, see [Requirements](/
 
 | Part | Runs on | What it does |
 |---|---|---|
-| **Coordinator** | one Mac or Linux machine | Holds all fleet state: nodes, modules, campaigns, jobs, results and the audit log. Plans work, hands it out, checks results and runs each module's coordinator side. |
+| **Coordinator** | one macOS, Linux or Windows computer, as a system service | Holds all fleet state: nodes, modules, campaigns, jobs, results and the audit log. Plans work, hands it out, checks results and runs each module's coordinator side. |
 | **Console** | the coordinator | The web console. It only displays state; every change you make is sent to the coordinator as an operation and recorded in the audit log. |
 | **`oarbank` CLI** | anywhere | The same operations as the console, from a terminal. |
 | **Agent** | every node | Enrolls the node, installs its release, runs doctors, golden jobs and jobs in the module sandbox, applies host protection, and follows coordinator moves. |
@@ -96,10 +96,15 @@ are handed out again.
 Oarbank does not trust a node's results until the node has proved it can produce the right ones.
 
 - **Doctor.** On every node, the agent runs each module's doctor in the sandbox. It reports `healthy`, `unhealthy`
-  (it should work here but something is broken) or `undetected` (this node cannot run the module). Only healthy
-  modules are offered work.
+  (it should work here but something is broken) or `undetected` (this node cannot run the module). Only a healthy
+  module can be certified. A doctor check named after a capability that fails keeps off only the stages that need that
+  capability.
 - **Golden jobs.** For each kind of node, the module supplies golden jobs with known answers. The node runs them and
   the module compares the results. A node is **certified** for a module once it passes.
+
+Two kinds of stage need no certification and run wherever the module's runner starts: bootstrap stages, which fetch
+a module's pinned datasets, and stages that compare nothing and need no capability or pool, such as an ingestion job
+([Running modules](/oarbank/operate/modules#which-stages-run-before-certification)).
 
 Certification is per node and per module version. A new module version re-certifies that module on the nodes that
 get it and nothing else; a node also re-certifies after its platform or OS version changes, and periodically. A
@@ -127,19 +132,28 @@ are in [Module sandbox](/oarbank/spec/sandbox).
 ## Host protection
 
 Nodes are computers people use. Host protection decides, every few seconds, how much fleet work a node may run
-without harming its owner's own work. You set it per node; a module can never declare or loosen it.
+without harming its owner's own work. You set it for the fleet, a group of nodes or one node; a module can never
+declare or loosen it ([Host protection](/oarbank/operate/host-protection)).
 
 On every OS:
 
 - **The memory guard** stops admitting jobs when free memory runs low and, if it keeps falling, evicts fleet jobs
   one at a time until memory recovers.
-- **Per-node caps** limit what the fleet may use on a node, such as its memory (`oarbank node limits`). They are all
-  off by default.
+- **Caps** limit what the fleet may use on a node, such as its memory (`oarbank settings set mem_gb 16 --node <node>`).
+  They are all off by default.
 - **Only fleet processes are touched.** The agent pauses, slows or stops only processes it started itself. Your own
   programs are never signalled.
 
 On macOS, the agent also applies the owner's rules: it can hold or yield fleet work while a named app or process is
 busy or while someone is using the computer, and it backs off for heat and battery.
+
+## Settings
+
+Every owner choice, from the memory a node keeps for its user to whether a module runs on laptops, is a setting with
+one value for the fleet, optional values for **groups** of nodes (chosen by OS, architecture, battery, RAM, labels or
+by name) and optional values for one node; the most specific wins, and a fleet or group value can be **locked**. The
+console shows for every node and key which value is in effect and why. A machine's managed policy can make settings
+stricter, never looser. See [Settings](/oarbank/operate/settings).
 
 ## Signing
 
