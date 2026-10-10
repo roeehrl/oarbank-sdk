@@ -2,14 +2,14 @@
 title: Reason codes and alerts
 description: What each code from oarbank explain, a job's attempts, a node's protection log and an alert means, how severe it is and what to run to fix it.
 type: reference
-core: '2.7.0'
+core: '2.8.0'
 sidebar:
   order: 2
 ---
 
 Oarbank explains itself with codes. `oarbank explain job <id>` and `oarbank explain node <id>` answer with the
 scheduler's own codes, every attempt ends with one, host protection logs one for each action, and alerts name a rule.
-These tables are generated from the core's contracts (`oarbank.contracts`) for Oarbank 2.7.0.
+These tables are generated from the core's contracts (`oarbank.contracts`) for Oarbank 2.8.0.
 
 Severity runs from P1 (information) to P5 (needs a person now). A **remedy** is an operation you can run with
 `oarbank op <operation> <target>` (preview it with `--dry-run`), or its matching command in

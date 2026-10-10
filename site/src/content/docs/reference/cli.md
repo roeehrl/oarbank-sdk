@@ -3,20 +3,21 @@ title: Command-line reference
 description: Every Oarbank command an operator or module author runs, what each one does, where it is installed on macOS, Linux and Windows, and the flags that confirm or preview a change.
 type: reference
 platforms: [macos, linux, windows]
-core: '2.7.0'
+core: '2.8.0'
 sidebar:
   order: 1
 ---
 
-Oarbank has five commands. Every one prints its full usage with `--help`, and `oarbank <command> --help` shows a
-command's own arguments. This page lists them as of Oarbank 2.7.0 and module SDK 1.5.0.
+Oarbank has six commands. Every one prints its full usage with `--help`, and `oarbank <command> --help` shows a
+command's own arguments. This page lists them as of Oarbank 2.8.0 and module SDK 1.5.0.
 
 | Command | Runs on | What it is |
 |---|---|---|
 | `oarbank` | the coordinator | The operator CLI: nodes, jobs, campaigns, modules, datasets, secrets, accounts, signing and moves |
 | `oarbank-setup` | the coordinator | Opens the first-run setup wizard, or refreshes the services of an existing wizard-managed installation |
 | `oarbankd` | the coordinator | The coordinator service itself; the installers run it, you normally do not |
-| `oarbank-agent`, `oarbank-launcher`, `oarbank-uninstall` | each node | The node's agent, the launcher that installs, runs and rolls back agent builds, and the node uninstaller |
+| `oarbank-node` | each node | Joins the node to a fleet, checks a code, shows where the node is, and leaves |
+| `oarbank-agent`, `oarbank-launcher`, `oarbank-uninstall` | each node | The node's agent, the launcher that installs, runs and rolls back agent builds (`oarbank-node` is the launcher under a second name), and the macOS node uninstaller |
 | `oarbank-sdk` | a module author's computer | The module SDK's tools: validate, preview, bundle and test modules |
 
 ## Where the commands are
@@ -27,7 +28,9 @@ command's own arguments. This page lists them as of Oarbank 2.7.0 and module SDK
 | Linux | `/opt/oarbank/coordinator/bin/oarbank` | `/usr/bin/oarbank-setup` |
 | Windows | `C:\Program Files\Oarbank\Coordinator\current\bin\oarbank.cmd` (an elevated prompt) | `C:\Program Files\Oarbank\Coordinator\package\oarbank-setup.ps1` (asks for elevation) |
 
-The installers do not put `oarbank` on the `PATH`: call it by its full path, or add its directory yourself.
+The installers do not put `oarbank` on the `PATH`: call it by its full path, or add its directory yourself. The node
+packages do put `oarbank-node` on it: `/usr/local/bin/oarbank-node` on macOS, `/usr/bin/oarbank-node` on Linux, and
+`C:\Program Files\Oarbank\oarbank-node.exe` on Windows.
 
 The CLI talks to the coordinator through its local owner channel, so it works on the coordinator for the account that
 set it up (Windows: an elevated prompt). Anywhere else, sign in with `oarbank console login` or use a personal access
@@ -69,8 +72,11 @@ Commands that change the fleet share these flags:
 
 | Command | What it does |
 |---|---|
-| `oarbank join-code [--label NAME] [--ttl SECONDS]` | A one-time join code for a new machine; the node is approved when it enrolls with it |
-| `oarbank node approve <enrollment>` / `reject` | Decide a pending enrollment (a node set up with a coordinator URL instead of a join code) |
+| `oarbank join-code [--label NAME] [--ttl SECONDS] [--uses N] [--approve\|--no-approve] [--system] [--containers]` | A join code for new machines: single use and approved at once by default (4 hours); `--uses N` lets N machines join, each waiting for approval unless `--approve` |
+| `oarbank join-codes [--all]` | Outstanding join codes, their uses and the machines that used them |
+| `oarbank join-code revoke <id>` | Revoke a code; machines that already joined with it stay |
+| `oarbank node approve <enrollment>` / `reject` | Decide a pending enrollment (a machine from a multi-use code, or one joined by the coordinator's address) |
+| `oarbank node approve-code <CODE>` | Approve the waiting machine that shows this 8-letter code |
 | `oarbank node state <node> active\|paused\|draining` | Take work, stop taking work, or finish current work and then stop |
 | `oarbank node mode <node> fleet_first\|moderate\|strict_yield` | How strongly host protection yields to the person using the machine |
 | `oarbank node limits <node> --cpu-cores N --mem-gb N --jobs N …` | Caps on what the fleet may use (`off` removes one, `--clear-all` removes all; `--enforce soft\|hard`) |
@@ -130,13 +136,17 @@ second fleet over an existing one.
 
 | Command | What it does |
 |---|---|
-| `oarbank-launcher setup --join-code 'OB1-…' [--scope system]` | Set up the node by hand after installing the package without a join-code file |
+| `oarbank-node join` | Join this machine: prompts for the code (hidden), or `--code-stdin`, `--code-file PATH`; `--coordinator URL` joins by address with a device code. Checks first, then waits until joined (`--no-wait`, `--wait SECONDS`). macOS: `--scope system` (the default with `sudo`) or `personal`. Also `--name`, `--containers` (Windows), `--json`, `--force` |
+| `oarbank-node check` | The same checks without joining: the code's format and expiry, DNS, the port, the coordinator's identity and certificate authority, the clock |
+| `oarbank-node status [--json] [--follow]` | Where the node is: not joined, waiting for approval, connected, or why joining failed |
+| `oarbank-node leave` | Forget the coordinator: the node's key, certificate, caches and logs go |
+| `oarbank-node doctor [--json]` | Status, the checks against the node's coordinator, and the container runtime |
 | `oarbank-launcher --version` | The launcher's version (the agent itself updates through the coordinator: see `oarbank agent list`) |
 | `oarbank-agent discover` | Coordinators announcing themselves on the local network, and whether macOS Local Network privacy blocks it |
 | `oarbank-agent gpu-apis` | The GPU APIs this node provides and why any is missing (Linux: `sudo -u oarbank /usr/lib/oarbank/oarbank-agent gpu-apis`) |
 | `oarbank-agent containers install\|doctor [--probe]` | Windows: install or check the agent's own container runtime |
 | `oarbank-uninstall [--purge]` | macOS: unload the node's service; `--purge` deletes its home; with `sudo` also removes the programs |
-| `oarbank-launcher remove --scope system [--purge]` | Linux: stop and remove the node's service (the package's removal runs it); `--purge` also deletes the node's home |
+| `oarbank-launcher remove --scope system [--purge]` | Stop and remove the node's service (the Linux package's removal runs it); `--purge` also deletes the node's home |
 
 ## `oarbank-sdk`
 

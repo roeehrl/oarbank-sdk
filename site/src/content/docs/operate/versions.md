@@ -3,13 +3,13 @@ title: Versions and compatibility
 description: Find the Oarbank, agent and module SDK versions you have installed, the latest release, which SDK features need which core, and where the docs for an older version are.
 type: reference
 platforms: [macos, linux, windows]
-core: '2.7.0'
+core: '2.8.0'
 sidebar:
   order: 4
 ---
 
 Oarbank has two version lines. The **core** (the coordinator and the node agent, in
-[roeehrl/oarbank](https://github.com/roeehrl/oarbank)) is at 2.7.0. The **module SDK** (`oarbank-sdk`, in
+[roeehrl/oarbank](https://github.com/roeehrl/oarbank)) is at 2.8.0. The **module SDK** (`oarbank-sdk`, in
 [roeehrl/oarbank-sdk](https://github.com/roeehrl/oarbank-sdk)) is at 1.5.0. These docs describe those releases.
 
 ## Find the installed versions
@@ -20,6 +20,7 @@ Oarbank has two version lines. The **core** (the coordinator and the node agent,
 | Coordinator, Linux | `dpkg-query -W oarbank-coordinator` (Debian, Ubuntu) or `rpm -q oarbank-coordinator` (Fedora, RHEL) |
 | Coordinator, Windows | Settings, Installed apps, **Oarbank Coordinator**; or in PowerShell: `Get-ItemProperty HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\* \| Where-Object DisplayName -like 'Oarbank*' \| Select-Object DisplayName, DisplayVersion` |
 | Every node's agent | `oarbank agent list` on the coordinator shows the version each node runs; `oarbank node show <node>` shows one |
+| A node's package | `oarbank-node --version` on the node (the launcher's version) |
 | Module SDK | `python -c "import oarbank_sdk; print(oarbank_sdk.__version__)"` in the environment you installed it in |
 | A module's needs | its manifest's `requires.core` (for example `">=2.5,<3"`); `oarbank modules` lists every installed module's |
 
@@ -42,6 +43,7 @@ The first line of [llms.txt](/oarbank/llms.txt) names the release these docs des
 
 | Core | Date | Module SDK |
 |---|---|---|
+| 2.8.0 | 2026-10-10 | 1.5.0 |
 | 2.7.0 | 2026-10-09 | 1.5.0 |
 | 2.6.0 | 2026-10-08 | 1.5.0 |
 | 2.5.0 | 2026-10-06 | 1.5.0 |

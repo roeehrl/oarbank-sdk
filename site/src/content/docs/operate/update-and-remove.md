@@ -3,13 +3,13 @@ title: Updating and removing
 description: Update the coordinator and the nodes' agents, move the coordinator to another computer, and remove a node or the coordinator on macOS, Linux and Windows without losing your owner keys by accident.
 type: how-to
 platforms: [macos, linux, windows]
-core: '2.7.0'
+core: '2.8.0'
 sidebar:
   order: 5
 ---
 
-This page covers Oarbank 2.7.0. The full install guide, including building the packages, is
-[docs/install.md](https://github.com/roeehrl/oarbank/blob/v2.7.0/docs/install.md) in the core's repository.
+This page covers Oarbank 2.8.0. The full install guide, including building the packages, is
+[docs/install.md](https://github.com/roeehrl/oarbank/blob/v2.8.0/docs/install.md) in the core's repository.
 
 ## Update the coordinator
 
@@ -73,12 +73,14 @@ pairing code.
 
 ## Remove a node
 
-Retire the node on the coordinator's Fleet page, then on the node:
+To take a node out of the fleet but keep the software, run `sudo oarbank-node leave` on it (on Windows, from an
+elevated prompt): the node forgets the coordinator, and its key, certificate, caches and logs go. It can join a fleet
+again with a new code. Retire it on the coordinator's Fleet page too. To remove the software as well:
 
 | | |
 |---|---|
-| macOS | `/Library/Oarbank/bin/oarbank-uninstall` unloads the service. `--purge` also deletes the node's home (its key, certificate, caches and logs). Run it with `sudo` to remove the programs too. |
-| Linux | Remove the `oarbank-agent` package with your package manager (`sudo apt remove oarbank-agent` or `sudo dnf remove oarbank-agent`). It stops and removes the service and keeps the node's home, `/var/lib/oarbank/agent`; `sudo oarbank-launcher remove --scope system --purge` before removing the package also deletes it. |
+| macOS | `sudo /Library/Oarbank/bin/oarbank-uninstall --purge` unloads the service, deletes the node's home (its key, certificate, caches and logs) and removes the programs and **Oarbank Node.app**. Without `--purge` the home stays. |
+| Linux | `sudo apt remove oarbank-agent` or `sudo dnf remove oarbank-agent` stops and removes the service and keeps the node's home, `/var/lib/oarbank`; `sudo apt purge oarbank-agent` also deletes it. |
 | Windows | Uninstall **Oarbank agent** from Installed apps. |
 
 ## Remove the coordinator
