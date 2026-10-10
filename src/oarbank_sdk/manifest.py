@@ -503,7 +503,8 @@ class Runner(Contract):
     capabilities: list[Capability] = Field(default_factory=list, description=(
         "[stable] By intent: cancellable (honours a stop request within stop_grace_s), freeze_ok (safe to freeze at any "
         "instruction), cooperative_pause (pauses on control.json), resumable (resumes from its own checkpoint after a "
-        "restart), progress_events, deterministic_output, cooperative_throttle, checkpoint (writes portable checkpoints, "
+        "restart), progress_events, deterministic_output, cooperative_throttle (honours threads and gpu_duty in control.json; "
+        "only such GPU runners run beside a protected GPU program), checkpoint (writes portable checkpoints, "
         "honours a checkpoint-then-stop request and resumes from <W>/checkpoint/; needs requires.core >= 2.5)."))
     stop_grace_s: Annotated[float, Field(ge=1, le=600)] = Field(20.0, description="[stable] Seconds between the stop request and forced termination of the process container.")
     checkpoint_grace_s: Annotated[float, Field(ge=1, le=1800)] = Field(120.0, description=(
