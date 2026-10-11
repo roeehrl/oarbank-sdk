@@ -1,0 +1,10 @@
+{"$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object",
+ "properties": {"completions": {"type": "array", "items": {"type": "string"}},
+                "backend": {"enum": ["stub", "mlx", "llamacpp"]},
+                "model": {"type": ["string", "null"]},
+                "tokens": {"type": "integer", "minimum": 0},
+                "digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+                "busy_s": {"type": "number", "minimum": 0},
+                "duty_idle_s": {"type": "number", "minimum": 0},
+                "tokens_per_busy_s": {"type": ["number", "null"]}},
+ "required": ["completions", "backend", "tokens", "digest"]}

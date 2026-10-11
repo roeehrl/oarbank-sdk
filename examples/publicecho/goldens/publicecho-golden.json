@@ -1,0 +1,17 @@
+{
+ "name": "publicecho-golden",
+ "key_inputs": {
+  "lines": [
+   "hello",
+   "world"
+  ]
+ },
+ "expected": {
+  "digest": "b21adae0639e3454f07b8be1794111caa1d2eb4f1639cfad7a0e7a4dff8a60b7",
+  "digest_version": 1
+ },
+ "stages": [
+  "echo"
+ ],
+ "datasets": []
+}

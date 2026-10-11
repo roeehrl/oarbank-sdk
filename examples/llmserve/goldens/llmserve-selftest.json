@@ -1,0 +1,18 @@
+{
+ "name": "llmserve-selftest",
+ "key_inputs": {
+  "prompts": [
+   "the agent measures",
+   "a duty is"
+  ],
+  "max_tokens": 24
+ },
+ "expected": {
+  "digest": "f097e3f8f619ee4084444e945c0f20ddcf034d8e32433eaba49ee3cb6561c54a",
+  "digest_version": 1
+ },
+ "stages": [
+  "selftest"
+ ],
+ "datasets": []
+}

@@ -17,8 +17,8 @@ Every module bundle has a `oarbank-module.toml` at its root. It holds every fact
   (`modules/<short>/`) and `OARBANK_MODULE`.
 ## Exec
 
-An exec (`coordinator.exec`, `runner.exec`, coordinator and runner variants, services, probes, `cli.exec`) is an argv
-array, never a shell string.
+An exec (`coordinator.exec`, `runner.exec`, coordinator and runner variants, services, probes, workloads, `cli.exec`)
+is an argv array, never a shell string.
 
 - **Element 0** is either:
   - the token **`python`**: the Python of the module's own environment on every OS (`bin/python`, or
@@ -31,7 +31,7 @@ array, never a shell string.
 - **`{bundle}`** may appear in any element and is replaced by the bundle's absolute native path. Nothing else is
   rewritten: relative paths are **not** resolved for you.
 - **cwd:** the bundle root for the coordinator, services and probes; the work directory for `run`; the data directory
-  for `doctor`.
+  for `doctor`; the run directory for a workload's `run` and `status`.
 - `oarbank_sdk.manifest.resolve_exec` is the reference resolver.
 
 ## Platforms
@@ -46,7 +46,7 @@ array, never a shell string.
   `[stages.variants.<key>]` for a stage (`timeout_s`, `requires.resources`, `retry`). `env`, `timeouts_s` and
   resources merge key by key; every other field replaces
   ([platforms.md](platforms.md#per-platform-declarations)).
-- `platforms` on services, probes and `stages[].requires` restricts them to some declared platforms.
+- `platforms` on services, probes, workloads and `stages[].requires` restricts them to some declared platforms.
 - One bundle carries every platform's files: one digest, one approval, one `compat`. `[bundle.platform_files]` says
   which files only some platforms' nodes receive.
 - `[placement]` keeps each campaign, group, dataset or pipeline on one platform class
@@ -64,8 +64,10 @@ array, never a shell string.
 | `[coordinator.move]` | The module's part in a coordinator move: `rules` (a files prefix or a store collection, with class `carry`, `rebuild` or `drop`) and the `effects` the move verbs may request ([module-protocol.md](module-protocol.md#coordinator-moves)). |
 | `[runner]` | The runner-protocol executable: `exec`, `runtime`, `capabilities`, `stop_grace_s`, `checkpoint_grace_s`, `gpu`, `bandwidth_class`, `env`, and per-platform `variants`. |
 | `[[stages]]` | At least one. Each has `name`, optional `after`, and `requires` (node capabilities, reserved `pools`, `needs_pools` that must merely exist, and `resources` cpu/mem_gb/network), plus `timeout_s` and `retry`, per-platform `variants`, a `placement` constraint with its `after` stage, and, for a standalone stage, `default` (the stage a job runs when it names none) and its own `determinism` (`none` for work whose results depend on when it ran, such as ingesting a moving feed: the host never replicates, compares, caches or golden-tests it, and with no capability or pool required it runs before certification: [Stages that run before certification](#stages-that-run-before-certification)). A stage's `checkpoint` (`max_mb`, `min_interval_s`) keeps portable checkpoints ([Portable checkpoints](#portable-checkpoints)). |
-| `[[services]]` | Node helpers the agent manages through the [service protocol](service-protocol.md): lifecycle, timeouts, restart policy, which pools and capabilities they `provide`, the memory, yield and pause flags, GPU use (`gpu`), and `endpoint` for a service jobs reach through the agent (a warm model server). |
+| `[[services]]` | Node helpers the agent manages through the [service protocol](service-protocol.md): lifecycle, timeouts, restart policy, which pools and capabilities they `provide`, the memory, yield and pause flags, GPU use (`gpu`), `endpoint` for a service jobs reach through the agent (a warm model server), and the inbound `listeners` it serves. |
+| `[sandbox]` | What the module's node-side processes need beyond their own directories, each an operator approves per version: the network (`net.mode`, `net.allow`), inbound listeners the agent opens for it (`net.inbound`), host tools, the GPU, container images and image sets, folders ([sandbox.md](sandbox.md)). |
 | `[[probes]]` | Read-only capability checks (`fingerprint` only), each run every `period_s`. |
+| `[[workloads]]` | Supervised long-running processes that are the work itself, run by the agent through the [workload protocol](workload-protocol.md) on the nodes the owner assigns them to: `exec`, `seat` and `identity`, the `secrets` and `listeners` each receives, `resources`, `gpu`, `control` (what host protection may do besides stopping it), `pause_tolerance_s`, `stop_timeout_s`, `restart`, `health` and `reports` ([Workloads](#workloads)). |
 | `[settings]` | `schema`: a JSON Schema file whose properties are the module's settings, each with its type, default, constraints, title, description and an `x-oarbank` annotation (scope `fleet` or `node`, `required`, `unit`, `advanced`, `campaign`). The core validates every value against it ([Settings](#settings)). Settings are visible to the owner: never put a credential in them. |
 | `[[secrets]]` | Write-only credentials the owner sets through the core: `name`, `description` ([Secrets](#secrets)). |
 | `[placement]` | Which unit of work stays on one platform class (`mix`, `unit`), how it binds (`bind`) and what happens when its class has no eligible node (`rebind`, `stranded_after_s`). |
@@ -105,26 +107,54 @@ The models enforce these, beyond the per-field types:
       required key (`x-oarbank.required` or the schema's `required` list) or `x-oarbank.campaign`
       ([Settings](#settings)). `oarbank-sdk check`, `bundle build` and `bundle verify` apply the settings part, since
       the schema is a bundle file.
+    - **2.10:** `sandbox.net.inbound`, `services[].listeners`, `[[workloads]]`, `requires.workload_protocol`, the
+      coordinator capability `workload.report` and `coordinator.workload_effects`.
 
     Every entry of `requires.features` is one this SDK knows.
 13. Every bundle path a node exec names (argv[0], or the script a `python` exec runs) reaches each platform that runs it under `bundle.platform_files`. `datasets.platform_bound` kinds are declared kinds.
 14. `stages[].default` is set on at most one stage, a standalone one; when several stages are standalone, exactly one sets it. `stages[].determinism` is set only on standalone stages (neither `after` another nor depended on): a chain is one evaluation and compares as `results.determinism`. At least one stage compares (its effective determinism is `exact` or `within_tolerance`): goldens run only on such stages, and every module is certified on golden evidence.
 15. `stages[].bootstrap` is set only on a standalone stage that is not the default stage, whose effective determinism is `none` and which reserves and needs no pools. A module with a bootstrap stage pins at least one dataset (`[[datasets.pinned]]`), pins need a bootstrap stage, and its `sandbox.net.mode` is `none` or `egress-allowlist`. Pinned dataset ids are unique; each pin's `kind` is a declared kind, its `platform` is set exactly when the kind is platform-bound and is a declared platform, its file paths are unique, and no two pins hold the same files ([Pinned datasets](#pinned-datasets)).
 16. Secrets: names are unique; a stage lists only declared secrets, each once, and a bootstrap stage lists none; every
-    declared secret reaches something (a stage lists it, or the coordinator has `secrets:read:self`).
+    declared secret reaches something (a stage or a workload lists it, or the coordinator has `secrets:read:self`).
 17. Container sets: names are unique; each `key` is a bundle file holding one ECDSA P-256 public key (checked by
     `oarbank-sdk check` and bundle verification). A stage that reserves the `gpu` pool also reserves `containers`, and
     the runner declares `gpu.in_container = true` with `gpu.use` `shared` or `exclusive`
     ([sandbox.md](sandbox.md#gpu-passthrough)).
 18. An endpoint service (`endpoint = true`) provides at least one pool (a job reaches it through a pool its stage
-    reserves) and its `lifecycle` is `on_demand` or `always` (the agent never starts a `manual` service, so it could never
+    reserves) or lists at least one listener (rule 22), and its `lifecycle` is `on_demand` or `always` (the agent never starts a `manual` service, so it could never
     hand it its channel). A service whose `gpu.use` is not `none` needs `[sandbox].devices.gpu = "compute"`.
 19. `sandbox.folders` ids are unique, each with `access` `read` or `write` ([sandbox.md](sandbox.md#folders)).
 20. A stage with `checkpoint` needs the runner capability `checkpoint`, and the capability needs at least one such
     stage; a bootstrap stage never sets `checkpoint`.
 21. `gpu.apis_any` (the runner's, a runner variant's, a service's) is set only with `gpu.use` `shared` or `exclusive`: it
     places GPU work ([runner-protocol.md](runner-protocol.md#gpu-use)).
-22. **Lint** (warnings, not errors): an unknown `mix`; a stage `placement` on a stage without `after`; an unknown `determinism_scope`; a placement mix coarser than `determinism_scope` while `results.value` is set (values in one campaign would come from classes whose results are not comparable); stages receiving secrets while the network mode is `egress-any`; a `gpu.apis_any` entry no core detects yet (outside `cuda`, `directml`, `metal`, `opencl`, `rocm`, `vulkan`: such work is placed nowhere). `oarbank-sdk check` prints them; `oarbank_sdk.manifest.lint` returns them.
+22. Inbound listeners ([sandbox.md](sandbox.md#inbound-listeners)): `sandbox.net.inbound` names are unique; each
+    entry is listed in `listeners` by exactly one service or workload, and every name in a service's `listeners` is an
+    entry, once;
+    a service with `listeners` is an endpoint service with `lifecycle = "always"` (a listener is wanted for as long as
+    the module is enabled on the node). An entry's `protocol` is `tcp`, `port_hint` 1024–65535, `max_conns` and
+    `max_conns_per_ip` 1–65535, `new_conns_per_ip_per_s` and `max_bytes_per_s` above 0, `idle_timeout_s` 1–86400.
+    `inbound` needs no network mode: answering an accepted connection is not egress. A workload may serve listeners
+    too (rule 24).
+23. **Lint** (warnings, not errors): an unknown `mix`; a stage `placement` on a stage without `after`; an unknown `determinism_scope`; a placement mix coarser than `determinism_scope` while `results.value` is set (values in one campaign would come from classes whose results are not comparable); stages receiving secrets while the network mode is `egress-any`; a `gpu.apis_any` entry no core detects yet (outside `cuda`, `directml`, `metal`, `opencl`, `rocm`, `vulkan`: such work is placed nowhere); a listener with `handover = "listen_fd"` whose service runs on a declared Windows platform (Windows nodes refuse it: `LISTENER_HANDOVER_UNSUPPORTED`). `oarbank-sdk check` prints them; `oarbank_sdk.manifest.lint` returns them.
+24. Workloads ([Workloads](#workloads)):
+    - names are unique among workloads and services (both appear as `<module>/<name>` in node reports);
+    - a workload lists only declared secrets, each once; `identity = "per_node"` lists at least one (its seat is named
+      by the node's values of them);
+    - `gpu.use` other than `none` needs `[sandbox].devices.gpu = "compute"`, and `gpu.apis_any` needs `use` `shared` or
+      `exclusive`;
+    - `control` lists each item once; `pause_tolerance_s` above 0 needs `cooperative_pause` or `freeze_ok`. It defaults
+      to 20 for a workload that declares either of them and to 0 otherwise (such a workload is never paused: it is
+      throttled where it can be, lowered, or stopped); it is at most 600, the pause ceiling;
+    - `listeners` name `[sandbox].net.inbound` entries (rule 22: each served by exactly one service or workload) with
+      handover `connections` (a workload is handed its connections, never a listening socket);
+    - `restart.backoff_max_s` is at least `restart.backoff_initial_s`;
+    - declared workloads need `requires.workload_protocol` (and, rule 12, `requires.core >= 2.10`);
+    - `reports = true` needs the coordinator capability `workload.report`, the capability needs a workload with
+      `reports = true`, and `coordinator.workload_effects` needs the capability;
+    - lint: a workload under `sandbox.net.mode = "egress-any"` while the module's platforms include Linux (Linux nodes
+      cannot enforce that mode, so the core places such workloads on macOS and Windows nodes only), and workloads that
+      receive secrets under `egress-any`.
 
 A module may offer both forms of an evaluation. For example, render declares a single `eval` stage and a `render → score` chain; the operator's pipeline setting picks the form for jobs that name no stage. A module may also declare standalone utility stages (an ingestion `sync`, a `fetch` that provisions tools) and enqueue jobs that name them; it then marks its evaluation stage `default = true`.
 
@@ -278,10 +308,12 @@ secrets = ["llm_api_key"]            # only this stage's runner receives it
 - **The owner sets it** through the core (`oarbank secret set <module> <name> [--node N]`, or the module's Settings
   page), for the module or for one node; a node's own value wins. The core stores it encrypted, and no page, API read,
   plan, audit row, export or error message ever shows it: only whether it is set, a fingerprint and when it changed.
-- **Delivery.** Only the runners of stages that list it get it, in `OARBANK_SECRETS_FILE`: an owner-only file inside the
-  job's work directory, deleted with it ([runner-protocol.md](runner-protocol.md#environment);
-  `oarbank_sdk.secrets.get`). Other stages, services, probes, doctor and bootstrap jobs never do. A job waits
-  (`SECRETS_NOT_SET`) on a node with no value for a secret its stage lists.
+- **Delivery.** Only the runners of stages that list it, and workloads that list it, get it, in
+  `OARBANK_SECRETS_FILE`: an owner-only file inside the job's work directory, deleted with it
+  ([runner-protocol.md](runner-protocol.md#environment); `oarbank_sdk.secrets.get`), or in the workload's private
+  directory, deleted when the run ends ([workload-protocol.md](workload-protocol.md#environment);
+  `oarbank_sdk.workload.secrets`). Other stages, services, probes, doctor and bootstrap jobs never do. A job waits
+  (`SECRETS_NOT_SET`) on a node with no value for a secret its stage lists, and so does a workload's seat.
 - **The coordinator side** reads the module's value with `host.secrets.get` only when `coordinator.permissions` lists
   `secrets:read:self` ([module-protocol.md](module-protocol.md#host-callbacks-module--host)). Few modules need it; a
   value a verb puts in a spec reaches every stage, which the conformance kit refuses.
@@ -289,6 +321,57 @@ secrets = ["llm_api_key"]            # only this stage's runner receives it
   results or artifacts, or pass it on a command line.
 - **Pair it with an egress allowlist** naming only the service the key is for, so a leaked key can reach only that host.
 - Coordinator moves carry secrets re-encrypted for the new coordinator; the move preview lists them by name.
+
+## Workloads
+
+Some work is a long-running process that is the work itself: a node of a peer-to-peer network, a pool worker, an
+inference provider. Declare it as a workload; the owner assigns it to nodes, and the agent runs it there through the
+[workload protocol](workload-protocol.md):
+
+```toml
+[requires]
+core = ">=2.10,<3"
+workload_protocol = [1]
+
+[[workloads]]
+name = "worker"
+exec = ["python", "-I", "{bundle}/worker.py"]     # the agent appends `run` or `status`; usually the SDK's supervisor shim
+seat = "node"                     # one seat per assigned node; "fleet": the owner asks for a count and the core places them
+identity = "none"                 # "per_node": the seat is named by the node's values of its secrets (at most one node runs it)
+secrets = []                      # declared secrets this workload receives (only it, of all the module's processes)
+resources = { cpu_cores = 2, mem_gb = 1.0 }
+control = ["cooperative_throttle", "freeze_ok"]
+pause_tolerance_s = 20            # the longest pause its peers survive: protection stops it instead of pausing longer
+stop_timeout_s = 30               # from the stop request to the kill
+restart = { backoff_initial_s = 10, backoff_max_s = 600, max_failures = 5, jitter = "full" }
+health = { period_s = 15, timeout_s = 5, failures = 3 }    # the `status` op; absent: a running process is healthy
+reports = true                    # its report events reach the module's workload.report verb
+
+[coordinator]
+capabilities = ["workload.report"]
+workload_effects = ["store.write"]
+```
+
+- **Not a job.** A workload has no leases, results, goldens or retries elsewhere: it runs where it is assigned, in the
+  module sandbox with the module's approved grants, in a process container of its own, until it is unassigned or held.
+- **Seats.** `seat = "node"`: the owner assigns it to nodes (`workloads.assign`). `seat = "fleet"`: the owner asks for a
+  count and the core places the seats once, on eligible nodes; it never moves one on its own. With `identity =
+  "per_node"` a seat runs only under a coordinator lease with a fence, named by the node's values of the workload's
+  secrets, so two nodes given the same key compete for one seat; every such secret must be set for the node itself.
+- **Host protection** treats a running workload as fleet work with its own ladder: no new start while work is not
+  admitted, then the `threads` hint (`cooperative_throttle`), then lower, then pause (`cooperative_pause` through the
+  control document, or `freeze_ok`) for at most `pause_tolerance_s`, then stop and hold for as long as the cause lasts.
+  A workload that declares neither pause item is never paused.
+- **Network-heavy.** `resources.network = "heavy"` says the workload moves a lot of data over the node's internet line.
+  At a site it counts against the site's budget of network-heavy work, and while a protected process at the site is in
+  an upload phase the agent pauses it on every node of the site (`cooperative_pause` or `freeze_ok`, at most
+  `pause_tolerance_s`), or stops and holds it until the phase ends ([Network-heavy stages](#network-heavy-stages)).
+- **Secrets** a workload lists reach only that workload, in an owner-only file deleted when its run ends ([Secrets](#secrets)).
+- **Reports.** With `reports = true` the workload's `report` events reach the coordinator's `workload.report` verb, whose
+  effects are limited to `coordinator.workload_effects`, the module's own records (`store.*`, `files.*`)
+  ([module-protocol.md](module-protocol.md#workload-reports)).
+- `oarbank_sdk.workload.Supervisor` wraps a third-party daemon as a workload; `oarbank-sdk conform` runs the workload
+  suite ([conformance.md](conformance.md)). The how-to: [workloads.md](../docs/workloads.md).
 
 ## Portable checkpoints
 

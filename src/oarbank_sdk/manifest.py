@@ -39,6 +39,8 @@ SDK15_KEYS_CORE = (2, 5)          # SDK 1.5: secrets, signed container image set
                                   # endpoints and GPU use, folder grants, portable checkpoints, artifact_ref
 SDK16_KEYS_CORE = (2, 9)          # SDK 1.6: host tool version constraints and arch; the settings annotations that change
                                   # what a core does (oarbank_sdk.settings.CORE_GATED: node scope, required, campaign)
+INBOUND_KEYS_CORE = (2, 10)       # inbound listeners: sandbox.net.inbound and services[].listeners
+WORKLOAD_KEYS_CORE = (2, 10)      # workloads (supervised long-running daemons, seat leases) and workload reports
 KNOWN_FEATURES = ("placement",)          # requires.features this SDK understands (must-understand)
 ENV_NAME = r"^[A-Z][A-Z0-9_]*$"
 # Variables the agent or the host sets itself (spec/runner-protocol.md, spec/platforms.md "Environment per OS"); a
@@ -173,6 +175,9 @@ class Requires(Contract):
     module_protocol: list[int] = Field(description="[stable] Module protocol majors the coordinator side speaks.")
     runner_protocol: list[int] = Field(default_factory=lambda: [1], description="[stable] Runner protocol majors the runner speaks.")
     service_protocol: list[int] = Field(default_factory=list, description="[stable] Service protocol majors (only when services/probes are declared).")
+    workload_protocol: list[int] = Field(default_factory=list, description=(
+        "[beta] Workload protocol majors (only when workloads are declared; spec/workload-protocol.md). Needs "
+        "requires.core >= 2.10."))
     experimental: list[str] = Field(default_factory=list, description="[stable] Opt-ins to experimental contract items; any opt-in blocks the verified badge.")
     ui_contract: VersionRange | None = Field(None, description="[beta] UI contract versions the module's pages use, e.g. '>=1.0,<2' (spec/ui-contract.md).")
     coordinator_platforms: list[PlatformToken] | None = Field(None, min_length=1, description=(
@@ -273,6 +278,62 @@ class ContainerSet(Contract):
         return path.startswith(self.repository) if self.repository.endswith("/") else path == self.repository
 
 
+class InboundListener(Contract):
+    """A listener the agent opens on nodes the owner assigns: it accepts TCP connections from the internet and hands each
+    one to the endpoint service that lists the listener (spec/sandbox.md, "Inbound listeners"). Module code still never
+    listens. The limits are the module's ceilings; the owner may lower them per node, never raise them. [beta]"""
+    name: Name = Field(description=(
+        "[beta] The listener's name, unique in the module; the node statement and every report call it "
+        "`<module>/<name>`. Needs requires.core >= 2.10."))
+    protocol: Literal["tcp"] = Field("tcp", description="[beta] `tcp` only (UDP is not built).")
+    port_hint: Annotated[int, Field(ge=1024, le=65535)] | None = Field(None, description=(
+        "[beta] The external port the module would like; the owner decides the real one per node."))
+    port_policy: Literal["stable", "flexible"] = Field("stable", description=(
+        "[beta] `stable`: the external port is published somewhere costly to change (a chain, a registry), so a port "
+        "someone else holds on the router is refused rather than replaced; `flexible`: the agent may take the next free "
+        "port of a small range. The owner may override it per node."))
+    tls: Literal["passthrough", "none"] = Field("passthrough", description=(
+        "[beta] The agent relays bytes untouched either way; the service terminates its own TLS, if any."))
+    handover: Literal["connections", "listen_fd"] = Field("connections", description=(
+        "[beta] `connections`: each connection arrives on the service's endpoint channel (every OS). `listen_fd` (macOS "
+        "and Linux): the service's `start` inherits a listening unix socket the agent made, in "
+        "OARBANK_LISTEN_FD_<NAME>, and only accepts on it (a third-party server that serves on an inherited socket); "
+        "Windows nodes refuse such a listener."))
+    proxy_protocol: bool | None = Field(None, description=(
+        "[beta] The agent writes a PROXY protocol v2 header before the first byte of each connection. Absent: true with "
+        "handover `listen_fd` (the header is then the only way a server learns the client's address), else false (the "
+        "address arrives in the `connection` message)."))
+    max_conns: Annotated[int, Field(ge=1, le=65535)] = Field(256, description="[beta] Open connections at once.")
+    max_conns_per_ip: Annotated[int, Field(ge=1, le=65535)] = Field(16, description=(
+        "[beta] Open connections at once from one client address (IPv6: per /64)."))
+    new_conns_per_ip_per_s: Annotated[float, Field(gt=0)] = Field(4.0, description=(
+        "[beta] New connections per second from one client address (a token bucket with a burst of twice the rate)."))
+    idle_timeout_s: Annotated[float, Field(ge=1, le=86400)] = Field(120.0, description=(
+        "[beta] A connection with no bytes either way for this long is closed."))
+    max_bytes_per_s: Annotated[float, Field(gt=0)] | None = Field(None, description=(
+        "[beta] A byte-rate cap for the listener, both directions together. Absent: none."))
+
+    def proxy(self) -> bool:
+        """Whether connections start with a PROXY v2 header (the default follows `handover`)."""
+        return self.handover == "listen_fd" if self.proxy_protocol is None else self.proxy_protocol
+
+    def env_name(self) -> str:
+        """The variable a `listen_fd` listener's inherited socket is named in."""
+        return LISTEN_FD_PREFIX + self.name.upper()
+
+    def approval_text(self) -> str:
+        """How the grant reads at approval (spec/sandbox.md, "Inbound listeners")."""
+        port = f"port {self.port_hint} wanted" if self.port_hint else "any port"
+        extra = ", served on an inherited listening socket" if self.handover == "listen_fd" else ""
+        cap = f", at most {self.max_bytes_per_s:g} bytes a second" if self.max_bytes_per_s else ""
+        return (f"listener {self.name} (TCP, {port}, {self.port_policy}{extra}; at most {self.max_conns} connections, "
+                f"{self.max_conns_per_ip} per address, {self.new_conns_per_ip_per_s:g} new a second per address, idle "
+                f"{self.idle_timeout_s:g} s{cap})")
+
+
+LISTEN_FD_PREFIX = "OARBANK_LISTEN_FD_"         # + the listener name, upper-cased: a listen_fd listener's socket
+
+
 class SandboxNet(Contract):
     """Network for the module's node-side processes (spec/sandbox.md, "Network"). [beta]"""
     mode: Annotated[str, Field(pattern=r"^[a-z][a-z0-9-]*$")] = Field("none", description=(
@@ -282,6 +343,22 @@ class SandboxNet(Contract):
     allow: list[Annotated[str, Field(max_length=253, pattern=HOST_PATTERN)]] = Field(default_factory=list, description=(
         "[beta] `host[:port]` entries (a leading `*.` matches subdomains); never IP addresses or CIDRs. Required with "
         "egress-allowlist; port defaults to 443."))
+    inbound: list[InboundListener] = Field(default_factory=list, description=(
+        "[beta] Listeners the agent opens on nodes the owner assigns, each served by one endpoint service that lists it "
+        "(`services[].listeners`); module code never listens. A grant approved by digest, independent of `mode` "
+        "(answering an accepted connection is not egress). Needs requires.core >= 2.10."))
+
+    @field_validator("inbound")
+    @classmethod
+    def _unique_inbound(cls, v):
+        names = [x.name for x in v]
+        dup = sorted({n for n in names if names.count(n) > 1})
+        if dup:
+            raise ValueError(f"sandbox.net.inbound lists {dup} more than once (listener names are unique)")
+        return v
+
+    def listener(self, name: str) -> InboundListener | None:
+        return next((x for x in self.inbound if x.name == name), None)
 
     @model_validator(mode="after")
     def _allow(self):
@@ -384,7 +461,7 @@ class SandboxSection(Contract):
 
     def requests(self) -> bool:
         return bool(self.net.mode != "none" or self.tools or self.devices.gpu != "none" or self.containers
-                    or self.container_sets or self.exec_writable or self.folders)
+                    or self.container_sets or self.exec_writable or self.folders or self.net.inbound)
 
     def runs_containers(self) -> bool:
         return bool(self.containers or self.container_sets)
@@ -392,8 +469,9 @@ class SandboxSection(Contract):
     def for_bootstrap(self) -> "SandboxSection":
         """The grants a bootstrap stage's jobs get (spec/sandbox.md, "Bootstrap jobs"): the network as approved (none or the
         egress allowlist; a module with a bootstrap stage never asks for egress-any) and nothing else: no host tools, GPU,
-        containers or execution of written files. The host also withholds the module data directory and settings."""
-        return SandboxSection(contract=self.contract, net=self.net)
+        containers, execution of written files or listeners. The host also withholds the module data directory and
+        settings."""
+        return SandboxSection(contract=self.contract, net=self.net.model_copy(update={"inbound": []}))
 
 
 class BundleSection(Contract):
@@ -462,6 +540,10 @@ class Coordinator(Contract):
         default_factory=lambda: {"default": 10.0}, description="[stable] Per-verb timeouts; key `default` applies to unlisted verbs.")
     permissions: list[Permission] = Field(default_factory=list, description="[stable] Host callbacks the module may call; everything else is denied.")
     campaign_effects: list[EffectKind] = Field(default_factory=list, description="[beta] Effects campaign.tick may request (requires the campaign.tick capability).")
+    workload_effects: list[Literal["store.write", "store.delete", "files.write", "files.put", "files.delete"]] = Field(
+        default_factory=list, description=(
+            "[beta] Effects workload.report may request: the module's own records only (requires the workload.report "
+            "capability and requires.core >= 2.10)."))
     move: MoveSection = Field(default_factory=MoveSection)
     env: EnvMap = Field(default_factory=dict, description=(
         "[beta] Extra environment for the coordinator process (names `^[A-Z][A-Z0-9_]*$`, never a reserved name). The host "
@@ -658,13 +740,21 @@ class Service(Contract):
     endpoint: bool = Field(False, description=(
         "[beta] Jobs reach the service: each attempt whose stage reserves one of its pools gets OARBANK_SERVICE_<NAME>, "
         "and the agent hands the service every connection over its endpoint channel; the service never listens "
-        "(spec/service-protocol.md, \"Endpoints\"). Provides at least one pool; lifecycle on_demand or always. Needs "
-        "requires.core >= 2.5."))
+        "(spec/service-protocol.md, \"Endpoints\"). Provides at least one pool or lists at least one listener; "
+        "lifecycle on_demand or always. Needs requires.core >= 2.5."))
+    listeners: list[Name] = Field(default_factory=list, description=(
+        "[beta] `[sandbox].net.inbound` listeners this service serves: the agent hands it each connection a listener "
+        "accepts (or, for handover `listen_fd`, the listening socket) and announces each listener's external address on "
+        "its endpoint channel. Needs endpoint = true, lifecycle always and requires.core >= 2.10."))
     gpu: ServiceGPU = Field(default_factory=ServiceGPU, description="[beta] Needs requires.core >= 2.5 when `use` is not none.")
 
     def env_name(self) -> str:
         """The variable a job finds this endpoint service's connector in."""
         return SERVICE_ENV_PREFIX + self.name.upper()
+
+    def listener_target(self) -> str:
+        """How listener rules name this process."""
+        return f"service {self.name!r}"
 
 
 class Probe(Contract):
@@ -675,11 +765,88 @@ class Probe(Contract):
     platforms: list[PlatformToken] = Field(default_factory=list, description="[beta] Only on these platforms (empty: every declared platform).")
 
 
+WORKLOAD_CONTROL = ("cooperative_throttle", "cooperative_pause", "freeze_ok")   # what a workload lets the agent do
+WORKLOAD_REPORT = "workload.report"                                            # the coordinator capability
+
+
+class WorkloadResources(Contract):
+    """What a running workload holds: counted against the node's capacity while it runs. [beta]"""
+    cpu_cores: Annotated[float, Field(ge=0, le=1024)] = Field(1.0, description="[beta] Cores it uses at full speed.")
+    mem_gb: Annotated[float, Field(ge=0, le=4096)] = Field(0.5, description="[beta] Memory it holds (GB).")
+    network: Literal["normal", "heavy"] = Field("normal", description=(
+        "[beta] `heavy`: the workload moves a lot of data over the node's internet line. At a site (nodes sharing one "
+        "line) at most the site's budget of network-heavy work runs at once, and while a protected process at the site "
+        "is in an upload phase the agent pauses it through its control (or stops and holds it when it cannot pause, "
+        "or past pause_tolerance_s) on every node of the site. Older cores ignore it."))
+
+
+class WorkloadRestart(Contract):
+    """How the agent restarts a workload that exits or fails its health check. [beta]"""
+    backoff_initial_s: Annotated[float, Field(gt=0)] = 10.0
+    backoff_max_s: Annotated[float, Field(gt=0)] = 600.0
+    max_failures: Annotated[int, Field(ge=1)] = Field(5, description="[beta] Consecutive failures before it is withdrawn (until a restart operation, a new version or a reassignment).")
+    jitter: Literal["full", "none"] = Field("full", description="[beta] `full`: each delay is uniform between 0 and the exponential backoff (AWS full jitter).")
+
+
+class WorkloadHealth(Contract):
+    """The agent's health check: `<exec> status` every period. [beta]"""
+    period_s: Annotated[float, Field(ge=5, le=3600)] = 15.0
+    timeout_s: Annotated[float, Field(gt=0, le=60)] = 5.0
+    failures: Annotated[int, Field(ge=1, le=20)] = Field(3, description="[beta] Consecutive unhealthy answers that end the run as a failure.")
+
+
+class Workload(Contract):
+    """A supervised long-running process that is the work itself: assigned to nodes by the owner, seat-based,
+    sandboxed with the module's grants, given its listed secrets, controlled through the runner control document, and
+    fleet work in host protection (spec/workload-protocol.md). [beta]"""
+    name: Name = Field(description="[beta] Unique among workloads and services; reports name it `<module>/<name>`.")
+    exec: Exec = Field(description=(
+        "[beta] argv (spec/manifest.md, \"Exec\"); the agent appends `run` (the long-running process, cwd its run "
+        "directory) or `status` (the health check). Usually the SDK's supervisor shim (oarbank_sdk.workload)."))
+    platforms: list[PlatformToken] = Field(default_factory=list, description="[beta] Only on these platforms (empty: every declared platform).")
+    seat: Literal["node", "fleet"] = Field("node", description=(
+        "[beta] `node`: the owner assigns it to nodes, one seat per node; `fleet`: the owner asks for a count and the "
+        "coordinator places the seats once on eligible nodes (it never moves one on its own)."))
+    identity: Literal["none", "per_node"] = Field("none", description=(
+        "[beta] `per_node`: the seat is named by the node's values of the workload's secrets and runs only under a "
+        "coordinator seat lease with a fence, so at most one node runs an identity at a time; every secret must be set "
+        "per node."))
+    secrets: list[Name] = Field(default_factory=list, description="[beta] Declared secrets delivered to this workload only, in OARBANK_SECRETS_FILE.")
+    listeners: list[Name] = Field(default_factory=list, description="[beta] Inbound listeners it serves through its endpoint channel ([sandbox].net.inbound).")
+    resources: WorkloadResources = Field(default_factory=WorkloadResources)
+    gpu: ServiceGPU = Field(default_factory=ServiceGPU, description="[beta] GPU use; not `none` needs sandbox.devices.gpu = 'compute'.")
+    control: list[Literal["cooperative_throttle", "cooperative_pause", "freeze_ok"]] = Field(default_factory=list, description=(
+        "[beta] What host protection may do besides stopping it: `cooperative_throttle` (it honours the control "
+        "document's `threads` and `gpu_duty`), `cooperative_pause` (it pauses itself on `pause`), `freeze_ok` (the "
+        "agent may freeze its process container)."))
+    pause_tolerance_s: Annotated[float, Field(ge=0, le=600)] | None = Field(None, description=(
+        "[beta] The longest pause its peers survive: protection stops and holds it instead of pausing longer. Default: 20 "
+        "when it can be paused (cooperative_pause or freeze_ok), else 0 (never paused)."))
+    stop_timeout_s: Annotated[float, Field(gt=0, le=600)] = Field(30.0, description="[beta] From the stop request to the kill.")
+    restart: WorkloadRestart = Field(default_factory=WorkloadRestart)
+    health: WorkloadHealth | None = Field(None, description="[beta] The `status` op's period; absent: a running process is healthy.")
+    reports: bool = Field(False, description=(
+        "[beta] Its `report` events reach the module's workload.report verb on the coordinator, whose effects keep the "
+        "module's own records (coordinator.workload_effects)."))
+
+    def pausable(self) -> bool:
+        return "cooperative_pause" in self.control or "freeze_ok" in self.control
+
+    def listener_target(self) -> str:
+        """How listener rules name this process."""
+        return f"workload {self.name!r}"
+
+    def effective_pause_tolerance_s(self) -> float:
+        if self.pause_tolerance_s is not None:
+            return self.pause_tolerance_s
+        return 20.0 if self.pausable() else 0.0
+
+
 class Secret(Contract):
     """A credential the owner sets through the core, write-only (spec/manifest.md, "Secrets"): stored encrypted on the
-    coordinator, never shown, delivered only to the runners of stages that list it and, with `secrets:read:self`, to
-    coordinator verbs. [beta]"""
-    name: Name = Field(description="[beta] The secret's name; unique. Stages list it in `secrets`.")
+    coordinator, never shown, delivered only to the runners of stages that list it, to workloads that list it and, with
+    `secrets:read:self`, to coordinator verbs. [beta]"""
+    name: Name = Field(description="[beta] The secret's name; unique. Stages and workloads list it in `secrets`.")
     description: Annotated[str, Field(max_length=500)] = Field("", description="[beta] What it is for, shown where the owner sets it.")
 
 
@@ -832,6 +999,7 @@ class Manifest(Contract):
     stages: list[Stage] = Field(min_length=1)
     services: list[Service] = Field(default_factory=list)
     probes: list[Probe] = Field(default_factory=list)
+    workloads: list[Workload] = Field(default_factory=list, description="[beta] Supervised long-running processes that are the work itself. Needs requires.core >= 2.10.")
     settings: Settings = Field(default_factory=Settings)
     secrets: list[Secret] = Field(default_factory=list, description="[beta] Write-only credentials. Needs requires.core >= 2.5.")
     results: Results
@@ -848,6 +1016,7 @@ class Manifest(Contract):
         out = [self.coordinator.exec] + [v.exec for v in self.coordinator.variants.values() if v.exec]
         out += [self.runner.exec] + [v.exec for v in self.runner.variants.values() if v.exec]
         out += [s.exec for s in self.services] + [p.exec for p in self.probes] + ([self.cli.exec] if self.cli else [])
+        out += [w.exec for w in self.workloads]
         return out
 
     def core_keys_used(self) -> list[tuple[str, tuple[int, int]]]:
@@ -898,8 +1067,19 @@ class Manifest(Contract):
             ("sandbox.tools[].version", any(t.version for t in self.sandbox.tools)),
             ("sandbox.tools[].arch", any(t.arch != "any" for t in self.sandbox.tools)),
         ]
+        workloads = [
+            ("workloads", bool(self.workloads)),
+            ("requires.workload_protocol", bool(self.requires.workload_protocol)),
+            ("the workload.report capability", WORKLOAD_REPORT in self.coordinator.capabilities),
+            ("coordinator.workload_effects", bool(self.coordinator.workload_effects)),
+        ]
+        inbound = [
+            ("sandbox.net.inbound", bool(self.sandbox.net.inbound)),
+            ("services[].listeners", any(s.listeners for s in self.services)),
+        ]
         return (out + [(k, SDK13_KEYS_CORE) for k, on in sdk13 if on] + [(k, BOOTSTRAP_KEYS_CORE) for k, on in sdk14 if on]
-                + [(k, SDK15_KEYS_CORE) for k, on in sdk15 if on] + [(k, SDK16_KEYS_CORE) for k, on in sdk16 if on])
+                + [(k, SDK15_KEYS_CORE) for k, on in sdk15 if on] + [(k, SDK16_KEYS_CORE) for k, on in sdk16 if on]
+                + [(k, INBOUND_KEYS_CORE) for k, on in inbound if on] + [(k, WORKLOAD_KEYS_CORE) for k, on in workloads if on])
 
     # ------------------------------------------------------------------------ stages
 
@@ -1015,7 +1195,7 @@ class Manifest(Contract):
             if key not in declared and key not in declared_os:
                 raise ValueError(f"runner variant {key!r} is neither a declared platform nor an OS of one")
         self._platform_rules(declared)
-        for what, items in (("service", self.services), ("probe", self.probes), ("stage", self.stages)):
+        for what, items in (("service", self.services), ("probe", self.probes), ("stage", self.stages), ("workload", self.workloads)):
             for it in items:
                 plats = it.requires.platforms if what == "stage" else it.platforms
                 bad = sorted(set(plats) - declared)
@@ -1082,6 +1262,7 @@ class Manifest(Contract):
         self._trust_rules()
         self._checkpoint_rules()
         self._gpu_api_rules()
+        self._workload_rules()
         if len(self.stages) > 1 and "result.merge" not in self.coordinator.capabilities:
             raise ValueError("a multi-stage module must implement result.merge (coordinator.capabilities)")
         if self.goldens and self.goldens.compare == "verb" and "golden.compare" not in self.coordinator.capabilities:
@@ -1154,14 +1335,54 @@ class Manifest(Contract):
     def _endpoint_rules(self):
         """Service endpoints and service GPU use (spec/manifest.md, rule 18)."""
         for s in self.services:
-            if s.endpoint and not s.provides.pools:
+            if s.endpoint and not s.provides.pools and not s.listeners:
                 raise ValueError(f"service {s.name!r}: an endpoint service provides at least one pool (a job reaches it "
-                                 "through a pool its stage reserves)")
+                                 "through a pool its stage reserves) or lists at least one listener")
             if s.endpoint and s.lifecycle == "manual":
                 raise ValueError(f"service {s.name!r}: an endpoint service is on_demand or always (the agent never starts "
                                  "a manual service, so it could never hand it its endpoint channel)")
             if s.gpu.use != "none" and self.sandbox.devices.gpu != "compute":
                 raise ValueError(f"service {s.name!r}: gpu.use = {s.gpu.use!r} needs sandbox.devices.gpu = 'compute'")
+        self._listener_rules()
+
+    def listener_targets(self) -> list[tuple[str, list[str], "Service | Workload"]]:
+        """Every module process that lists listeners, as (how rules name it, its listeners, the process): endpoint
+        services and workloads."""
+        return ([(s.listener_target(), list(s.listeners), s) for s in self.services if s.listeners]
+                + [(w.listener_target(), list(w.listeners), w) for w in self.workloads if w.listeners])
+
+    def listener_service(self, name: str) -> "Service | Workload | None":
+        """The process serving listener `name`."""
+        return next((t for _, names, t in self.listener_targets() if name in names), None)
+
+    def _listener_rules(self):
+        """Inbound listeners (spec/manifest.md, rule 22)."""
+        declared = {x.name for x in self.sandbox.net.inbound}
+        served: dict[str, list[str]] = {}
+        for where, names, _ in self.listener_targets():
+            dup = sorted({n for n in names if names.count(n) > 1})
+            if dup:
+                raise ValueError(f"{where}: listeners lists {dup} more than once")
+            unknown = [n for n in names if n not in declared]
+            if unknown:
+                raise ValueError(f"{where}: listeners {unknown} are not [sandbox].net.inbound entries")
+            for n in names:
+                served.setdefault(n, []).append(where)
+        for s in self.services:
+            if s.listeners and not s.endpoint:
+                raise ValueError(f"service {s.name!r}: a service with listeners is an endpoint service (endpoint = true): "
+                                 "its connections and announcements arrive on its endpoint channel")
+            if s.listeners and s.lifecycle != "always":
+                raise ValueError(f"service {s.name!r}: a service with listeners has lifecycle = 'always' (a listener is "
+                                 "wanted for as long as the module is enabled on the node)")
+        for x in self.sandbox.net.inbound:
+            by = served.get(x.name, [])
+            if not by:
+                raise ValueError(f"sandbox.net.inbound {x.name!r}: no endpoint service or workload lists it in "
+                                 "`listeners` (a listener needs exactly one)")
+            if len(by) > 1:
+                raise ValueError(f"sandbox.net.inbound {x.name!r} is listed by {', '.join(by)}: a listener needs exactly "
+                                 "one service or workload")
 
     def _bootstrap_rules(self, chain: set):
         """Bootstrap stages and the pinned dataset table (spec/manifest.md, rule 15)."""
@@ -1226,11 +1447,12 @@ class Manifest(Contract):
                 raise ValueError(f"stage {st.name!r}: a bootstrap stage receives no secrets (bootstrap jobs get only the "
                                  "egress allowlist)")
             used |= set(st.secrets)
+        used |= {n for w in self.workloads for n in w.secrets}
         if "secrets:read:self" not in self.coordinator.permissions:
             unused = [n for n in names if n not in used]
             if unused:
-                raise ValueError(f"secrets {unused} reach nothing: list them in a stage's `secrets`, or give the "
-                                 "coordinator the secrets:read:self permission")
+                raise ValueError(f"secrets {unused} reach nothing: list them in a stage's or a workload's `secrets`, or "
+                                 "give the coordinator the secrets:read:self permission")
         sets = [c.name for c in self.sandbox.container_sets]
         dup = sorted({n for n in sets if sets.count(n) > 1})
         if dup:
@@ -1246,10 +1468,59 @@ class Manifest(Contract):
                 raise ValueError(f"stage {st.name!r} reserves the gpu pool: declare runner.gpu.in_container = true and "
                                  "runner.gpu.use = 'shared' or 'exclusive' (GPU admission applies to its jobs)")
 
+    def _workload_rules(self):
+        """Workloads (spec/manifest.md, rule 24)."""
+        names = [w.name for w in self.workloads]
+        if len(set(names)) != len(names):
+            raise ValueError("workload names must be unique")
+        clash = sorted(set(names) & {s.name for s in self.services})
+        if clash:
+            raise ValueError(f"workloads {clash} share a name with a service: both are reported as <module>/<name>")
+        declared = {s.name for s in self.secrets}
+        handover = {i.name: i.handover for i in self.sandbox.net.inbound}
+        for w in self.workloads:
+            if len(set(w.secrets)) != len(w.secrets):
+                raise ValueError(f"workload {w.name!r}: a secret is listed twice")
+            unknown = [x for x in w.secrets if x not in declared]
+            if unknown:
+                raise ValueError(f"workload {w.name!r}: secrets {unknown} are not declared in [[secrets]]")
+            if w.identity == "per_node" and not w.secrets:
+                raise ValueError(f"workload {w.name!r}: identity = 'per_node' names its seat by the node's secrets, so it "
+                                 "lists at least one secret")
+            if w.gpu.use != "none" and self.sandbox.devices.gpu != "compute":
+                raise ValueError(f"workload {w.name!r}: gpu.use {w.gpu.use!r} needs sandbox.devices.gpu = 'compute'")
+            if w.gpu.apis_any and w.gpu.use == "none":
+                raise ValueError(f"workload {w.name!r}: gpu.apis_any needs use = 'shared' or 'exclusive'")
+            if len(set(w.control)) != len(w.control):
+                raise ValueError(f"workload {w.name!r}: a control item is listed twice")
+            fd = [x for x in w.listeners if handover.get(x) == "listen_fd"]
+            if fd:
+                raise ValueError(f"workload {w.name!r}: listeners {fd} have handover 'listen_fd'; a workload is handed its "
+                                 "connections (handover 'connections'), never a listening socket")
+            if w.restart.backoff_max_s < w.restart.backoff_initial_s:
+                raise ValueError(f"workload {w.name!r}: restart.backoff_max_s is below backoff_initial_s")
+            if w.pause_tolerance_s and w.pause_tolerance_s > 0 and not w.pausable():
+                raise ValueError(f"workload {w.name!r}: pause_tolerance_s > 0 needs control cooperative_pause or freeze_ok "
+                                 "(a workload that cannot be paused is never paused)")
+        if self.workloads and not self.requires.workload_protocol:
+            raise ValueError("workloads are declared, so requires.workload_protocol must list a major")
+        reporting = [w.name for w in self.workloads if w.reports]
+        cap = WORKLOAD_REPORT in self.coordinator.capabilities
+        if reporting and not cap:
+            raise ValueError(f"workloads {reporting} send reports, so coordinator.capabilities lists {WORKLOAD_REPORT}")
+        if cap and not reporting:
+            raise ValueError(f"the {WORKLOAD_REPORT} capability needs a workload with reports = true")
+        if self.coordinator.workload_effects and not cap:
+            raise ValueError(f"coordinator.workload_effects requires the {WORKLOAD_REPORT} capability")
+
+    def workload(self, name: str) -> "Workload | None":
+        return next((w for w in self.workloads if w.name == name), None)
+
     def _gpu_api_rules(self):
         """GPU APIs select nodes only for GPU work (spec/manifest.md, rule 21)."""
         needs = [("runner.gpu", self.runner.gpu)] + [(f"runner.variants.{k}.gpu", v.gpu) for k, v in self.runner.variants.items() if v.gpu]
         needs += [(f"services.{s.name}.gpu", s.gpu) for s in self.services]
+        needs += [(f"workloads.{w.name}.gpu", w.gpu) for w in self.workloads]
         for where, g in needs:
             if g.apis_any and g.use == "none":
                 raise ValueError(f"{where}.apis_any needs use = 'shared' or 'exclusive': it places GPU work, and with "
@@ -1309,6 +1580,7 @@ class Manifest(Contract):
                 execs = [("runner", self.runner.for_platform(p).exec)]
                 execs += [(f"service {s.name}", s.exec) for s in self.services if pf.matches(p, s.platforms)]
                 execs += [(f"probe {x.name}", x.exec) for x in self.probes if pf.matches(p, x.platforms)]
+                execs += [(f"workload {w.name}", w.exec) for w in self.workloads if pf.matches(p, w.platforms)]
                 for what, argv in execs:               # argv[0], and the script a `python` exec runs
                     for a in argv:
                         if a.startswith(BUNDLE_TOKEN + "/") and not self.bundle.receives(a[len(BUNDLE_TOKEN) + 1:], p):
@@ -1357,6 +1629,13 @@ def lint(man: Manifest) -> list[str]:
                    "egress-allowlist naming only the service the key is for limits that")
     gpus = [("runner.gpu", man.runner.gpu)] + [(f"runner.variants.{k}.gpu", v.gpu) for k, v in man.runner.variants.items() if v.gpu]
     gpus += [(f"services.{s.name}.gpu", s.gpu) for s in man.services]
+    gpus += [(f"workloads.{w.name}.gpu", w.gpu) for w in man.workloads]
+    if man.workloads and man.sandbox.net.mode == "egress-any" and "linux" in man.requires.os_platforms():
+        out.append("workloads run with sandbox.net.mode 'egress-any', which Linux nodes cannot enforce: the core places them "
+                   "on macOS and Windows nodes only")
+    if man.sandbox.net.mode == "egress-any" and any(w.secrets for w in man.workloads):
+        out.append("workloads receive secrets while sandbox.net.mode is 'egress-any': a leaked key can reach any host; an "
+                   "egress-allowlist naming only the endpoints the key is for limits that")
     for where, g in gpus:
         unknown = [a for a in g.apis_any if a not in gpu.KNOWN_APIS]
         if unknown:
@@ -1369,6 +1648,13 @@ def lint(man: Manifest) -> list[str]:
         if images and os_ == "windows" and f"linux/{arch}" not in images:
             out.append(f"requires.platforms lists {plat}, but no container image or set is for linux/{arch}: Windows nodes run "
                        f"containers of their own architecture only, so its containers cannot run there")
+    for x in man.sandbox.net.inbound:
+        svc = man.listener_service(x.name)
+        wins = [p for p in man.requires.platforms if p.startswith("windows")
+                and (svc is None or pf.matches(p, getattr(svc, "platforms", [])))]
+        if x.handover == "listen_fd" and wins:
+            out.append(f"sandbox.net.inbound {x.name!r} has handover 'listen_fd', which Windows nodes cannot provide: on "
+                       f"{', '.join(wins)} nodes this listener is unavailable (LISTENER_HANDOVER_UNSUPPORTED)")
     scope = man.results.determinism_scope
     if scope not in pf.SCOPE_MIX:
         out.append(f"results.determinism_scope {scope!r} is not known to this SDK; replicas compare within one platform")

@@ -376,3 +376,103 @@ def test_a_stage_declares_network_heavy_use():
         m.Manifest.model_validate(d)
     from oarbank_sdk.schemas import schema_for
     assert schema_for("manifest-1")["$defs"]["Resources"]["properties"]["network"]["enum"] == ["normal", "heavy"]
+
+
+def listening(d, inbound=None, **svc):
+    """toy with an inbound listener `peer` served by an always-on endpoint service `node` (core 2.10)."""
+    d["requires"].update(core=">=2.10,<3", service_protocol=[1])
+    d["sandbox"] = {"net": {"inbound": inbound if inbound is not None else [{"name": "peer", "port_hint": 9000}]}}
+    d["services"] = [{"name": "node", "exec": ["python", "-I", "{bundle}/node.py"], "endpoint": True, "lifecycle": "always",
+                      "listeners": ["peer"], **svc}]
+    return d
+
+
+def test_an_inbound_listener_is_served_by_one_always_on_endpoint_service_and_needs_core_2_10():
+    man = m.Manifest.model_validate(listening(copy.deepcopy(doc("toy"))))
+    x = man.sandbox.net.inbound[0]
+    assert (x.protocol, x.port_policy, x.tls, x.handover, x.max_conns, x.max_conns_per_ip, x.new_conns_per_ip_per_s,
+            x.idle_timeout_s, x.max_bytes_per_s) == ("tcp", "stable", "passthrough", "connections", 256, 16, 4.0, 120.0, None)
+    assert x.proxy() is False and x.env_name() == "OARBANK_LISTEN_FD_PEER"
+    assert man.sandbox.net.mode == "none"                       # inbound needs no egress mode
+    assert man.sandbox.requests()                                # an inbound listener is a grant to approve
+    assert man.listener_service("peer").name == "node" and man.listener_service("other") is None
+    assert [(w, n) for w, n, _ in man.listener_targets()] == [("service 'node'", ["peer"])]
+    assert man.endpoint_services_of(None) == []                  # no pool: no job reaches it
+    assert man.core_keys_used()[-2:] == [("sandbox.net.inbound", (2, 10)), ("services[].listeners", (2, 10))]
+    assert x.approval_text() == ("listener peer (TCP, port 9000 wanted, stable; at most 256 connections, 16 per address, "
+                                 "4 new a second per address, idle 120 s)")
+    assert man.sandbox.for_bootstrap().net.inbound == []         # bootstrap jobs never get listeners
+    # rule 12: both keys need core 2.10
+    bad(lambda d: listening(d)["requires"].update(core=">=2.5,<3"),
+        r"sandbox\.net\.inbound, services\[\]\.listeners need requires.core >= 2.10", name="toy")
+    # rule 22
+    bad(lambda d: listening(d, inbound=[{"name": "peer"}, {"name": "peer"}]), r"lists \['peer'\] more than once", name="toy")
+    bad(lambda d: listening(d, listeners=["peer", "other"]), r"listeners \['other'\] are not \[sandbox\]\.net\.inbound",
+        name="toy")
+    bad(lambda d: listening(d, listeners=[], provides={"pools": ["model"]}), "no endpoint service or workload lists it", name="toy")
+    bad(lambda d: listening(d, lifecycle="on_demand"), "a service with listeners has lifecycle = 'always'", name="toy")
+    bad(lambda d: listening(d, endpoint=False), "a service with listeners is an endpoint service", name="toy")
+    bad(lambda d: listening(d, listeners=["peer", "peer"]), r"listeners lists \['peer'\] more than once", name="toy")
+
+    def two(d):
+        listening(d)
+        d["services"].append({**d["services"][0], "name": "other"})
+    bad(two, r"'peer' is listed by service 'node', service 'other'", name="toy")
+    # an endpoint service needs a pool or a listener
+    bad(lambda d: listening(d, listeners=[], provides={"capabilities": ["llm"]}).update(
+        sandbox={}), "provides at least one pool .* or lists at least one listener", name="toy")
+
+
+@pytest.mark.parametrize("entry, match", [
+    ({"name": "peer", "protocol": "udp"}, "protocol"),
+    ({"name": "peer", "port_hint": 80}, "port_hint"),
+    ({"name": "peer", "port_hint": 65536}, "port_hint"),
+    ({"name": "peer", "port_policy": "any"}, "port_policy"),
+    ({"name": "peer", "tls": "terminate"}, "tls"),
+    ({"name": "peer", "handover": "fd"}, "handover"),
+    ({"name": "peer", "max_conns": 0}, "max_conns"),
+    ({"name": "peer", "max_conns_per_ip": 70000}, "max_conns_per_ip"),
+    ({"name": "peer", "new_conns_per_ip_per_s": 0}, "new_conns_per_ip_per_s"),
+    ({"name": "peer", "idle_timeout_s": 0}, "idle_timeout_s"),
+    ({"name": "peer", "idle_timeout_s": 86401}, "idle_timeout_s"),
+    ({"name": "peer", "max_bytes_per_s": 0}, "max_bytes_per_s"),
+    ({"name": "Peer"}, "name"),
+])
+def test_inbound_listener_fields_are_bounded(entry, match):
+    bad(lambda d: listening(d, inbound=[entry]), match, name="toy")
+
+
+def test_listen_fd_handover_defaults_to_proxy_protocol_and_warns_for_windows_nodes():
+    d = listening(copy.deepcopy(doc("toy")), inbound=[{"name": "peer", "handover": "listen_fd", "new_conns_per_ip_per_s": 0.5,
+                                                       "max_bytes_per_s": 1e6}])
+    man = m.Manifest.model_validate(d)
+    x = man.sandbox.net.inbound[0]
+    assert x.proxy() is True and "served on an inherited listening socket" in x.approval_text()
+    assert "0.5 new a second" in x.approval_text() and "at most 1e+06 bytes a second" in x.approval_text()
+    warn = [w for w in m.lint(man) if "listen_fd" in w]
+    assert len(warn) == 1 and "windows-arm64, windows-amd64 nodes this listener is unavailable" in warn[0]
+    d["sandbox"]["net"]["inbound"][0]["proxy_protocol"] = False
+    assert m.Manifest.model_validate(d).sandbox.net.inbound[0].proxy() is False
+    d["services"][0]["platforms"] = ["darwin-arm64", "linux-amd64"]    # the service never runs on Windows nodes
+    assert not [w for w in m.lint(m.Manifest.model_validate(d)) if "listen_fd" in w]
+    plain = m.Manifest.model_validate(listening(copy.deepcopy(doc("toy")), inbound=[{"name": "peer", "proxy_protocol": True}]))
+    assert plain.sandbox.net.inbound[0].proxy() is True and not [w for w in m.lint(plain) if "listen_fd" in w]
+
+
+def test_a_listener_service_may_also_serve_jobs_through_a_pool():
+    d = listening(copy.deepcopy(doc("toy")), provides={"pools": ["model"]})
+    d["stages"][0]["requires"]["pools"] = {"model": 1}
+    man = m.Manifest.model_validate(d)
+    assert [s.name for s in man.endpoint_services_of(None)] == ["node"]
+
+
+def test_the_listener_example_passes_check(capsys):
+    assert main(["check", str(Path(__file__).parents[1] / "examples" / "publicecho" / "oarbank-module.toml")]) == 0
+    assert "ok  dev.codonic.oarbank.publicecho" in capsys.readouterr().out
+
+
+def test_a_workload_declares_network_heavy_use():
+    assert m.WorkloadResources().network == "normal"
+    assert m.WorkloadResources(network="heavy").network == "heavy"
+    with pytest.raises(ValidationError):
+        m.WorkloadResources(network="huge")

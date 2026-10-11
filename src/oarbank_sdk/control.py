@@ -181,6 +181,20 @@ class Control:
         """The stop asks for a checkpoint first (`stop` with `checkpoint`): write one, then acknowledge the stop."""
         return self.stop and self.checkpoint
 
+    def poll(self) -> bool:
+        """Apply a nudged change if one came (never blocks, never raises); returns whether a newer document applied."""
+        return self._nudges.take() and self.refresh()
+
+    def wait(self):
+        """Block until the next nudge and apply it; raise Stopped on a stop request (a governor holding at duty 0 waits
+        here: oarbank_sdk.duty)."""
+        t = time.perf_counter()
+        self._nudges.wait()
+        self.paused_s += time.perf_counter() - t
+        self.refresh()
+        if self.stop:
+            raise Stopped()
+
     def check(self):
         """Apply a nudged change (never blocks); raise Stopped on a stop request."""
         if self._nudges.take():
