@@ -63,6 +63,9 @@ For Oarbank core 2.9.0. Everything is additive within manifest 1 and module prot
   schema a `node` key, a required key or a `campaign` key. `unit` and `advanced` need no newer core.
   `oarbank_sdk.settings.core_gate` applies the settings part in `check`, `bundle build` and `bundle verify`.
 - The `toy` example declares a fleet setting and a node setting and needs core 2.9.
+- **The conformance kit cleans up after itself.** A run of the kit (`oarbank-sdk conform`, `conform()`) kept every
+  runner workdir, data directory, grants directory, checkpoint and sandbox profile it made in the temp directory,
+  hundreds per test session. They now go in one directory, removed when the run ends, however it ends.
 
 ### Migrating from 1.5
 

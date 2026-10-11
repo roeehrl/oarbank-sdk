@@ -35,6 +35,7 @@ The host owns leases, attempts, retries, certification, replication, disputes an
 | `integrity.check` | optional | Verify the module's own state through host callbacks; see "Integrity checks" below. |
 | `move.preflight` / `move.postflight` / `move.cancelled` | optional | The module's part in a coordinator move; see "Coordinator moves" below. |
 | `campaign.tick` | optional | Advance one of the module's running campaigns. The host calls it every few seconds per running campaign, with the campaign (including [beta] its `placement {mix, unit, class, state}`) and all its jobs and canonical results (each with the `platform` that produced it); it returns effects limited to `coordinator.campaign_effects`. With the `campaign.tick.results` capability each done job also carries its canonical `result` (see "Results in campaign.tick"). A campaign the module leaves running with no open jobs stays running until the module marks it `done`. |
+| `workload.report` | optional | What one of the module's workloads observed: the `report` events the agent shipped for it, in order. It returns effects limited to `coordinator.workload_effects`; see "Workload reports" below. |
 
 An optional verb is available only if the module lists it in `initialize.capabilities`. A call to an unadvertised verb fails with `-32003`.
 
@@ -65,6 +66,27 @@ advertises it with `Module(..., features=(mp.CAP_TICK_RESULTS,))`). Then:
   module version without the capability (a result-cache hit from an older version) is not delivered (`result: null`).
   One tick carries at most 8 MiB of results (`mp.TICK_RESULTS_BUDGET`), newest done jobs first; a done job left out
   has `result_omitted: true`. Keep what you have consumed in your store, and let results you no longer need age out.
+
+### Workload reports
+
+A workload with `reports = true` ([manifest.md](manifest.md#workloads)) appends `report` events to its events file
+([workload-protocol.md](workload-protocol.md#events)); the agent numbers them (`seq`, rising per workload on its node)
+and ships them to the coordinator, at most 60 a minute per workload. The coordinator calls `workload.report` (capability
+`workload.report`, core 2.10) with them:
+
+- **Params:** `{workload, node, seat_id, fence, events: [{seq, t, data}]}`, at most 200 events, oldest first. `seat_id`
+  and `fence` name the seat the workload ran in (`null` for a workload without an identity); `data` is the event's
+  object, as the workload wrote it (at most 4 KiB).
+- **Result:** `{effects, message}`. The effects are limited to the kinds `coordinator.workload_effects` lists, which are
+  only the module's own records: `store.write`, `store.delete`, `files.write`, `files.put`, `files.delete`. The host
+  applies them atomically with the delivery and refuses the whole answer if one is not declared.
+- **Idempotent by seq.** A delivery may repeat after a failure: the same `seq` for the same workload on the same node is
+  a retry of something already handled. Key what you write by it, or by the source's own reference inside `data` (a
+  store document per report, keyed `<node>.<workload>.<seq>` or by that reference), so a repeat writes the same thing
+  again. An error answer is not an acknowledgement: the host delivers the events again later.
+- **Keep your own records.** Amounts are integers in the smallest unit, each record keyed by the source's own reference;
+  a correction is a new record that reverses the old one. A module asks its owner only for public identifiers, never
+  for a key that controls funds.
 
 ## Host callbacks (module → host)
 

@@ -300,3 +300,62 @@ def test_a_runner_that_does_not_hold_its_duty_is_caught(tmp_path):
     # and one that writes no reports at all cannot show it holds anything
     r.write_text(r.read_text().replace("Duty(ctl, events=events,", "Duty(ctl, events=None,"))
     assert "duty spec stand-in-at-0.3 (gpu_duty 0.3): reports the duty it holds" in failed(conform(d))
+
+
+PUBLICECHO = Path(__file__).parents[1] / "examples" / "publicecho"
+
+
+def copy_publicecho(tmp_path) -> Path:
+    d = tmp_path / "publicecho"
+    shutil.copytree(PUBLICECHO, d, ignore=shutil.ignore_patterns("__pycache__", "dist"))
+    return d
+
+
+def test_the_listener_reference_module_conforms_with_its_listener_served():
+    """publicecho's service starts as an agent starts it with its listener, gets the kit's announcement, and answers the
+    fixtures' listener_specs through listener connections the kit hands it."""
+    rep = conform(PUBLICECHO)
+    assert rep.ok, rep.text()
+    names = {c.name for c in rep.checks if c.status == "pass"}
+    assert {"service echo: starts with its listeners, says hello on its endpoint channel and becomes ready",
+            "service echo: listener echo: takes a connection the agent hands it",
+            "service echo: listener spec one-line", "service echo: listener spec two-lines",
+            "service echo: the service never listens itself", "service echo: stops"} <= names, rep.text()
+    assert not [c for c in rep.checks if c.suite == "service"]   # a service with listeners runs in the listener suite
+
+
+def test_a_listener_service_that_listens_itself_is_caught(tmp_path):
+    d = copy_publicecho(tmp_path)
+    code = (d / "echo_service.py").read_text(encoding="utf-8").replace(
+        'def main(op: str) -> int:\n',
+        'LISTENER = []\n\n\ndef main(op: str) -> int:\n'
+        '    if op in ("start", "serve"):                     # an echo server that also opens a port of its own\n'
+        '        s = socket.socket()\n'
+        '        s.bind(("127.0.0.1", 0))\n'
+        '        s.listen()\n'
+        '        LISTENER.append(s)\n')
+    (d / "echo_service.py").write_text(code, encoding="utf-8", newline="\n")
+    rep = conform(d)
+    assert "service echo: the service never listens itself" in failed(rep), rep.text()
+
+
+def test_a_listener_spec_the_service_does_not_answer_fails(tmp_path):
+    d = copy_publicecho(tmp_path)
+    fx = json.loads((d / "conformance.json").read_text(encoding="utf-8"))
+    fx["listener_specs"][0]["expect"]["contains"] = "echo hello 198.51.100.1:1\n"
+    fx["listener_specs"].append({"name": "stray", "listener": "nope", "send": "x\n"})
+    rep = conform(d, fixtures=fx)
+    assert {"service echo: listener spec one-line", "listener spec stray: fixture"} <= failed(rep), rep.text()
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="listen_fd listeners exist on macOS and Linux only")
+def test_a_listen_fd_listener_conforms_on_its_inherited_socket(tmp_path):
+    d = copy_publicecho(tmp_path)
+    toml = d / "oarbank-module.toml"
+    toml.write_text(toml.read_text(encoding="utf-8").replace('name = "echo"\nport_hint', 'name = "echo"\nhandover = "listen_fd"\n'
+                                                              'port_hint'), encoding="utf-8", newline="\n")
+    rep = conform(d)
+    assert rep.ok, rep.text()
+    names = {c.name for c in rep.checks if c.status == "pass"}
+    assert {"service echo: listener spec one-line", "service echo: the service never listens itself"} <= names, rep.text()
+    assert any("listen_fd" in c.detail for c in rep.checks if c.status == "warn")   # Windows nodes cannot serve it

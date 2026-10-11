@@ -68,6 +68,21 @@ wired limit: wired memory is memory the protected program cannot have.
 that time the GPU was busy with your units, the duty asked, and `device` (`gpu`; `cpu` for a stand-in that does its
 units on the CPU). The conformance kit reads them.
 
+### In a workload
+
+A workload (a long-running process, [Run a long-running workload](workloads.md)) gets `gpu_duty` in its own control
+document under the same rules, once it declares `cooperative_throttle` and uses the GPU; the agent checks its
+processes' GPU time the same way and pauses or stops it through the workload's protection ladder. A workload that runs
+its GPU units in Python holds it with a governor made without a control document, fed from the supervisor's callback:
+
+```python
+duty = Duty(None, events=None)
+sup = Supervisor([...], gpu_duty=duty.set)    # the supervisor calls duty.set(d) on every change
+```
+
+A third-party daemon holds it through its own knobs (a batch size, a rate limit in the module's proxy): the callback
+is where the module translates the duty for it.
+
 ## Prove it with the conformance kit
 
 List one or more duty specs in `conformance.json`: tasks that run long enough to measure (the kit stops a `cancellable`
