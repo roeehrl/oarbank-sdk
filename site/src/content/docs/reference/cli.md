@@ -113,6 +113,10 @@ both preview the per-node impact, then apply.
 | `oarbank groups create <name> [--os --arch --label --hostname --battery\|--no-battery --ram-min --ram-max --cores-min --selector JSON --member …]` | A node group |
 | `oarbank groups update <G> [selector flags] [--name --description --no-selector --no-members]` | Change a group |
 | `oarbank groups rank <G> up\|down\|top\|bottom`, `oarbank groups delete <G>` | Reorder or delete a group (deleting deletes its values) |
+| `oarbank sites list\|show [S]\|suggest` | Sites (nodes sharing one internet line) with their budget and state, and suggested sites (2.10) |
+| `oarbank sites create <name> --node N … [--transfers N --heavy-jobs N --mbps M]`, `oarbank sites update <S> […]` | A site and its uplink budget ([Sites](/oarbank/operate/sites)) |
+| `oarbank sites add <S> <node>…`, `oarbank sites remove <node>…`, `oarbank sites delete <S>` | Members of a site |
+| `oarbank sites accept <key> [--name N \| --site S]`, `oarbank sites dismiss <key>` | Take or drop a suggestion |
 
 ### Host tools
 
