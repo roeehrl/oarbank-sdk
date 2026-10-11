@@ -54,7 +54,7 @@ directory inside the run directory, plus:
 | `OARBANK_LIMITS_FILE` | The owner's caps on the node. |
 | `OARBANK_SEAT_ID`, `OARBANK_SEAT_FENCE` | Informational: the seat it runs in (`identity = "per_node"`) and the seat's fence. Nothing needs to act on them. |
 | `OARBANK_CONTROL_EVENT` | Windows: the handle, in decimal, of the inherited auto-reset event the agent sets after every change to the control document. |
-| `OARBANK_ENDPOINT_CHANNEL` | Only for a workload that serves `listeners`: its endpoint channel, as for an endpoint service ([service-protocol.md](service-protocol.md#endpoints)); every inbound connection arrives on it (`oarbank_sdk.service_endpoint.Acceptor`). |
+| `OARBANK_ENDPOINT_CHANNEL`, `OARBANK_LISTENERS_FILE` | Only for a workload that serves `listeners`: its endpoint channel and the listeners file, exactly as for an endpoint service that lists listeners ([service-protocol.md](service-protocol.md#listeners)): it says hello on the channel, gets the announcements, every connection an inbound listener accepts (`handover = "connections"` only; a workload never gets a listening socket), answers `accepted`, and may narrow with `listener_allow` (`oarbank_sdk.service_endpoint.Acceptor`). A workload that serves listeners is not adopted across agent restarts: its channel ends with the agent, so the new agent stops it and starts it afresh. |
 | `HTTPS_PROXY`, `HTTP_PROXY`, `ALL_PROXY` | For `net.mode = "egress-allowlist"`: the agent's local proxy, the only route out. |
 
 Settings and secrets are files, never environment variables: sizes differ per OS, and a child would inherit them.

@@ -40,6 +40,11 @@ Suites:
 - **service**: each endpoint service starts as an agent starts it (with its endpoint channel), says hello, becomes
   ready, answers the fixtures' `service_specs` through connections the kit hands it, drops an attempt that ended, stops,
   and **never listens itself** (no process of it holds a listening socket);
+- **listener**: each endpoint service that lists inbound listeners starts the same way, with OARBANK_LISTENERS_FILE
+  (and, for a `listen_fd` listener, the listening socket the kit made), gets an announcement for each listener after its
+  hello, accepts a connection the kit hands it on each listener (with the PROXY v2 header when the listener has one),
+  answers the fixtures' `listener_specs` (and its `service_specs`), sends only well-formed `listener_allow` messages,
+  stops, and never listens itself;
 - **workload**: each workload runs as an agent runs it (a run directory, the private directory with its control
   document, the protocol's environment and a unique token, `run` as the leader of a new process group or Job Object):
   it keeps running, answers `status` healthy, survives a freeze (`freeze_ok`), shows and clears a cooperative pause,
@@ -55,7 +60,8 @@ Fixtures (optional `conformance.json` next to the manifest) feed the fake host:
 "capabilities": [...], "gpu_apis"?: {"host": [...], "containers": [...]}}], "params": [...examples for params.check...], "store": {"<collection>/<key>": doc},
 "files": {"<path>": "<text content>"}, "runner_specs": [{"name", "stage"?, "payload", "datasets"?, "mounts"?,
 "expect": {"exit"?, "artifacts"?, "reason"?}}], "service_specs": [{"name", "service", "method"?, "path", "body"?,
-"expect": {"status"?}}], "ops": [{"verb", "target"?, "params"?}], "folders": {"<id>": "<dir>"}}`. A read folder's `dir`
+"expect": {"status"?}}], "listener_specs": [{"name", "listener", "send"? | "method"?, "path"?, "body"?,
+"expect": {"status"?, "contains"?}}], "ops": [{"verb", "target"?, "params"?}], "folders": {"<id>": "<dir>"}}`. A read folder's `dir`
 (relative to the module) is granted read-only; every write folder gets a fresh empty outbox. Each runner spec (a
 non-golden task: an ingestion or provisioning job)
 runs like a golden, sandboxed with the egress proxy, and is checked against `expect`; any connection the proxy refused
@@ -336,8 +342,17 @@ def portability_issues(root: Path, man) -> list[str]:
     return out
 
 
+SCRATCH: dict = {}           # the running conform()'s scratch directory: every directory and file the kit makes goes in it
+
+
+def _scratch(prefix: str) -> Path:
+    """A fresh directory for one part of a conform() run, inside the run's scratch directory, which conform() removes
+    when it ends however it ends (the processes the kit starts never own a directory: a killed runner leaves nothing)."""
+    return Path(tempfile.mkdtemp(prefix=prefix, dir=SCRATCH.get("dir")))
+
+
 def check_bundle(root: Path, r: Report):
-    with tempfile.TemporaryDirectory() as td:
+    with tempfile.TemporaryDirectory(prefix="conform-bundle-", dir=SCRATCH.get("dir")) as td:
         try:
             out, info = B.build(root, Path(td) / "m.mfb")
             B.verify(out)
@@ -583,7 +598,7 @@ class Grants:
     folder is a fresh empty outbox."""
 
     def __init__(self, man, fx: dict, root: Path | None = None):
-        self.dir = Path(tempfile.mkdtemp(prefix="conform-grants-"))
+        self.dir = _scratch("conform-grants-")
         from . import toolversion
         given = fx.get("tools") or {}
         self.missing = [t.id for t in man.sandbox.tools if t.id not in given]
@@ -644,6 +659,7 @@ class Grants:
     def close(self):
         if self.proxy:
             self.proxy.stop()
+        shutil.rmtree(self.dir, ignore_errors=True)
 
 
 GRANTS: dict = {}
@@ -652,7 +668,7 @@ SERVICES: dict = {}          # the endpoint services the runner suite started, b
 
 def _service_run(root: Path, man, svc, g: "Grants") -> ServiceRun:
     policy = (lambda data: g.policy(man, root, None, data, kind="service")) if SANDBOX["on"] else None
-    return ServiceRun(root, man, svc, g.env(), policy)
+    return ServiceRun(root, man, svc, g.env(), policy, scratch=SCRATCH.get("dir"))
 
 
 def _connectors(root: Path, man, stage, attempt: int) -> tuple[list, str | None]:
@@ -785,7 +801,7 @@ def _run(root: Path, man, env_doc: dict, fx: dict, locale: str = "C", stop: bool
     """One runner run. `stop`: a stop request once the runner wrote its first phase (`checkpoint`: checkpoint, then stop,
     within checkpoint_grace_s). `resume`: (a directory holding a checkpoint by name, the envelope's `resume`): the files
     go read-only under <W>/checkpoint/ and the envelope names it."""
-    ws = Path(tempfile.mkdtemp(prefix="conform-"))
+    ws = _scratch("conform-")
     if resume is not None:
         src, doc = resume
         shutil.copytree(src, ws / "checkpoint")
@@ -800,7 +816,7 @@ def _run(root: Path, man, env_doc: dict, fx: dict, locale: str = "C", stop: bool
             shutil.copytree(root / src, ws / mount)              # relative to the module (an absolute dir stays as is)
     (ws / "spec.json").write_text(json.dumps(env_doc), encoding="utf-8", newline="\n")
     (ws / "tmp").mkdir()
-    data = Path(tempfile.mkdtemp(prefix="conform-data-"))
+    data = _scratch("conform-data-")
     g = GRANTS["g"]
     nudge = _Nudge()
     run = man.runner.for_platform(portable.host_platform())
@@ -1031,7 +1047,7 @@ def _take_checkpoint(o: Outcome, man, stage_name) -> tuple:
     names = [f.checkpoint_name() for f in ev.files]
     if len(set(names)) != len(names):
         return None, None, "checkpoint names are not unique"
-    out = Path(tempfile.mkdtemp(prefix="conform-ckpt-"))
+    out = _scratch("conform-ckpt-")
     entries, total = [], 0
     for f in ev.files:
         src = o.ws / f.path
@@ -1110,6 +1126,7 @@ def check_runner(root: Path, man, fx: dict, runs: list, r: Report):
     try:
         _check_runner(root, man, fx, runs, r, g)
         check_services(root, man, fx, r, g)
+        check_listeners(root, man, fx, r, g)
     finally:
         _stop_services()
         g.close()
@@ -1127,7 +1144,7 @@ def _check_runner(root: Path, man, fx: dict, runs: list, r: Report, g: "Grants")
     if g.unmet:
         r.add("runner", "host tool versions", False, f"fixtures `tools` give versions the module does not accept: "
               f"{', '.join(g.unmet)} (a node grants only an installation that satisfies [sandbox].tools[].version)")
-    data = Path(tempfile.mkdtemp(prefix="conform-data-"))
+    data = _scratch("conform-data-")
     (data / "tmp").mkdir()
     host = portable.host_platform()
     argv = _argv(man.runner.for_platform(host).exec, root) + ["doctor", "--json"]
@@ -1376,8 +1393,8 @@ def check_services(root: Path, man, fx: dict, r: Report, g: "Grants"):
         except ValidationError as e:
             r.add("service", f"service spec #{i}: fixture", False, str(e).replace("\n", " ")[:300])
     for svc in man.services:
-        if not svc.endpoint or not pf.matches(host, svc.platforms):
-            continue
+        if not svc.endpoint or svc.listeners or not pf.matches(host, svc.platforms):
+            continue                                        # a service with listeners runs in the listener suite
         label = f"service {svc.name}"
         if svc.gpu.use != "none" and not gpu.fits(svc.gpu.apis_any, host_gpu_apis()):
             r.add("service", label, None, f"not run here: it needs one of {', '.join(svc.gpu.apis_any)} on the host; this host "
@@ -1525,7 +1542,7 @@ class _WorkloadRun:
 
     def __init__(self, root: Path, man, fx: dict, w, g: "Grants"):
         self.root, self.man, self.w, self.g = root, man, w, g
-        self.base = Path(tempfile.mkdtemp(prefix="conform-wl-"))
+        self.base = _scratch("conform-wl-")
         self.data = self.base / "data"
         self.run = self.data / "workloads" / w.name / "run-1"
         (self.run / "tmp").mkdir(parents=True)
@@ -1854,10 +1871,17 @@ def conform_workloads(root, fixtures: dict | None = None, sandbox: bool | None =
     before = SANDBOX["on"]
     if sandbox is not None:
         SANDBOX["on"] = sandbox and sys.platform == "darwin"
+    outer = SCRATCH.get("dir")
     try:
-        return _conform_workloads(Path(root).resolve(), fixtures)
+        with tempfile.TemporaryDirectory(prefix="conform-run-", ignore_cleanup_errors=True) as td:
+            SCRATCH["dir"] = td
+            return _conform_workloads(Path(root).resolve(), fixtures)
     finally:
         SANDBOX["on"] = before
+        if outer is None:
+            SCRATCH.pop("dir", None)
+        else:
+            SCRATCH["dir"] = outer
 
 
 def _conform_workloads(root: Path, fixtures: dict | None) -> Report:
@@ -1876,6 +1900,191 @@ def _conform_workloads(root: Path, fixtures: dict | None) -> Report:
         r.add("workload", "workloads", None, "the module declares no [[workloads]]")
     check_workloads(root, man, fx, r)
     return r
+
+
+class ListenerSpecExpect(StrictContract):
+    status: int | None = None
+    contains: str | None = None
+
+
+class ListenerSpec(StrictContract):
+    """A conformance fixture's client of an inbound listener (`listener_specs`): raw bytes (`send`, UTF-8, read until
+    the answer contains `expect.contains` or the service closes) or, with `path`, one HTTP/1.1 request (`method`,
+    default GET; `expect.status`, default 200), sent through a connection the kit hands the service as the agent would."""
+    name: str = Field(min_length=1, max_length=80)
+    listener: Name
+    send: str | None = None
+    method: str = "GET"
+    path: str | None = None
+    body: dict | list | None = None
+    expect: ListenerSpecExpect = Field(default_factory=ListenerSpecExpect)
+
+
+KIT_PEER = "198.51.100.23:51000"            # the client every listener connection the kit hands over comes from
+KIT_ACCEPTED_ON = "192.0.2.10:41000"        # the address the kit's listener accepted on (a PROXY v2 destination)
+
+
+def kit_announcement(x) -> dict:
+    """The announcement the kit sends for a listener after hello: documentation addresses at its `port_hint` (else
+    41000), state `reachable`."""
+    port = x.port_hint or 41000
+    return {"external": f"203.0.113.7:{port}", "external_v6": f"[2001:db8::7]:{port}", "state": "reachable"}
+
+
+def _read_until(conn, want: str | None, secs: float = 10) -> bytes:
+    conn.settimeout(secs)
+    got = b""
+    deadline = time.monotonic() + secs
+    while time.monotonic() < deadline and len(got) < 65536:
+        try:
+            chunk = conn.recv(4096)
+        except (TimeoutError, OSError):
+            break
+        if not chunk:
+            break
+        got += chunk
+        if want is not None and want.encode() in got:
+            break
+    return got
+
+
+def _listener_spec(conn, spec: "ListenerSpec") -> tuple[bool, str]:
+    if spec.path is not None:
+        status, body = _request(conn, spec.method, spec.path, spec.body)
+        want = 200 if spec.expect.status is None else spec.expect.status
+        ok = status == want and (spec.expect.contains is None or spec.expect.contains.encode() in body)
+        return ok, f"status {status}: {body[:200]!r}"
+    if spec.send:
+        conn.sendall(spec.send.encode())
+    got = _read_until(conn, spec.expect.contains)
+    conn.close()
+    ok = spec.expect.contains is None or spec.expect.contains.encode() in got
+    return ok, f"answered {got[:200]!r}" + ("" if ok else f", without {spec.expect.contains!r}")
+
+
+def check_listeners(root: Path, man, fx: dict, r: Report, g: "Grants"):
+    """The listener suite: each endpoint service that lists inbound listeners, run as an agent runs it with them
+    (spec/service-protocol.md, "Listeners")."""
+    host = portable.host_platform()
+    specs, sspecs = [], []
+    for i, raw in enumerate(fx.get("listener_specs") or []):
+        try:
+            specs.append(ListenerSpec.model_validate(raw))
+        except ValidationError as e:
+            r.add("listener", f"listener spec #{i}: fixture", False, str(e).replace("\n", " ")[:300])
+    for raw in fx.get("service_specs") or []:
+        try:
+            sspecs.append(ServiceSpec.model_validate(raw))
+        except ValidationError:
+            pass                                            # the service suite reports it
+    declared = {x.name for x in man.sandbox.net.inbound}
+    for spec in specs:
+        if spec.listener not in declared:
+            r.add("listener", f"listener spec {spec.name}: fixture", False, f"{spec.listener!r} is no inbound listener")
+    for svc in man.services:
+        if not svc.listeners or not pf.matches(host, svc.platforms):
+            continue
+        label = f"service {svc.name}"
+        if svc.gpu.use != "none" and not gpu.fits(svc.gpu.apis_any, host_gpu_apis()):
+            r.add("listener", label, None, f"not run here: it needs one of {', '.join(svc.gpu.apis_any)} on the host")
+            continue
+        _check_listener_service(root, man, svc, specs, sspecs, r, g)
+
+
+def _check_listener_service(root: Path, man, svc, specs: list, sspecs: list, r: Report, g: "Grants"):
+    label = f"service {svc.name}"
+    listeners = [man.sandbox.net.listener(n) for n in svc.listeners]
+    fds = {}
+    for x in listeners:
+        if x.handover != "listen_fd":
+            continue
+        if os.name == "nt":
+            r.add("listener", f"{label}: listener {x.name}", None, "handover listen_fd: Windows nodes refuse this listener "
+                  "(LISTENER_HANDOVER_UNSUPPORTED), so the kit does not run it here")
+            continue
+        fds[x.name] = EH.ListenFdHost(x.name)
+    run = _service_run(root, man, svc, g)
+    path = g.dir / f"listeners-{svc.name}.json"
+    EH.write_listeners_file(path, {x.name: {"external": None, "external_v6": None, "state": "unmapped",
+                                            "since": time.time()} for x in listeners})
+    run.extra_env = {"OARBANK_LISTENERS_FILE": str(path), **{k: v for h in fds.values() for k, v in h.env.items()}}
+    run.extra_fds = [h.sock.fileno() for h in fds.values()]
+    run.own_sockets = [h.path for h in fds.values()]
+    try:
+        why = run.start()
+        r.add("listener", f"{label}: starts with its listeners, says hello on its endpoint channel and becomes ready",
+              why is None, why or "")
+        if why:
+            if any(w in why.lower() for w in ("permission", "not permitted")) and any(w in why for w in ("bind", "listen")):
+                r.add("listener", f"{label}: the service never listens itself", False,
+                      f"the sandbox refused it a listening socket: {why}")
+            return
+        listens = run.listening()
+        for x in listeners:
+            if x.handover == "listen_fd" and x.name not in fds:
+                continue
+            ann = kit_announcement(x)
+            run.host.announce(x.name, ann["external"], ann["external_v6"], ann["state"])
+            proxy = EH.proxy_for(KIT_PEER, KIT_ACCEPTED_ON) if x.proxy() else None
+            mine = [s for s in specs if s.listener == x.name]
+
+            def hand():
+                if x.name in fds:
+                    return None, fds[x.name].connect(KIT_PEER, proxy)
+                return run.host.listener_connection(x.name, KIT_PEER, proxy)
+            try:
+                n, conn = hand()
+                ok = True if n is None else run.host.wait_accepted(n, 10)
+                r.add("listener", f"{label}: listener {x.name}: takes a connection the agent hands it", ok,
+                      "" if ok else "no `accepted` for the connection within 10 s")
+                if not mine:
+                    conn.close()
+                    r.add("listener", f"{label}: listener {x.name}: answers", None,
+                          "no `listener_specs` for this listener: the kit checked only that it takes connections")
+            except OSError as e:
+                r.add("listener", f"{label}: listener {x.name}: takes a connection the agent hands it", False, repr(e))
+                continue
+            for spec in mine:
+                try:
+                    _, conn = hand()
+                    ok, detail = _listener_spec(conn, spec)
+                except (OSError, ValueError) as e:
+                    ok, detail = False, repr(e)
+                r.add("listener", f"{label}: listener spec {spec.name}", ok, detail)
+        for spec in [s for s in sspecs if s.service == svc.name and svc.provides.pools]:
+            try:
+                status, body = _request(run.connect(attempt=7), spec.method, spec.path, spec.body)
+                r.add("listener", f"{label}: service spec {spec.name}", status == spec.expect.status,
+                      f"status {status}: {body[:200]!r}")
+            except OSError as e:
+                r.add("listener", f"{label}: service spec {spec.name}", False, repr(e))
+        if run.host.allows:
+            bad = [m for m in run.host.allows if m.get("listener") not in svc.listeners or not _cidrs_ok(m.get("cidrs"))]
+            r.add("listener", f"{label}: listener_allow names its own listeners and IP networks", not bad,
+                  json.dumps(bad[:2])[:300] if bad else f"{len(run.host.allows)} message(s)")
+        listens += run.listening()
+        r.add("listener", f"{label}: the service never listens itself", not listens,
+              "; ".join(sorted(set(listens)))[:600] or "no listening socket of its own after ready and after its "
+              "connections")
+    finally:
+        stopped = run.stop()
+        for h in fds.values():
+            h.close()
+        r.add("listener", f"{label}: stops", stopped is None, stopped or "")
+
+
+def _cidrs_ok(cidrs) -> bool:
+    import ipaddress
+    if cidrs is None:
+        return True
+    if not isinstance(cidrs, list):
+        return False
+    try:
+        for c in cidrs:
+            ipaddress.ip_network(c, strict=False)
+    except (TypeError, ValueError):
+        return False
+    return True
 
 
 def check_images(root: Path, man, fx: dict, r: Report):
@@ -1917,8 +2126,22 @@ SANDBOX = {"on": sys.platform == "darwin"}
 def conform(root, fixtures: dict | None = None, runner: bool = True, sandbox: bool | None = None,
             workloads: bool = True) -> Report:
     """`sandbox`: run the runner under the module sandbox (default: on macOS). `runner = False` skips every suite that
-    runs node processes (runner, gpu, service, workload); `workloads = False` only the workload suite."""
-    root = Path(root).resolve()
+    runs node processes (runner, gpu, service, listener, workload); `workloads = False` only the workload suite.
+    Everything the run writes (workdirs, data directories, grants, checkpoints, sandbox profiles) goes into one scratch
+    directory, removed when it returns or raises."""
+    outer = SCRATCH.get("dir")
+    with tempfile.TemporaryDirectory(prefix="conform-run-", ignore_cleanup_errors=True) as td:
+        SCRATCH["dir"] = td
+        try:
+            return _conform(Path(root).resolve(), fixtures, runner, sandbox, workloads)
+        finally:
+            if outer is None:
+                SCRATCH.pop("dir", None)
+            else:
+                SCRATCH["dir"] = outer
+
+
+def _conform(root: Path, fixtures: dict | None, runner: bool, sandbox: bool | None, workloads: bool = True) -> Report:
     if sandbox is not None:
         SANDBOX["on"] = sandbox and sys.platform == "darwin"
     fx = fixtures if fixtures is not None else (json.loads((root / "conformance.json").read_text(encoding="utf-8"))

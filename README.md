@@ -9,6 +9,23 @@ console) knows nothing about any particular workload. Everything a job type need
 result, which nodes may run it, what the console shows) lives in a module, and a module talks to the core **only**
 through the versioned contracts in this repository.
 
+Documentation: **[docs.codonic.dev/oarbank](https://docs.codonic.dev/oarbank/)** (for agents:
+[llms.txt](https://docs.codonic.dev/oarbank/llms.txt)).
+
+## Use it with an AI agent
+
+The [Oarbank skill](skills/oarbank/SKILL.md) lets Claude Code, Codex and other coding agents install, run,
+troubleshoot and build modules for Oarbank, reading the current docs as they go:
+
+```sh
+npx skills add roeehrl/oarbank-sdk --skill oarbank -g          # any agent
+claude plugin marketplace add roeehrl/oarbank-sdk && claude plugin install oarbank@codonic   # Claude Code
+codex plugin marketplace add roeehrl/oarbank-sdk && codex plugin add oarbank@codonic         # Codex
+```
+
+Updating, removing, the Claude app and pinning a version:
+[Use Oarbank with an AI agent](https://docs.codonic.dev/oarbank/get-started#use-oarbank-with-an-ai-agent).
+
 ## What is in the SDK
 
 | Part | What it covers | Spec |
@@ -37,6 +54,9 @@ The Python package `oarbank_sdk` implements these contracts:
 - **`oarbank_sdk.service_endpoint`**, HTTP over a service endpoint: `request()` in a job, `serve_http()` in an
   endpoint service, which is handed every connection and never listens. Stdlib only. A how-to:
   [docs/service-endpoints.md](docs/service-endpoints.md); the reference module: [`examples/modelserver`](examples/modelserver).
+  The same acceptor gets the connections an inbound listener accepts from the internet, with the listener's announced
+  external address, narrowing by network and PROXY v2 parsing: [docs/inbound-listeners.md](docs/inbound-listeners.md),
+  the reference module [`examples/publicecho`](examples/publicecho).
 - **`oarbank_sdk.workload`**, the supervisor shim that runs a third-party daemon as a workload (pause, thread limits,
   stop, the `status` op) and the event helpers (`progress`, `report`, `error`). Stdlib only. A how-to:
   [docs/workloads.md](docs/workloads.md); the reference module: [`examples/workload`](examples/workload).
@@ -47,9 +67,10 @@ The Python package `oarbank_sdk` implements these contracts:
   coordinator side over the module protocol and runs the runner on its goldens, and on any other runner specs its
   fixtures list, as this host's platform would (sandboxed, through the egress proxy; a bootstrap stage's with the
   bootstrap grants, its artifacts checked against the module's pinned datasets; a stage that reserves an endpoint
-  service's pool with that service up), drives each endpoint service through its endpoint channel, failing one that
-  listens itself, and runs each workload as an agent would, failing one that leaves its process group, listens or ignores
-  a stop. Secrets reach only the stages that list them and must never appear in what a run or a verb returns;
+  service's pool with that service up), drives each endpoint service through its endpoint channel and each inbound
+  listener through connections it hands the listener's service, failing a service that listens itself, and runs each
+  workload as an agent would, failing one that leaves its process group, listens or ignores a stop. Secrets reach only
+  the stages that list them and must never appear in what a run or a verb returns;
   container sets' members verify against their key, and images outside a set or unsigned are refused. A stage that
   keeps checkpoints is stopped with checkpoint-then-stop and resumed in a fresh workdir, which must give the same
   digest.
@@ -88,8 +109,10 @@ approved by their signing key ([Use secrets and signed container images](docs/se
 [`examples/reel`](examples/reel) shows datasets by URL, folders on the node, media on module pages and portable
 checkpoints ([Files, media and checkpoints](docs/files-media-checkpoints.md)).
 [`examples/gpuinfo`](examples/gpuinfo) runs only where a node provides one of its GPU APIs, a different set per platform
-([Place work by GPU API](docs/gpu-placement.md)). Every example has pages; [Build your module's GUI](docs/module-gui.md)
-explains them, and toy's frame is a complete bridge client.
+([Place work by GPU API](docs/gpu-placement.md)). [`examples/publicecho`](examples/publicecho) answers connections from
+the internet through an inbound listener the agent owns ([Accept connections from the internet](docs/inbound-listeners.md)).
+The other examples have pages; [Build your module's GUI](docs/module-gui.md) explains them, and toy's frame is a
+complete bridge client.
 
 ## Developing the SDK
 

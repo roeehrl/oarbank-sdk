@@ -3,6 +3,7 @@ manifest's `[sandbox].tools` requests, the tools file a runner reads, and the co
 import copy
 import functools
 import json
+import re
 import shutil
 import tomllib
 from pathlib import Path
@@ -68,6 +69,30 @@ def test_a_tool_request_carries_a_version_constraint_and_an_arch():
     with pytest.raises(ValidationError, match="more than once"):
         m.Manifest.model_validate(bad)
 
+
+
+@pytest.mark.parametrize("tool, uses", [({"id": "jdk", "version": ">=17"}, "sandbox.tools[].version"),
+                                        ({"id": "jdk", "arch": "native"}, "sandbox.tools[].arch"),
+                                        ({"id": "jdk", "arch": "amd64"}, "sandbox.tools[].arch")])
+def test_a_version_or_an_arch_needs_core_2_9(tool, uses):
+    """Cores before 2.9 ignore a tool's version and arch (they granted a registry id's paths), so a module relying on
+    them names a core that honours them (spec/versioning.md, "Additive changes within manifest 1")."""
+    d = _toy()
+    d["sandbox"] = {"tools": [tool]}
+    for core in (">=2.5,<3", ">=2.8.9", "<3"):
+        d["requires"]["core"] = core
+        with pytest.raises(ValidationError, match=rf"{re.escape(uses)} need requires.core >= 2.9"):
+            m.Manifest.model_validate(d)
+    for core in (">=2.9,<3", ">=2.9.0", "~=2.9", ">=3"):
+        d["requires"]["core"] = core
+        assert (uses, (2, 9)) in m.Manifest.model_validate(d).core_keys_used()
+
+
+def test_a_plain_tool_request_needs_no_new_core():
+    d = _toy()
+    d["requires"]["core"] = ">=2.5,<3"
+    d["sandbox"] = {"tools": [{"id": "jdk", "arch": "any", "trust": "code-exec"}]}
+    assert m.Manifest.model_validate(d).core_keys_used() == []
 
 def test_the_tools_file_names_each_granted_installation(tmp_path, monkeypatch):
     (tmp_path / "t.json").write_text(json.dumps({"jdk": [{"path": "/opt/jdk-17", "version": "17.0.12", "arch": "aarch64"}]}),

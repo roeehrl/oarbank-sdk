@@ -40,7 +40,7 @@ reports = true                                       # its report events reach w
   its share). It defaults to 20 for a pausable workload and 0 otherwise.
 - **`secrets`** a workload lists reach only that workload, in an owner-only file deleted when its run ends. With
   `identity = "per_node"` the owner sets each one for each node, and at most one node runs an identity at a time.
-- `oarbank-sdk check` enforces the rules ([manifest.md](../spec/manifest.md#workloads), rule 23).
+- `oarbank-sdk check` enforces the rules ([manifest.md](../spec/manifest.md#workloads), rule 24).
 
 ## 2. Wrap the daemon in the supervisor shim
 
