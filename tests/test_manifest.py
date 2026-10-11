@@ -362,3 +362,17 @@ def test_service_gpu_use_needs_the_gpu_grant_and_core_2_5():
         served(d, endpoint=False, gpu=gpu).update(sandbox={"devices": {"gpu": "compute"}})
         d["requires"]["core"] = ">=2.4,<3"
     bad(old_core, r"services\[\]\.gpu need requires.core >= 2.5", name="toy")
+
+
+def test_a_stage_declares_network_heavy_use():
+    """`requires.resources.network` (spec/manifest.md, "Network-heavy stages"): normal by default, heavy when declared,
+    nothing else; the published schema says the same."""
+    assert m.Manifest.model_validate(doc("toy")).stages[0].requires.resources.network == "normal"
+    d = copy.deepcopy(doc("toy"))
+    d["stages"][0].setdefault("requires", {}).setdefault("resources", {})["network"] = "heavy"
+    assert m.Manifest.model_validate(d).stages[0].requires.resources.network == "heavy"
+    d["stages"][0]["requires"]["resources"]["network"] = "huge"
+    with pytest.raises(ValidationError):
+        m.Manifest.model_validate(d)
+    from oarbank_sdk.schemas import schema_for
+    assert schema_for("manifest-1")["$defs"]["Resources"]["properties"]["network"]["enum"] == ["normal", "heavy"]

@@ -102,14 +102,15 @@ Cross-field rules are in [manifest.md](manifest.md).
 | `stages[].checkpoint` | StageCheckpoint (optional) |  | [beta] The stage keeps portable checkpoints: the latest one a job's runner wrote is uploaded, and the job's next attempt, on any node, resumes from it. Needs the runner capability `checkpoint` and requires.core >= 2.5. |
 | `stages[].checkpoint.max_mb` | int | required | [beta] The largest checkpoint (all its files) the agent uploads, MB. |
 | `stages[].checkpoint.min_interval_s` | float | `600.0` | [beta] The agent uploads at most one checkpoint per interval; a checkpoint answering a checkpoint-then-stop request is always uploaded. |
-| `stages[].requires` | StageRequires | `"capabilities=[] pools={} needs_pools=[] platforms=[] resources=Resources(cpu=1.0, mem_gb=1.0)"` |  |
+| `stages[].requires` | StageRequires | `"capabilities=[] pools={} needs_pools=[] platforms=[] resources=Resources(cpu=1.0, mem_gb=1.0, network='normal')"` |  |
 | `stages[].requires.capabilities` | list of str | `[]` | [stable] Node capabilities that must be healthy (from probes/services). |
 | `stages[].requires.pools` | table str → int | `{}` | [stable] Countable pool tokens reserved for the job's lifetime. |
 | `stages[].requires.needs_pools` | list of str | `[]` | [beta] Pools that must exist on the node but are not reserved (a short phase uses them). |
 | `stages[].requires.platforms` | list of str | `[]` | [beta] Only on these platforms (empty: every declared platform). |
-| `stages[].requires.resources` | Resources | `"cpu=1.0 mem_gb=1.0"` |  |
+| `stages[].requires.resources` | Resources | `"cpu=1.0 mem_gb=1.0 network='normal'"` |  |
 | `stages[].requires.resources.cpu` | float | `1.0` | [stable] CPU cores the job uses. |
 | `stages[].requires.resources.mem_gb` | float | `1.0` | [stable] Peak memory (GB) the job may use; the agent budgets it before admission. |
+| `stages[].requires.resources.network` | `"normal"` \| `"heavy"` | `"normal"` | [beta] `heavy`: the job moves a lot of data over the node's internet line (uploads or downloads of its own). Where the owner groups nodes into sites (nodes sharing one line), the core admits such jobs only within the site's budget of network-heavy jobs, and pauses them (cooperative pause or freeze; released when neither) on every node of the site while a protected process there is in an upload phase. Older cores ignore it. |
 | `stages[].timeout_s` | float | `1800.0` | [stable] Hard wall-clock limit per attempt. |
 | `stages[].retry` | Retry | `"max_attempts=3"` |  |
 | `stages[].retry.max_attempts` | int | `3` | [stable] Execution attempts before the job is quarantined. |

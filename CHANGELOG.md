@@ -37,6 +37,12 @@ For Oarbank core 2.9.0. Everything is additive within manifest 1 and module prot
   module's runner starts (`Manifest.certification_exempt`). A failed doctor check named after a capability withdraws
   only that capability (`Manifest.capability_names`), and doctor check details are kept whole or by their end.
 
+- **Network-heavy stages** ([spec/manifest.md](spec/manifest.md#network-heavy-stages)).
+  `stages[].requires.resources.network = "heavy"` says a stage's jobs move a lot of data over the node's internet line
+  themselves. Where the owner groups nodes into sites (nodes sharing one line, core 2.10), such jobs run only within the
+  site's budget and pause on every node of the site while a protected process there is in an upload phase. Older cores
+  ignore it.
+
 ### Changed
 
 - **The core-version gate for 1.6 features.** Older cores ignore these, so the SDK refuses them unless `requires.core`

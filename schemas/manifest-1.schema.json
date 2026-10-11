@@ -1504,6 +1504,16 @@
           "maximum": 1024,
           "title": "Mem Gb",
           "type": "number"
+        },
+        "network": {
+          "default": "normal",
+          "description": "[beta] `heavy`: the job moves a lot of data over the node's internet line (uploads or downloads of its own). Where the owner groups nodes into sites (nodes sharing one line), the core admits such jobs only within the site's budget of network-heavy jobs, and pauses them (cooperative pause or freeze; released when neither) on every node of the site while a protected process there is in an upload phase. Older cores ignore it.",
+          "enum": [
+            "normal",
+            "heavy"
+          ],
+          "title": "Network",
+          "type": "string"
         }
       },
       "title": "Resources",

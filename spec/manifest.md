@@ -63,7 +63,7 @@ array, never a shell string.
 | `[coordinator]` | The module-protocol process: `exec`, `runtime`, optional-verb `capabilities`, `concurrency`, per-verb `timeouts_s`, host-callback `permissions`, the effects `campaign.tick` may request, `env`, and per-platform `variants`. |
 | `[coordinator.move]` | The module's part in a coordinator move: `rules` (a files prefix or a store collection, with class `carry`, `rebuild` or `drop`) and the `effects` the move verbs may request ([module-protocol.md](module-protocol.md#coordinator-moves)). |
 | `[runner]` | The runner-protocol executable: `exec`, `runtime`, `capabilities`, `stop_grace_s`, `checkpoint_grace_s`, `gpu`, `bandwidth_class`, `env`, and per-platform `variants`. |
-| `[[stages]]` | At least one. Each has `name`, optional `after`, and `requires` (node capabilities, reserved `pools`, `needs_pools` that must merely exist, and `resources` cpu/mem_gb), plus `timeout_s` and `retry`, per-platform `variants`, a `placement` constraint with its `after` stage, and, for a standalone stage, `default` (the stage a job runs when it names none) and its own `determinism` (`none` for work whose results depend on when it ran, such as ingesting a moving feed: the host never replicates, compares, caches or golden-tests it, and with no capability or pool required it runs before certification: [Stages that run before certification](#stages-that-run-before-certification)). A stage's `checkpoint` (`max_mb`, `min_interval_s`) keeps portable checkpoints ([Portable checkpoints](#portable-checkpoints)). |
+| `[[stages]]` | At least one. Each has `name`, optional `after`, and `requires` (node capabilities, reserved `pools`, `needs_pools` that must merely exist, and `resources` cpu/mem_gb/network), plus `timeout_s` and `retry`, per-platform `variants`, a `placement` constraint with its `after` stage, and, for a standalone stage, `default` (the stage a job runs when it names none) and its own `determinism` (`none` for work whose results depend on when it ran, such as ingesting a moving feed: the host never replicates, compares, caches or golden-tests it, and with no capability or pool required it runs before certification: [Stages that run before certification](#stages-that-run-before-certification)). A stage's `checkpoint` (`max_mb`, `min_interval_s`) keeps portable checkpoints ([Portable checkpoints](#portable-checkpoints)). |
 | `[[services]]` | Node helpers the agent manages through the [service protocol](service-protocol.md): lifecycle, timeouts, restart policy, which pools and capabilities they `provide`, the memory, yield and pause flags, GPU use (`gpu`), and `endpoint` for a service jobs reach through the agent (a warm model server). |
 | `[[probes]]` | Read-only capability checks (`fingerprint` only), each run every `period_s`. |
 | `[settings]` | `schema`: a JSON Schema file whose properties are the module's settings, each with its type, default, constraints, title, description and an `x-oarbank` annotation (scope `fleet` or `node`, `required`, `unit`, `advanced`, `campaign`). The core validates every value against it ([Settings](#settings)). Settings are visible to the owner: never put a credential in them. |
@@ -312,6 +312,29 @@ checkpoint = { max_mb = 4096, min_interval_s = 600 }
 - The job's next attempt, on any node, starts with the checkpoint under `<W>/checkpoint/` and `resume` in its spec
   envelope ([runner-protocol.md](runner-protocol.md#checkpoints)). A resumed attempt must give the same result as an
   uninterrupted one; the conformance kit replays an interrupted run to check it.
+
+## Network-heavy stages
+
+Nodes that share one internet line slow each other's large transfers, and an owner's own program may have to upload on
+time. The owner groups such nodes into a **site** with an uplink budget; a stage whose jobs move a lot of data over the
+line themselves says so:
+
+```toml
+[[stages]]
+name = "publish"
+requires = { resources = { cpu = 1, mem_gb = 1.0, network = "heavy" } }
+```
+
+- At a site, such a job is admitted only while the site runs fewer network-heavy jobs than its budget allows, and never
+  while a protected process at the site is in an upload phase (explain names `SITE_UPLINK_BUSY` or
+  `SITE_UPLINK_BUDGET`).
+- While such a phase lasts, the agent pauses the job on every node of the site: through `pause` in the control document
+  (`cooperative_pause`) or a freeze (`freeze_ok`); a runner that can do neither is released (`preempt_site`, requeued,
+  never charged). A job paused longer than its node's longest pause is released the same way.
+- The agent's own transfers for a job (staging datasets, uploading results and checkpoints) are paced and paused by the
+  site without any declaration; `network` is for traffic the job makes itself.
+- `normal` (the default) changes nothing. The spec envelope's `resources` carries the value. Cores before 2.10 ignore
+  it: the job then runs as any other.
 
 ## Declarative UI: formats and templates
 
