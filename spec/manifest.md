@@ -64,7 +64,8 @@ is an argv array, never a shell string.
 | `[coordinator.move]` | The module's part in a coordinator move: `rules` (a files prefix or a store collection, with class `carry`, `rebuild` or `drop`) and the `effects` the move verbs may request ([module-protocol.md](module-protocol.md#coordinator-moves)). |
 | `[runner]` | The runner-protocol executable: `exec`, `runtime`, `capabilities`, `stop_grace_s`, `checkpoint_grace_s`, `gpu`, `bandwidth_class`, `env`, and per-platform `variants`. |
 | `[[stages]]` | At least one. Each has `name`, optional `after`, and `requires` (node capabilities, reserved `pools`, `needs_pools` that must merely exist, and `resources` cpu/mem_gb), plus `timeout_s` and `retry`, per-platform `variants`, a `placement` constraint with its `after` stage, and, for a standalone stage, `default` (the stage a job runs when it names none) and its own `determinism` (`none` for work whose results depend on when it ran, such as ingesting a moving feed: the host never replicates, compares, caches or golden-tests it, and with no capability or pool required it runs before certification: [Stages that run before certification](#stages-that-run-before-certification)). A stage's `checkpoint` (`max_mb`, `min_interval_s`) keeps portable checkpoints ([Portable checkpoints](#portable-checkpoints)). |
-| `[[services]]` | Node helpers the agent manages through the [service protocol](service-protocol.md): lifecycle, timeouts, restart policy, which pools and capabilities they `provide`, the memory, yield and pause flags, GPU use (`gpu`), and `endpoint` for a service jobs reach through the agent (a warm model server). |
+| `[[services]]` | Node helpers the agent manages through the [service protocol](service-protocol.md): lifecycle, timeouts, restart policy, which pools and capabilities they `provide`, the memory, yield and pause flags, GPU use (`gpu`), `endpoint` for a service jobs reach through the agent (a warm model server), and the inbound `listeners` it serves. |
+| `[sandbox]` | What the module's node-side processes need beyond their own directories, each an operator approves per version: the network (`net.mode`, `net.allow`), inbound listeners the agent opens for it (`net.inbound`), host tools, the GPU, container images and image sets, folders ([sandbox.md](sandbox.md)). |
 | `[[probes]]` | Read-only capability checks (`fingerprint` only), each run every `period_s`. |
 | `[[workloads]]` | Supervised long-running processes that are the work itself, run by the agent through the [workload protocol](workload-protocol.md) on the nodes the owner assigns them to: `exec`, `seat` and `identity`, the `secrets` and `listeners` each receives, `resources`, `gpu`, `control` (what host protection may do besides stopping it), `pause_tolerance_s`, `stop_timeout_s`, `restart`, `health` and `reports` ([Workloads](#workloads)). |
 | `[settings]` | `schema`: a JSON Schema file whose properties are the module's settings, each with its type, default, constraints, title, description and an `x-oarbank` annotation (scope `fleet` or `node`, `required`, `unit`, `advanced`, `campaign`). The core validates every value against it ([Settings](#settings)). Settings are visible to the owner: never put a credential in them. |
@@ -101,8 +102,13 @@ The models enforce these, beyond the per-field types:
       `services[].gpu`, `sandbox.folders`,
       `stages[].checkpoint`, `runner.checkpoint_grace_s`, the runner capability `checkpoint` and the view cell type
       `artifact_ref`.
-    - **2.10:** `[[workloads]]`, `requires.workload_protocol`, the coordinator capability `workload.report` and
-      `coordinator.workload_effects`.
+    - **2.9:** a `sandbox.tools[]` entry with a `version` or an `arch` other than `any`
+      ([sandbox.md](sandbox.md#host-tools)), and, in the settings schema, a key with `x-oarbank` scope `node`, a
+      required key (`x-oarbank.required` or the schema's `required` list) or `x-oarbank.campaign`
+      ([Settings](#settings)). `oarbank-sdk check`, `bundle build` and `bundle verify` apply the settings part, since
+      the schema is a bundle file.
+    - **2.10:** `sandbox.net.inbound`, `services[].listeners`, `[[workloads]]`, `requires.workload_protocol`, the
+      coordinator capability `workload.report` and `coordinator.workload_effects`.
 
     Every entry of `requires.features` is one this SDK knows.
 13. Every bundle path a node exec names (argv[0], or the script a `python` exec runs) reaches each platform that runs it under `bundle.platform_files`. `datasets.platform_bound` kinds are declared kinds.
@@ -115,15 +121,23 @@ The models enforce these, beyond the per-field types:
     the runner declares `gpu.in_container = true` with `gpu.use` `shared` or `exclusive`
     ([sandbox.md](sandbox.md#gpu-passthrough)).
 18. An endpoint service (`endpoint = true`) provides at least one pool (a job reaches it through a pool its stage
-    reserves) and its `lifecycle` is `on_demand` or `always` (the agent never starts a `manual` service, so it could never
+    reserves) or lists at least one listener (rule 22), and its `lifecycle` is `on_demand` or `always` (the agent never starts a `manual` service, so it could never
     hand it its channel). A service whose `gpu.use` is not `none` needs `[sandbox].devices.gpu = "compute"`.
 19. `sandbox.folders` ids are unique, each with `access` `read` or `write` ([sandbox.md](sandbox.md#folders)).
 20. A stage with `checkpoint` needs the runner capability `checkpoint`, and the capability needs at least one such
     stage; a bootstrap stage never sets `checkpoint`.
 21. `gpu.apis_any` (the runner's, a runner variant's, a service's) is set only with `gpu.use` `shared` or `exclusive`: it
     places GPU work ([runner-protocol.md](runner-protocol.md#gpu-use)).
-22. **Lint** (warnings, not errors): an unknown `mix`; a stage `placement` on a stage without `after`; an unknown `determinism_scope`; a placement mix coarser than `determinism_scope` while `results.value` is set (values in one campaign would come from classes whose results are not comparable); stages receiving secrets while the network mode is `egress-any`; a `gpu.apis_any` entry no core detects yet (outside `cuda`, `directml`, `metal`, `opencl`, `rocm`, `vulkan`: such work is placed nowhere). `oarbank-sdk check` prints them; `oarbank_sdk.manifest.lint` returns them.
-23. Workloads ([Workloads](#workloads)):
+22. Inbound listeners ([sandbox.md](sandbox.md#inbound-listeners)): `sandbox.net.inbound` names are unique; each
+    entry is listed in `listeners` by exactly one service or workload, and every name in a service's `listeners` is an
+    entry, once;
+    a service with `listeners` is an endpoint service with `lifecycle = "always"` (a listener is wanted for as long as
+    the module is enabled on the node). An entry's `protocol` is `tcp`, `port_hint` 1024–65535, `max_conns` and
+    `max_conns_per_ip` 1–65535, `new_conns_per_ip_per_s` and `max_bytes_per_s` above 0, `idle_timeout_s` 1–86400.
+    `inbound` needs no network mode: answering an accepted connection is not egress. A workload may serve listeners
+    too (rule 24).
+23. **Lint** (warnings, not errors): an unknown `mix`; a stage `placement` on a stage without `after`; an unknown `determinism_scope`; a placement mix coarser than `determinism_scope` while `results.value` is set (values in one campaign would come from classes whose results are not comparable); stages receiving secrets while the network mode is `egress-any`; a `gpu.apis_any` entry no core detects yet (outside `cuda`, `directml`, `metal`, `opencl`, `rocm`, `vulkan`: such work is placed nowhere); a listener with `handover = "listen_fd"` whose service runs on a declared Windows platform (Windows nodes refuse it: `LISTENER_HANDOVER_UNSUPPORTED`). `oarbank-sdk check` prints them; `oarbank_sdk.manifest.lint` returns them.
+24. Workloads ([Workloads](#workloads)):
     - names are unique among workloads and services (both appear as `<module>/<name>` in node reports);
     - a workload lists only declared secrets, each once; `identity = "per_node"` lists at least one (its seat is named
       by the node's values of them);
@@ -132,7 +146,8 @@ The models enforce these, beyond the per-field types:
     - `control` lists each item once; `pause_tolerance_s` above 0 needs `cooperative_pause` or `freeze_ok`. It defaults
       to 20 for a workload that declares either of them and to 0 otherwise (such a workload is never paused: it is
       throttled where it can be, lowered, or stopped); it is at most 600, the pause ceiling;
-    - `listeners` name `[sandbox].net.inbound` entries;
+    - `listeners` name `[sandbox].net.inbound` entries (rule 22: each served by exactly one service or workload) with
+      handover `connections` (a workload is handed its connections, never a listening socket);
     - `restart.backoff_max_s` is at least `restart.backoff_initial_s`;
     - declared workloads need `requires.workload_protocol` (and, rule 12, `requires.core >= 2.10`);
     - `reports = true` needs the coordinator capability `workload.report`, the capability needs a workload with
@@ -220,9 +235,9 @@ schema = "schemas/settings.schema.json"
   "vm_mem_gb": {"type": "number", "minimum": 2, "maximum": 64, "default": 8,
                 "title": "VM memory", "description": "Memory the module's VM gets on a node.",
                 "x-oarbank": {"scope": "node", "unit": "GB"}},
-  "pool_tao_per_round": {"type": "number", "minimum": 0,
-                         "title": "Miner pool per round", "description": "For the gate's expected value.",
-                         "x-oarbank": {"scope": "fleet", "unit": "TAO", "required": true}}
+  "credits_per_round": {"type": "number", "minimum": 0,
+                        "title": "Credit pool per round", "description": "For the gate's expected value.",
+                        "x-oarbank": {"scope": "fleet", "unit": "credits", "required": true}}
  }
 }
 ```
@@ -239,9 +254,9 @@ schema = "schemas/settings.schema.json"
   |---|---|---|
   | `scope` | `"fleet"` | `fleet`: one value for the whole fleet, which the module's coordinator side reads (`host.settings.get`, `initialize`). `node`: a value the owner sets for the fleet, a node group or one node (the most specific wins); each node's runners, doctor and services receive it in `OARBANK_SETTINGS_FILE` |
   | `required` | `false` (or the schema's own `required` list) | The owner must set it: until a value exists the module's work waits (`SETTINGS_NOT_SET`) and its readiness checklist shows the step "Required settings". A required setting has no `default` |
-  | `unit` | none | A short word shown beside the value (`GB`, `s`, `TAO`) |
+  | `unit` | none | A short word shown beside the value (`GB`, `s`, `credits`) |
   | `advanced` | `false` | Shown under the module's Advanced disclosure |
-  | `campaign` | `false` | A campaign of the module may override it while the campaign runs (`campaigns.create` or `campaigns.update` `settings`, or the owner on the campaign's page), bounded by the owner's locks. The campaign's value reaches that campaign's jobs only: a `node` key in their runners' `OARBANK_SETTINGS_FILE`, every key in `campaign.tick` (`campaign.settings`). Core 2.9 and later (an older core refuses the annotation at install) |
+  | `campaign` | `false` | A campaign of the module may override it while the campaign runs (`campaigns.create` or `campaigns.update` `settings`, or the owner on the campaign's page), bounded by the owner's locks. The campaign's value reaches that campaign's jobs only: a `node` key in their runners' `OARBANK_SETTINGS_FILE`, every key in `campaign.tick` (`campaign.settings`). Core 2.9 and later (`requires.core >= 2.9`, rule 12) |
 
 - **What a process receives.** Runners, `doctor` and services get the node-scoped settings, resolved for their node:
   every `node` key with the owner's value, else its default (a key with neither is absent), and nothing else, in
@@ -262,6 +277,11 @@ schema = "schemas/settings.schema.json"
 
 `oarbank-sdk check`, `bundle build` and `bundle verify` refuse a schema the core would not read, and the conformance kit
 checks the fixtures' settings against it ([conformance.md](conformance.md)).
+
+**Which core.** Cores before 2.9 stored a module's settings as one opaque object, so a schema that relies on a `node`
+key, a required key or a campaign override needs `requires.core >= 2.9` ([cross-field rule 12](#cross-field-rules));
+`oarbank-sdk check`, `bundle build` and `bundle verify` refuse it otherwise. Fleet keys with a `unit` or `advanced`
+need no newer core.
 
 **Migrating a module written for SDK 1.5 or earlier.** The core used to store a module's settings as one opaque
 object. Now: (1) declare every key the module reads or writes in its settings schema, (2) mark those its runners or

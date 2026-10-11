@@ -1,6 +1,7 @@
 """The workload supervisor shim and event helpers (oarbank_sdk.workload, spec/workload-protocol.md), driven for real: a
 Supervisor runs a synthetic daemon as the agent runs a workload (the leader of a new process group, started with SIGUSR1
 ignored, its control document replaced and nudged)."""
+import copy
 import json
 import os
 import signal
@@ -363,7 +364,7 @@ def test_windows_freeze_and_thaw_a_child():
         p.wait()
 
 
-# ---------------------------------------------------------------------------- the manifest's rule 23
+# ---------------------------------------------------------------------------- the manifest's rule 24
 
 def workload_doc(**w) -> dict:
     import tomllib
@@ -413,3 +414,23 @@ def test_workload_rules_refuse_what_cannot_work():
     d = workload_doc()
     d["workloads"].append(dict(d["workloads"][0]))
     refused(d, "unique")
+
+
+def test_a_workload_serves_an_inbound_listener_as_its_only_target():
+    from oarbank_sdk import manifest as mf
+    d = workload_doc(listeners=["peer"])
+    d["sandbox"] = {"net": {"inbound": [{"name": "peer", "port_hint": 9000}]}}
+    man = mf.Manifest.model_validate(d)
+    assert [(w, n) for w, n, _ in man.listener_targets()] == [("workload 'worker'", ["peer"])]
+    assert man.listener_service("peer").name == "worker"
+    assert ("workloads", (2, 10)) in man.core_keys_used() and ("sandbox.net.inbound", (2, 10)) in man.core_keys_used()
+    # rule 22: exactly one target; rule 24: a workload is handed connections, never a listening socket
+    two = copy.deepcopy(d)
+    two["services"] = [{"name": "node", "exec": ["python", "-I", "{bundle}/node.py"], "endpoint": True,
+                        "lifecycle": "always", "listeners": ["peer"]}]
+    two["requires"]["service_protocol"] = [1]
+    refused(two, "a listener needs exactly one service or workload")
+    fd = copy.deepcopy(d)
+    fd["sandbox"]["net"]["inbound"][0]["handover"] = "listen_fd"
+    refused(fd, "never a listening socket")
+    refused(workload_doc(listeners=["peer"]), "not [sandbox].net.inbound entries")

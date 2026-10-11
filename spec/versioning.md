@@ -30,8 +30,10 @@ placement keys of SDK 1.1 need `requires.core >= 2.2`, the stage, tick-result an
 `requires.core >= 2.3`, the bootstrap stages and pinned datasets of SDK 1.4 need `requires.core >= 2.4`, and the
 secrets, container image sets, container GPU pool, GPU placement by API (`runner.gpu.apis_any`), service endpoints,
 service GPU use, folder grants, portable checkpoints and the `artifact_ref` cell type of SDK 1.5 need
-`requires.core >= 2.5`, and the workloads of SDK 1.6 (`[[workloads]]`, `requires.workload_protocol`, the
-`workload.report` capability and `coordinator.workload_effects`) need `requires.core >= 2.10`
+`requires.core >= 2.5`, the host tool `version` and `arch` and the settings annotations that change what a core
+does (a `node` key, a required key, a campaign override) of SDK 1.6 need `requires.core >= 2.9`, and inbound listeners
+(`sandbox.net.inbound`, `services[].listeners`) and workloads (`[[workloads]]`, `requires.workload_protocol`, the
+`workload.report` capability and `coordinator.workload_effects`) of SDK 1.7 need `requires.core >= 2.10`
 ([manifest.md](manifest.md#cross-field-rules), rule 12). For
 later features, `requires.features` is a must-understand list: a reader refuses a manifest that lists a feature it
 does not know. Module protocol additions are optional fields plus host capability names

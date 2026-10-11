@@ -1,14 +1,20 @@
-"""The agent's side of the endpoint protocol (spec/service-protocol.md, "Endpoints"), for the conformance kit and tests:
-an endpoint channel for one service run, connectors for jobs, and connections handed to both. The agent's own
-implementation is in Rust; this one follows the same wire rules with the standard library."""
+"""The agent's side of the endpoint protocol (spec/service-protocol.md, "Endpoints" and "Listeners"), for the
+conformance kit and tests: an endpoint channel for one service run, connectors for jobs, connections handed to both,
+listener connections with their announcements and the narrowing the service asks for, and the listening socket of a
+`listen_fd` listener. The agent's own implementation is in Rust; this one follows the same wire rules with the standard
+library."""
 import json
 import os
 import secrets
+import shutil
 import socket
 import subprocess
+import tempfile
 import threading
+import time
 
-from .service_endpoint import CHANNEL_ENV, WINDOWS, ChannelClosed, EndpointError, _Lines, _Pipe, _wrap, env_name
+from .service_endpoint import (CHANNEL_ENV, LISTEN_FD_PREFIX, LISTENER_STATES, WINDOWS, ChannelClosed, EndpointError, _Lines,
+                               _Pipe, _wrap, env_name, proxy_v2_header, split_addr)
 
 
 class _OvPipe:
@@ -151,6 +157,10 @@ class ServiceHost:
         self.lines = _Lines(self.mine)
         self.pid, self.conn, self.lock = None, 0, threading.Lock()
         self.held = _Held()
+        self.allows: list[dict] = []                  # every listener_allow the service sent, in order
+        self.narrowed: dict[str, list | None] = {}    # each listener's narrowing, as the agent keeps it
+        self.acked: set = set()                       # connections the service said it has
+        self.received = threading.Condition()
 
     def spawned(self):
         self.theirs.close()
@@ -176,6 +186,30 @@ class ServiceHost:
                 return
             if msg.get("op") == "accepted":
                 self.held.drop(msg.get("conn"))
+                with self.received:
+                    self.acked.add(msg.get("conn"))
+                    self.received.notify_all()
+            elif msg.get("op") == "listener_allow" and isinstance(msg.get("listener"), str):
+                with self.received:
+                    self.allows.append(msg)
+                    name, cidrs = msg["listener"], msg.get("cidrs")
+                    if cidrs is None:
+                        self.narrowed.pop(name, None)
+                    elif msg.get("append") and self.narrowed.get(name) is not None:
+                        self.narrowed[name] = self.narrowed[name] + list(cidrs)
+                    else:
+                        self.narrowed[name] = list(cidrs)
+                    self.received.notify_all()
+
+    def wait_accepted(self, conn: int, timeout: float = 10) -> bool:
+        """Wait until the service has said `accepted` for connection `conn`."""
+        with self.received:
+            return self.received.wait_for(lambda: conn in self.acked, timeout)
+
+    def wait_allows(self, n: int, timeout: float = 10) -> bool:
+        """Wait until the service has sent at least `n` listener_allow messages."""
+        with self.received:
+            return self.received.wait_for(lambda: len(self.allows) >= n, timeout)
 
     def connection(self, attempt: int, job_pid: int | None = None):
         """A new connection for `attempt`: the service end goes to the service; returns (its number, the job end: a
@@ -194,6 +228,36 @@ class ServiceHost:
         if job_pid is not None and WINDOWS:
             return n, _place(ours, job_pid)
         return n, ours
+
+    def listener_connection(self, listener: str, peer: str = "198.51.100.23:51000", proxy: tuple | None = None):
+        """A connection a listener accepted from `peer`, handed to the service (no attempt); returns (its number, the
+        client's end, a stream in this process). With `proxy` ((source, destination)), the client's end first carries
+        the PROXY v2 header the agent writes."""
+        ours, svc = _pair(ours_overlapped=False)
+        with self.lock:
+            self.conn += 1
+            n = self.conn
+            msg = {"op": "connection", "conn": n, "listener": listener, "peer": peer}
+            if WINDOWS:
+                msg["handle"] = _place(svc, self.pid)
+                self.lines.send(msg)
+            else:
+                self.held.keep(n, svc)
+                socket.send_fds(self.mine, [(json.dumps(msg) + "\n").encode()], [svc.fileno()])
+        if proxy is not None:
+            ours.sendall(proxy_v2_header(*proxy))
+        return n, ours
+
+    def announce(self, name: str, external: str | None, external_v6: str | None = None, state: str = "mapped_unverified",
+                 since: float | None = None) -> dict:
+        """Tell the service a listener's external address and state (`listener`); returns the announcement."""
+        if state not in LISTENER_STATES:
+            raise ValueError(f"state {state!r} is not one of {LISTENER_STATES}")
+        ann = {"external": external, "external_v6": external_v6, "state": state,
+               "since": float(time.time() if since is None else since)}
+        with self.lock:
+            self.lines.send({"op": "listener", "name": name, **ann})
+        return ann
 
     def ended(self, attempt: int):
         with self.lock:
@@ -275,3 +339,53 @@ def connect_here(host: ServiceHost, attempt: int):
     """A connection for a client in this process (the kit's probe): the job end as a socket or socket-like pipe."""
     return host.connection(attempt)[1]
 
+
+
+def write_listeners_file(path, announcements: dict) -> str:
+    """OARBANK_LISTENERS_FILE as the agent writes it before the service starts: {name: {external, external_v6, state,
+    since}}. Returns the path."""
+    tmp = f"{path}.tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(announcements, f)
+    os.replace(tmp, path)
+    return str(path)
+
+
+class ListenFdHost:
+    """The agent's side of a `listen_fd` listener (macOS, Linux): a unix socket in a directory only this account can
+    enter, listening, whose descriptor the service's `start` inherits in OARBANK_LISTEN_FD_<NAME>. `connect` plays a
+    client the listener accepted: the agent connects to the socket and writes the PROXY v2 header first when the
+    listener has one."""
+
+    def __init__(self, name: str):
+        if WINDOWS:
+            raise EndpointError("unsupported", "listen_fd listeners exist on macOS and Linux only")
+        self.name = name
+        self.dir = tempfile.mkdtemp(prefix="obl-")              # mode 0700: only this account enters it
+        self.path = os.path.join(self.dir, "s")
+        self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        self.sock.bind(self.path)
+        self.sock.listen(64)
+        os.set_inheritable(self.sock.fileno(), False)
+        self.env = {LISTEN_FD_PREFIX + name.upper(): f"fd:{self.sock.fileno()}"}
+        self.popen_kwargs = {"pass_fds": [self.sock.fileno()]}
+
+    def spawned(self):
+        """Nothing to drop: the agent keeps its own descriptor (it only connects to the path)."""
+
+    def connect(self, peer: str = "198.51.100.23:51000", proxy: tuple | None = None, timeout: float = 10):
+        c = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        c.settimeout(timeout)
+        c.connect(self.path)
+        if proxy is not None:
+            c.sendall(proxy_v2_header(*proxy))
+        return c
+
+    def close(self):
+        self.sock.close()
+        shutil.rmtree(self.dir, ignore_errors=True)
+
+
+def proxy_for(peer: str, accepted_on: str) -> tuple:
+    """The (source, destination) of a PROXY v2 header for a client `peer` accepted on `accepted_on` (`addr:port` each)."""
+    return split_addr(peer), split_addr(accepted_on)

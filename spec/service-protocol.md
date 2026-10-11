@@ -9,9 +9,9 @@ Some modules need something long-lived on the node: a VM, a daemon, a container 
 ops: fingerprint | start | stop | status | ready | list_owned | destroy <id> [--force]
 ```
 
-- **Environment:** the per-OS conventional variables ([platforms.md](platforms.md#environment-per-os)) with the home and temporary directory inside the module's data directory, plus `OARBANK_MODULE_DATA`, `OARBANK_MODULE`, `OARBANK_SERVICE`, `OARBANK_NODE_ID`, `OARBANK_PLATFORM`, `OARBANK_SETTINGS_FILE` (the module's settings for this node), `OARBANK_TOOLS_FILE` (its granted host tools, as for runners) and `OARBANK_LIMITS_FILE` (the owner's caps). Settings and limits are UTF-8 JSON files, because environment sizes differ per OS.
+- **Environment:** the per-OS conventional variables ([platforms.md](platforms.md#environment-per-os)) with the home and temporary directory inside the module's data directory, plus `OARBANK_MODULE_DATA`, `OARBANK_MODULE`, `OARBANK_SERVICE`, `OARBANK_NODE_ID`, `OARBANK_PLATFORM`, `OARBANK_SETTINGS_FILE` (the module's settings for this node), `OARBANK_TOOLS_FILE` (its granted host tools, as for runners) and `OARBANK_LIMITS_FILE` (the owner's caps). An endpoint service gets `OARBANK_ENDPOINT_CHANNEL` in `start` ([Endpoints](#endpoints)); a service that lists inbound listeners also gets `OARBANK_LISTENERS_FILE` and, for each `listen_fd` listener, `OARBANK_LISTEN_FD_<NAME>` ([Listeners](#listeners)). Settings and limits are UTF-8 JSON files, because environment sizes differ per OS.
 - **Exec:** the manifest's exec rules ([manifest.md](manifest.md#exec)), cwd the bundle root. A service limited by `platforms` runs only there.
-- **Sandbox:** services and probes run under the module sandbox ([sandbox.md](sandbox.md)) with the module's approved grants, minus the container broker. A service cannot start VMs or containers itself: a module that needs containers declares them in `[sandbox].containers` and its jobs use the agent's broker, whose `containers` pool replaces a module's own container service. A service never listens: jobs reach an endpoint service only through the agent ([Endpoints](#endpoints)).
+- **Sandbox:** services and probes run under the module sandbox ([sandbox.md](sandbox.md)) with the module's approved grants, minus the container broker. A service cannot start VMs or containers itself: a module that needs containers declares them in `[sandbox].containers` and its jobs use the agent's broker, whose `containers` pool replaces a module's own container service. A service never listens: jobs reach an endpoint service only through the agent ([Endpoints](#endpoints)), and so do connections from the internet ([Listeners](#listeners)).
 - **Output:** one JSON document on stdout. Exit 0 means the operation succeeded.
 - **Idempotency:** every op must be idempotent. `start` on a running service succeeds; `stop` on a stopped one succeeds.
 
@@ -85,6 +85,53 @@ binds or listens on anything, and nothing is reachable by name.
 - **Requests and responses.** The SDK speaks HTTP/1.1 over a connection: `service_endpoint.request()` and
   `HTTPConnection` in jobs, `service_endpoint.serve_http()` in the service. On Windows one thread at a time reads or
   writes a connection (synchronous pipes).
+
+## Listeners
+
+An endpoint service that lists inbound listeners (`services[].listeners`, [sandbox.md](sandbox.md#inbound-listeners))
+serves connections the agent accepts from the internet. Its `lifecycle` is `always`. The agent listens, enforces the
+listener's limits and the allowlists, and relays bytes; the service gets connected byte streams, exactly like
+connections from jobs, on the same endpoint channel.
+
+- **`OARBANK_LISTENERS_FILE`**, written before the service starts: a UTF-8 JSON object with an announcement for each
+  listener the service lists, `{"<name>": {"external", "external_v6", "state", "since"}}`.
+- **Announcements.** After the hello and on every change, the agent sends `{"op": "listener", "name", "external",
+  "external_v6", "state", "since"}`. `external` is the listener's public IPv4 address and port (`198.51.100.7:9000`),
+  `external_v6` its IPv6 one (`[2001:db8::7]:9000`), either null while unknown; `since` is a Unix time. `state`:
+  `unmapped` (no router mapping yet, or it failed), `mapped_unverified` (the router holds the mapping and no dial-back
+  has confirmed it yet, or no prober is available), `reachable` (a dial-back from outside succeeded at this address) or
+  `unreachable` (the mapping verified but a dial-back failed). A workload that publishes its address re-publishes it
+  when `external` changes, within its own network's rate limits.
+- **Connections** (`handover = "connections"`, every OS): `{"op": "connection", "conn": <n>, "listener": "<name>",
+  "peer": "<addr:port>"}` with the service's end attached as for a job's connection, and **no** `attempt`; the service
+  answers `accepted` as for any connection, and `ended` never concerns it. With the listener's `proxy_protocol`, the
+  first bytes the service reads are a PROXY protocol v2 header (the client's address and the address the agent
+  accepted on).
+- **`listen_fd`** (macOS and Linux): `start` inherits a listening unix socket the agent made, in
+  `OARBANK_LISTEN_FD_<NAME>=fd:<n>` (the listener name upper-cased), and passes it on to what it leaves running as it
+  passes the channel (`service_endpoint.inherit_channel()` passes both). The service only calls `accept` on it; each
+  connection starts with a PROXY v2 header unless the manifest sets `proxy_protocol = false`. No `connection` message is
+  sent for these; announcements and narrowing still use the channel.
+- **Narrowing.** The service may send `{"op": "listener_allow", "listener": "<name>", "cidrs": ["198.51.100.0/24",
+  ...], "append": false}`: the agent intersects the networks with the owner's allowlist, so a module only ever narrows.
+  `cidrs: null` drops the module's narrowing, `[]` lets nobody connect, and `"append": true` adds to the list instead of
+  replacing it. Each line stays under 4096 bytes, so a long list goes in several messages: the first replaces, the
+  rest append.
+- **While the service is not up** (starting, restarting, held by host protection), the listener stays bound and mapped,
+  but new connections are closed at once, so a quick return needs no re-mapping.
+
+| On | From | Message |
+|---|---|---|
+| channel | agent | `{"op": "listener", "name", "external", "external_v6", "state", "since"}` |
+| channel | agent | `{"op": "connection", "conn": <n>, "listener": "<name>", "peer": "<addr:port>"}` with the service's end attached |
+| channel | service | `{"op": "accepted", "conn": <n>}` |
+| channel | service | `{"op": "listener_allow", "listener": "<name>", "cidrs": [...] \| null, "append": <bool>}` |
+
+The SDK's `service_endpoint.Acceptor` yields every connection with its `Origin` (`attempt`, or `listener` and `peer`),
+keeps `listeners` (seeded from the file, updated by announcements, with an `on_listener` callback) and sends
+`listener_allow` with `narrow()`; `serve_http(handler, proxy=[...])` serves listener connections too and reads the
+PROXY header of the listeners named; `read_proxy_v2` reads one from any connection; `listen_socket` and
+`exec_with_listen_fds` (the systemd `LISTEN_FDS` convention) serve a `listen_fd` listener.
 
 ## Ownership and reaping
 

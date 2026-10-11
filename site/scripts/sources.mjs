@@ -52,12 +52,29 @@ export const PAGES = [
     order: 5,
   },
   {
+    src: 'docs/inbound-listeners.md',
+    dest: 'build/inbound-listeners.md',
+    type: 'how-to',
+    title: 'Accept connections from the internet',
+    description:
+      'Declare an inbound listener the agent owns, serve its connections in an endpoint service, read its announced external address, narrow who may connect, read PROXY v2 headers and test it with the conformance kit.',
+    order: 7,
+  },
+  {
+    src: 'docs/make-a-node-reachable.md',
+    dest: 'operate/make-a-node-reachable.md',
+    type: 'how-to',
+    description:
+      'Assign a module’s inbound listener to a node, let the agent map the port on the router or forward it by hand, and read what the reachability check found and how to fix it.',
+    order: 3,
+  },
+  {
     src: 'docs/workloads.md',
     dest: 'build/workloads.md',
     type: 'how-to',
     description:
       'Ship a long-running process that is the work itself: declare a workload, wrap a third-party daemon in the supervisor shim, answer status, report into your own records and pass the conformance kit.',
-    order: 7,
+    order: 10,
   },
   {
     src: 'docs/compatibility.md',
@@ -75,6 +92,22 @@ export const PAGES = [
     description:
       'Pages and panels as data, the host queries that show what the core does for your module, buttons and typed links, and a sandboxed frame with a bridge client.',
     order: 6,
+  },
+  {
+    src: 'docs/host-tools.md',
+    dest: 'build/host-tools.md',
+    type: 'how-to',
+    description:
+      'Ask for a JDK, a Python or another program on the node by tool id and version range, read the installation the node grants, test it, and move off tool registry ids.',
+    order: 7,
+  },
+  {
+    src: 'docs/module-settings.md',
+    dest: 'build/module-settings.md',
+    type: 'how-to',
+    description:
+      'Declare a module’s settings as typed keys with a scope, read them on nodes and on the coordinator, let campaigns override them, and move a module from SDK 1.5.',
+    order: 8,
   },
   {
     src: 'spec/public-surface.md',
