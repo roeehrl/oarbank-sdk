@@ -4,7 +4,7 @@ What changed in each oarbank-sdk release, for module authors. The core's changel
 [roeehrl/oarbank](https://github.com/roeehrl/oarbank/blob/main/CHANGELOG.md). Contract rules:
 [spec/versioning.md](spec/versioning.md).
 
-## 1.6.0 (unreleased)
+## 1.6.0 (2026-10-11)
 
 For Oarbank core 2.9.0. Everything is additive within manifest 1 and module protocol 1.
 
