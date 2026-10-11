@@ -17,6 +17,7 @@ through the versioned contracts in this repository.
 | Module protocol 1 | Coordinator ↔ module: JSON-RPC 2.0 over stdio | [spec/module-protocol.md](spec/module-protocol.md) |
 | Runner protocol 1 | Agent ↔ job runner: argv, files, exit codes, events, Control | [spec/runner-protocol.md](spec/runner-protocol.md) |
 | Service protocol 1 | Agent ↔ node services and probes, and the endpoints jobs reach a warm service through | [spec/service-protocol.md](spec/service-protocol.md) |
+| Workload protocol 1 | Agent ↔ workloads: supervised long-running processes that are the work itself, their control, events, health and containment | [spec/workload-protocol.md](spec/workload-protocol.md) |
 | Envelopes | Spec and result documents | [spec/envelopes.md](spec/envelopes.md) |
 | Platforms | Platform tokens, per-platform declarations, placement | [spec/platforms.md](spec/platforms.md) |
 | Sandbox | What a module process may touch, and the grants an operator approves | [spec/sandbox.md](spec/sandbox.md) |
@@ -36,6 +37,9 @@ The Python package `oarbank_sdk` implements these contracts:
 - **`oarbank_sdk.service_endpoint`**, HTTP over a service endpoint: `request()` in a job, `serve_http()` in an
   endpoint service, which is handed every connection and never listens. Stdlib only. A how-to:
   [docs/service-endpoints.md](docs/service-endpoints.md); the reference module: [`examples/modelserver`](examples/modelserver).
+- **`oarbank_sdk.workload`**, the supervisor shim that runs a third-party daemon as a workload (pause, thread limits,
+  stop, the `status` op) and the event helpers (`progress`, `report`, `error`). Stdlib only. A how-to:
+  [docs/workloads.md](docs/workloads.md); the reference module: [`examples/workload`](examples/workload).
 - **`oarbank_sdk.gpu`**, the GPU APIs this host provides, detected as a node's agent detects them (`oarbank-sdk
   gpu-apis`), and whether a node meets a stage's GPU needs. Stdlib only. A how-to:
   [docs/gpu-placement.md](docs/gpu-placement.md); the reference module: [`examples/gpuinfo`](examples/gpuinfo).
@@ -43,8 +47,9 @@ The Python package `oarbank_sdk` implements these contracts:
   coordinator side over the module protocol and runs the runner on its goldens, and on any other runner specs its
   fixtures list, as this host's platform would (sandboxed, through the egress proxy; a bootstrap stage's with the
   bootstrap grants, its artifacts checked against the module's pinned datasets; a stage that reserves an endpoint
-  service's pool with that service up), and drives each endpoint service through its endpoint channel, failing one that
-  listens itself. Secrets reach only the stages that list them and must never appear in what a run or a verb returns;
+  service's pool with that service up), drives each endpoint service through its endpoint channel, failing one that
+  listens itself, and runs each workload as an agent would, failing one that leaves its process group, listens or ignores
+  a stop. Secrets reach only the stages that list them and must never appear in what a run or a verb returns;
   container sets' members verify against their key, and images outside a set or unsigned are refused. A stage that
   keeps checkpoints is stopped with checkpoint-then-stop and resumed in a fresh workdir, which must give the same
   digest.
