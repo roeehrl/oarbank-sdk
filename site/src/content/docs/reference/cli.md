@@ -184,6 +184,7 @@ From 2.10 ([Make a node reachable](/oarbank/operate/make-a-node-reachable)). A l
 | `oarbank token create\|revoke` | Personal access tokens |
 | `oarbank console login [--open]` | A console sign-in link |
 | `oarbank agent list\|upload\|sign\|canary\|promote\|rollback` | Node agent self-update; `list` shows the version every node runs |
+| `oarbank update status\|releases\|import\|fetch\|sign\|plan\|start\|pause\|resume\|halt\|rollback\|skip\|hold\|unhold\|pin\|unpin\|coordinator` | Fleet updates: whole node packages and the coordinator, ring by ring ([Update the fleet](/oarbank/operate/update-and-remove#update-the-fleet)) |
 | `oarbank release build\|keygen\|sign\|promote\|list` | Release bundles and the release signing key |
 | `oarbank owner show\|set\|disable\|rescue-move` | The owner key set (signing mode) |
 | `oarbank coordinator status\|prepare\|move\|sign\|cancel\|finalize` | How the coordinator runs (`status`), and moving it to another machine |
@@ -220,6 +221,7 @@ administrator and never creates a second fleet over an existing one.
 | `oarbank-agent policy` | The managed policy in force, as JSON; a join code shows as `(set)` |
 | `oarbank-agent tools detect` | Detect the node's host tools now and print what was found (run as the agent's account) |
 | `oarbank-launcher --version` | The launcher's version (the agent itself updates through the coordinator: see `oarbank agent list`) |
+| `oarbank-launcher update-run`, `update-trust` | The node's root update runner, started by its launchd job, systemd path unit or the Windows helper; `sudo oarbank-launcher update-trust --from-agent` pins update trust on a node that joined after its package was installed |
 | `oarbank-agent discover` | Coordinators announcing themselves on the local network, and whether macOS Local Network privacy blocks it |
 | `oarbank-agent gpu-apis` | The GPU APIs this node provides and why any is missing (Linux: `sudo -u oarbank /usr/lib/oarbank/oarbank-agent gpu-apis`) |
 | `oarbank-agent containers doctor [--probe] [--gpu]` | The node's container runtime: its state, each missing piece with its fix (exit 3 while something is missing); `--probe` runs real containers. On macOS run it as the agent's account ([Containers on nodes](/oarbank/operate/containers)) |

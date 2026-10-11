@@ -30,7 +30,7 @@ create one, delegation is off by default, and `gpu_jobs = "certified"` is opt-in
 ### Upgrade the coordinator to 2.10
 
 Run the 2.10.0 installer over the 2.9 one, as for any update
-([Updating and removing](/oarbank/operate/update-and-remove#update-the-coordinator)):
+([Updating and removing](/oarbank/operate/update-and-remove#update-the-coordinator-by-hand)):
 
 - **macOS:** double-click `oarbank-coordinator-2.10.0-macos-arm64.pkg`. It writes the system services again and
   restarts them on the new build.
@@ -44,7 +44,13 @@ a **Workloads** card on each node page, a **Workloads** tab on each module that 
 
 ### Upgrade the nodes to 2.10
 
-Upload, sign, try and promote the 2.10.0 agent ([Updating and removing](/oarbank/operate/update-and-remove#update-the-nodes)):
+Install the 2.10.0 node package on each node once, over the old one. This is the last time: the package brings the
+node's update runner and pins the owner keys the node trusts for it, and from 2.10 the coordinator updates whole
+packages itself ([Update the fleet](/oarbank/operate/update-and-remove#update-the-fleet)).
+
+To get the 2.10 agent onto nodes before you can reach them, upload, sign, try and promote it as before
+([Update only a node's agent](/oarbank/operate/update-and-remove#update-only-a-nodes-agent)). The rest of the package,
+and fleet updates, still wait for the package:
 
 ```sh
 oarbank agent upload oarbank-agent-2.10.0-linux-amd64
@@ -164,7 +170,7 @@ Upgrade the **coordinator first**, then the nodes. The downloads are on the
 </Tabs>
 
 A coordinator installed from an archive upgrades with the new archive's helper, as before
-([Updating and removing](/oarbank/operate/update-and-remove#update-the-coordinator)); on macOS and Linux it installs
+([Updating and removing](/oarbank/operate/update-and-remove#update-the-coordinator-by-hand)); on macOS and Linux it installs
 the system services too.
 
 ### Check the result
@@ -260,7 +266,7 @@ oarbank agent canary <build> --node <node>
 oarbank agent promote <build>
 ```
 
-[Updating and removing](/oarbank/operate/update-and-remove#update-the-nodes) has the details. Update every node: a 2.9
+[Updating and removing](/oarbank/operate/update-and-remove#update-only-a-nodes-agent) has the details. Update every node: a 2.9
 agent is what detects host tools (an older one reports none, so modules that ask for tools wait with `TOOL_NOT_FOUND`),
 reports which settings revision it applied, enforces managed settings, offers modules whose doctor is not healthy for
 the stages that need no certification, and brings up the container runtime on Macs.

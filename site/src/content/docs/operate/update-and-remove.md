@@ -1,6 +1,6 @@
 ---
 title: Updating and removing
-description: Update the coordinator and the nodes' agents, move the coordinator to another computer, and remove a node or the coordinator on macOS, Linux and Windows without losing your owner keys by accident.
+description: Update the whole fleet from the coordinator with one rollout, or a coordinator or node by hand, move the coordinator to another computer, and remove a node or the coordinator on macOS, Linux and Windows without losing your owner keys by accident.
 type: how-to
 platforms: [macos, linux, windows]
 core: '2.10.0'
@@ -13,7 +13,45 @@ from 2.8 the macOS and Linux coordinator moves to a system service once, and fro
 new features. The full install guide, including building the packages, is
 [docs/install.md](https://github.com/roeehrl/oarbank/blob/v2.10.0/docs/install.md) in the core's repository.
 
-## Update the coordinator
+## Update the fleet
+
+From 2.10 the coordinator updates every node's whole package (launcher, helpers, Oarbank Node app, runtime and agent)
+and itself, ring by ring, rolling back by itself what does not come up healthy. Nobody logs in to the machines.
+
+1. **Get the release.** On the **Updates** page, **Fetch** the newest release, or import one you downloaded: its
+   `oarbank-fleet-<version>.json` and the packages your nodes and coordinator need, in one directory.
+
+   ```sh
+   oarbank update fetch 2.10.1          # from the release source (the project's GitHub releases by default)
+   oarbank update import ./oarbank-2.10.1/
+   oarbank update sign 2.10.1           # signing mode: with your owner key, on the machine that holds it
+   ```
+
+2. **Start it.** **Update fleet** on the Updates page, or `oarbank update start 2.10.1`, shows the plan first: the
+   coordinator, then the `canary`, `early` and `broad` rings with the nodes in each, their update windows, and the
+   nodes skipped and why (held, pinned, offline, no updater). Confirm it and the rollout runs by itself:
+   - the coordinator updates first. It snapshots its database, tries the new build's migrations on a copy, then installs
+     the new build beside the old one and keeps it only if it is healthy within five minutes;
+   - then each ring, one node at a time by default. A node finishes its running jobs, installs the package, and keeps it
+     only once its new agent has checked in, otherwise it goes back to the package it had. The next ring starts after the
+     ring has baked;
+   - a failure halts the rollout and rolls back the nodes it moved.
+
+3. **Watch or steer it.** The Updates page shows each ring's progress and gates. `oarbank update status`, `pause`,
+   `resume`, `halt`, `rollback` and `skip <node>` do what its buttons do.
+
+**Policy.** Put machines in rings with the `update_ring` setting (a group of test machines as `canary`). Limit when
+nodes may update with `update_window`. Hold a node with `oarbank update hold <node> --reason … --until …`, or pin it to
+a version with `oarbank update pin`. Holds and pins expire. `update_auto = on` starts a rollout by itself when a signed
+release is ready. The default, `notify`, tells you and waits for your click. A machine's managed policy (MDM, Group
+Policy, `/etc/oarbank/policy.json`) can hold it or turn automatic updates off for it.
+
+**The first time.** A node gets its update runner and pins the owner keys it trusts when its 2.10 package is installed.
+A node that joined after its package was installed needs `sudo oarbank-launcher update-trust --from-agent` once. The
+Updates page marks nodes without an updater and says why. Personal installs and development builds keep updating their
+agent only (below).
+
+## Update the coordinator by hand
 
 Download the new installer from the [releases](https://github.com/roeehrl/oarbank/releases) and check it. Each
 package set has its own checksum file beside it, for example `SHA256SUMS-coordinator-packages-2.10.0-linux-amd64` for
@@ -40,9 +78,10 @@ If the services do not come back, run `oarbank-setup` (on the PATH on macOS and 
 existing installation again and never makes a new fleet. [The coordinator service](/oarbank/operate/coordinator#check-and-restart-it)
 shows how to look at the services and their logs.
 
-## Update the nodes
+## Update only a node's agent
 
-Nodes update their agent from the coordinator; nobody needs to log in to them.
+For nodes without an update runner (a personal install, a development build) the coordinator can still replace the
+agent binary alone; nobody needs to log in to them.
 
 Upload the release's agent binary for each platform your nodes run (`oarbank-agent-2.10.0-darwin-arm64`,
 `-darwin-amd64`, `-linux-amd64`, `-linux-arm64`, `-windows-x64.exe`, `-windows-arm64.exe`; each has a

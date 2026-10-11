@@ -202,7 +202,7 @@ duty.close()
   {"asked", "busy_s", "elapsed_s", "units", "device", "threads"}}` every 2 s (and when the duty changes). `device` is
   `gpu`, or `cpu` for a stand-in whose units run on the CPU. The conformance kit checks these against what it measures
   ([conformance.md](conformance.md), `duty_specs`).
-- **What the agent checks** (core 2.10, D50): every two seconds it reads each job's GPU time (all processes of its
+- **What the agent checks** (core 2.10): every two seconds it reads each job's GPU time (all processes of its
   container). A job over its `gpu_duty` plus 0.1 for three consecutive samples, judged from the second sample after it
   was given a duty, is paused for 60 s (`GPU_DUTY_EXCEEDED`); the third such pause of the same module's work within an
   hour stops it, and that module's jobs get no duty for an hour, so they wait beside protected GPU work like a runner that
