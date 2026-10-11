@@ -14,6 +14,8 @@ What changed in each oarbank-sdk release, for module authors. The core's changel
   unit of `b` seconds, applies a newer document while it idles, holds at duty 0, sizes units with `scale()`, and writes
   `gpu_duty` metric events. Core 2.10 sets the duty under `gpu_jobs = "certified"` from an AIMD budget on the
   protected program's progress and pauses, then stops, a runner its measured GPU time shows over the duty plus 0.1.
+- **`Duty.set(d)`** feeds a governor made without a control document, such as a workload's supervisor `gpu_duty`
+  callback; a workload holds its duty the same way a runner does.
 - **`Control.poll()`** applies a nudged document without blocking or raising; **`Control.wait()`** blocks until the next
   nudge.
 - **Conformance: duty specs** ([spec/conformance.md](spec/conformance.md)). A `cooperative_throttle` runner runs each
