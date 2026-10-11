@@ -1,7 +1,7 @@
 # The module sandbox
 
-Every module process runs confined: the coordinator side, the runner, services, probes and `doctor`, on every
-platform. This page is the **contract**: what a module process may and may not reach. Each platform enforces it with
+Every module process runs confined: the coordinator side, the runner, services, probes, workloads and `doctor`, on
+every platform. This page is the **contract**: what a module process may and may not reach. Each platform enforces it with
 its own backend:
 
 | Platform | Backend | Details |
@@ -24,6 +24,12 @@ A module never sees the backend. It declares what it needs in `[sandbox]`, and a
 | approved folders (`[sandbox].folders`) | none | read (input folders); create and write only (outboxes) | none |
 | everything else: homes, other modules, the agent's and coordinator's state, credential stores, devices other than null, zero, random and urandom | denied | denied | denied |
 
+**Workloads** ([workload-protocol.md](workload-protocol.md)) get what a service gets, with their run directory (inside
+the data directory) as cwd and home, plus their **private directory read-only**: the control document, the settings,
+tools and limits files and, for a workload that lists secrets, the secrets file. Only that workload's profile may read
+its private directory, so the module's other processes never see its secrets. A workload never gets the container
+broker.
+
 **Processes**
 - A module process may spawn children, and children inherit the confinement.
 - It may signal only processes in its own confinement.
@@ -33,7 +39,9 @@ A module never sees the backend. It declares what it needs in `[sandbox]`, and a
 
 **Local IPC.** The only channels are the job's broker endpoint, when granted, and the endpoint handles the agent hands
 out itself ([service-protocol.md](service-protocol.md#endpoints)): a job's connectors to its module's endpoint
-services and an endpoint service's channel, inherited and already connected, so no rule has to allow a name. There are no
+services and an endpoint service's channel, inherited and already connected, and the listening socket of a
+`listen_fd` inbound listener, inherited and already listening ([Inbound listeners](#inbound-listeners)), so no rule has to
+allow a name. There are no
 other sockets, pipes, D-Bus, mach services or Docker sockets. Name resolution and logging go through backend-listed
 system facilities.
 
@@ -76,6 +84,7 @@ key = "keys/tasks.pub"
 | `net.mode = "none"` (default) | No network at all. |
 | `net.mode = "egress-allowlist"` | Only the `allow` hosts, `host[:port]` with port 443 by default and `*.` for subdomains, never IP addresses. Traffic goes through **the agent's local proxy**, which enforces the list and refuses a name that resolves to a non-public address (loopback, link-local, private, multicast); `oarbank_sdk.egress_proxy` is the reference. The agent sets `HTTPS_PROXY`/`HTTP_PROXY`/`ALL_PROXY`; the backend blocks every other route. |
 | `net.mode = "egress-any"` | Outbound connections to any public address, plus DNS. A separately approved **full-trust** grant. |
+| `net.inbound` | Connections from the internet on nodes the owner assigns: the **agent** listens, and hands each connection it accepts to the endpoint service that lists the listener. A top-risk grant, independent of `net.mode` ([Inbound listeners](#inbound-listeners)). |
 | `tools` | Read and execute one installation of each host tool, detected and version-checked on the node, never a path the module names: see [Host tools](#host-tools). The process finds each in `OARBANK_TOOLS_FILE`. `trust = "code-exec"` flags tools that run arbitrary code (a JVM, an interpreter, a shell) in the approval UI. On Windows, any readable binary is executable. |
 | `devices.gpu = "compute"` | GPU compute through the platform's APIs, with no display server. Flagged at approval: it widens the kernel surface. |
 | `containers` | The job's broker endpoint, for these digest-pinned images only. A stage that runs containers reserves the agent-provided `containers` pool. |
@@ -85,7 +94,9 @@ key = "keys/tasks.pub"
 
 **Network rules, whatever the mode:**
 - never loopback or link-local;
-- never listening (an endpoint service is handed its connections);
+- never listening (an endpoint service, and a workload that serves listeners, is handed its connections; an inbound
+  listener is the agent's, and a `listen_fd` service only accepts on the socket the agent made; the backend refuses
+  `bind` and `listen` to a workload, so a workload can never raise a firewall prompt);
 - never another unix socket or pipe.
 
 **Approval**
@@ -165,6 +176,62 @@ where they are is in the module: the operator maps each id to a path per node, a
 - **Execution.** Nothing in a folder may be executed, except on Windows, where any readable file can be (as for tools).
 - **Enforcement.** Nodes report `folders.read` and `folders.write` in `sandbox.enforcement`; a module that requests
   folders runs only where both of its kinds are enforced.
+
+## Inbound listeners
+
+Some workloads must accept connections from the internet: a peer of a network that publishes its address, a public
+endpoint, a relay. Module code still never listens, binds or holds an internet socket. The module declares listeners;
+the agent owns them, maps them on the node's router when it can, proves them reachable from outside, and relays every
+connection's bytes to the service.
+
+```toml
+[requires]
+core = ">=2.10,<3"
+
+[[sandbox.net.inbound]]
+name = "peer"
+port_hint = 9000                 # the external port wanted; the owner decides the real one per node
+port_policy = "stable"           # published somewhere costly to change: a port someone else holds is refused
+max_conns = 256
+max_conns_per_ip = 16
+new_conns_per_ip_per_s = 4
+idle_timeout_s = 120
+
+[[services]]
+name = "node"
+exec = ["python", "-I", "{bundle}/node_service.py"]
+lifecycle = "always"
+endpoint = true
+listeners = ["peer"]
+```
+
+Every key is in [manifest-reference.md](manifest-reference.md); the rules are [manifest.md](manifest.md#cross-field-rules)
+rule 22.
+
+- **A grant approved by digest.** `inbound` is part of the version's requests, shown at approval as "accepts
+  connections from the internet on nodes the owner assigns: listener peer (TCP, port 9000 wanted, stable; at most 256
+  connections, 16 per address, 4 new a second per address, idle 120 s)" (`InboundListener.approval_text()`). A new
+  version needs its own approval, as for every grant.
+- **Three gates on the node.** A listener exists on a node only when the approved version requests it, the owner's
+  signed node statement assigns `<module>/<listener>` to that node (with its external port policy, lower limits and an
+  allowlist), and the module's service that lists it is running there. A kill switch and the machine's managed policy
+  can close every listener; a compromised coordinator cannot open one.
+- **Limits.** The manifest's limits are ceilings: the owner may lower them per node, never raise them. The agent
+  enforces them while it relays: connections at once, per address (IPv6: per /64), new connections a second per
+  address, the idle timeout and the byte rate.
+- **Hand-over.** `handover = "connections"` (the default, every OS): each accepted connection arrives on the service's
+  endpoint channel with the listener's name and the client's address ([service-protocol.md](service-protocol.md#listeners)).
+  `handover = "listen_fd"` (macOS and Linux): the agent creates a unix socket in a directory only its own account can
+  enter, listens on it itself, and the service's `start` inherits the listening descriptor in
+  `OARBANK_LISTEN_FD_<NAME>`; the service only calls `accept` on it, which its sandbox allows, while `listen` and
+  `bind` stay refused. This serves third-party servers that take an inherited socket. Windows nodes refuse such a
+  listener (`LISTENER_HANDOVER_UNSUPPORTED`) and `oarbank-sdk check` warns about it.
+- **The client's address.** With `proxy_protocol` (the default with `listen_fd`), the first bytes of each connection are
+  a PROXY protocol v2 header the agent writes itself (nothing from the network is passed through as one).
+- **Narrowing.** The service may narrow who connects to the networks it names (`listener_allow`); the agent intersects
+  them with the owner's allowlist, so a module can only ever narrow.
+- **Network mode.** `inbound` needs none: answering an accepted connection is not egress. `egress-any` is needed only
+  when the workload also dials out to arbitrary peers.
 
 ## Bootstrap jobs
 

@@ -79,6 +79,11 @@ class Duty:
             return None
         return min(1.0, max(0.0, float(d)))
 
+    def set(self, duty: float | None):
+        """Set the duty of a governor made without a control document (`control=None`): a workload's supervisor passes
+        the `gpu_duty` of its control document here from its `gpu_duty` callback (oarbank_sdk.workload)."""
+        self._fixed = duty
+
     def _check(self):
         if self.control is not None:
             self.control.check()                # applies a nudged document; raises Stopped on a stop request

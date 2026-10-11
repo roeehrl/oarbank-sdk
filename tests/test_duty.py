@@ -139,3 +139,14 @@ def test_the_gpu_module_names_the_governor():
     assert gpu.Duty is Duty
     with pytest.raises(RuntimeError):
         Duty(None, duty=0.0).unit().__enter__()
+
+
+def test_a_governor_without_a_control_document_takes_its_duty_from_set():
+    c = Clock()
+    d = Duty(None, clock=c, sleep=c.sleep)
+    work(c, d, 0.1)
+    assert c.t == pytest.approx(0.1)                    # no duty: flat out
+    d.set(0.25)
+    t0 = c.t
+    work(c, d, 0.1)
+    assert c.t - t0 == pytest.approx(0.4)

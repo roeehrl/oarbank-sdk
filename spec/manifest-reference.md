@@ -28,6 +28,7 @@ Cross-field rules are in [manifest.md](manifest.md).
 | `requires.module_protocol` | list of int | required | [stable] Module protocol majors the coordinator side speaks. |
 | `requires.runner_protocol` | list of int | `[1]` | [stable] Runner protocol majors the runner speaks. |
 | `requires.service_protocol` | list of int | `[]` | [stable] Service protocol majors (only when services/probes are declared). |
+| `requires.workload_protocol` | list of int | `[]` | [beta] Workload protocol majors (only when workloads are declared; spec/workload-protocol.md). Needs requires.core >= 2.10. |
 | `requires.experimental` | list of str | `[]` | [stable] Opt-ins to experimental contract items; any opt-in blocks the verified badge. |
 | `requires.ui_contract` | str (optional) |  | [beta] UI contract versions the module's pages use, e.g. '>=1.0,<2' (spec/ui-contract.md). |
 | `requires.coordinator_platforms` | list of str (optional) |  | [beta] Platforms the coordinator side runs on (the coordinator host's platform); `platforms` lists node platforms only. Absent: any platform. A core refuses to install or enable the module on a coordinator host not listed, and blocks a coordinator move to one. Needs requires.core >= 2.2. |
@@ -46,6 +47,7 @@ Cross-field rules are in [manifest.md](manifest.md).
 | `coordinator.timeouts_s` | table str → float | `{"default": 10.0}` | [stable] Per-verb timeouts; key `default` applies to unlisted verbs. |
 | `coordinator.permissions` | list of `"datasets:read"` \| `"blobs:stat"` \| `"settings:read:self"` \| `"store:read:self"` \| `"nodes:read"` \| `"jobs:read:self"` \| `"files:read:self"` \| `"secrets:read:self"` | `[]` | [stable] Host callbacks the module may call; everything else is denied. |
 | `coordinator.campaign_effects` | list of `"jobs.enqueue"` \| `"jobs.cancel"` \| `"campaigns.create"` \| `"campaigns.update"` \| `"campaigns.cancel"` \| `"datasets.create"` \| `"datasets.update"` \| `"datasets.delete"` \| `"module_settings.update"` \| `"store.write"` \| `"store.delete"` \| `"files.write"` \| `"files.put"` \| `"files.delete"` \| `"external"` | `[]` | [beta] Effects campaign.tick may request (requires the campaign.tick capability). |
+| `coordinator.workload_effects` | list of `"store.write"` \| `"store.delete"` \| `"files.write"` \| `"files.put"` \| `"files.delete"` | `[]` | [beta] Effects workload.report may request: the module's own records only (requires the workload.report capability and requires.core >= 2.10). |
 | `coordinator.move` | MoveSection | `"rules=[] effects=[]"` |  |
 | `coordinator.move.rules` | list of MoveRule | `[]` | [beta] The first matching rule wins; unmatched state is carried. |
 | `coordinator.move.rules[].files` | str (optional) |  | [beta] A path prefix in the module's files ('' = all of them). |
@@ -141,7 +143,8 @@ Cross-field rules are in [manifest.md](manifest.md).
 | `services[].reserves_host_memory` | bool | `false` | [beta] The fingerprint's reserve.mem_gb is charged to the host while running. |
 | `services[].yieldable` | bool | `true` | [beta] The agent may stop it when idle under memory pressure, and host protection may stop it, releasing the jobs using it, when it evicts or while GPU work may not run (a GPU service). |
 | `services[].freeze_ok` | bool | `false` | [beta] The agent may freeze the service's process container (freezing returns no memory). |
-| `services[].endpoint` | bool | `false` | [beta] Jobs reach the service: each attempt whose stage reserves one of its pools gets OARBANK_SERVICE_<NAME>, and the agent hands the service every connection over its endpoint channel; the service never listens (spec/service-protocol.md, "Endpoints"). Provides at least one pool; lifecycle on_demand or always. Needs requires.core >= 2.5. |
+| `services[].endpoint` | bool | `false` | [beta] Jobs reach the service: each attempt whose stage reserves one of its pools gets OARBANK_SERVICE_<NAME>, and the agent hands the service every connection over its endpoint channel; the service never listens (spec/service-protocol.md, "Endpoints"). Provides at least one pool or lists at least one listener; lifecycle on_demand or always. Needs requires.core >= 2.5. |
+| `services[].listeners` | list of str | `[]` | [beta] `[sandbox].net.inbound` listeners this service serves: the agent hands it each connection a listener accepts (or, for handover `listen_fd`, the listening socket) and announces each listener's external address on its endpoint channel. Needs endpoint = true, lifecycle always and requires.core >= 2.10. |
 | `services[].gpu` | ServiceGPU | `"use='none' apis_any=[]"` | [beta] Needs requires.core >= 2.5 when `use` is not none. |
 | `services[].gpu.use` | `"none"` \| `"shared"` \| `"exclusive"` | `"none"` | [beta] A running service that is not `none` is GPU-resident fleet work: host protection stops it, when yieldable, while GPU work may not run, and a job reserving one of its pools is a GPU job. Needs sandbox.devices.gpu = 'compute' and requires.core >= 2.5. |
 | `services[].gpu.apis_any` | list of str | `[]` | [beta] Any of these GPU APIs; jobs run only on nodes providing one (open set; detected: cuda, directml, metal, opencl, rocm, vulkan). Needs `use` shared or exclusive and requires.core >= 2.5. |
@@ -150,10 +153,37 @@ Cross-field rules are in [manifest.md](manifest.md).
 | `probes[].exec` | list of str | required |  |
 | `probes[].period_s` | float | `3600.0` |  |
 | `probes[].platforms` | list of str | `[]` | [beta] Only on these platforms (empty: every declared platform). |
+| `workloads` | list of Workload | `[]` | [beta] Supervised long-running processes that are the work itself. Needs requires.core >= 2.10. |
+| `workloads[].name` | str | required | [beta] Unique among workloads and services; reports name it `<module>/<name>`. |
+| `workloads[].exec` | list of str | required | [beta] argv (spec/manifest.md, "Exec"); the agent appends `run` (the long-running process, cwd its run directory) or `status` (the health check). Usually the SDK's supervisor shim (oarbank_sdk.workload). |
+| `workloads[].platforms` | list of str | `[]` | [beta] Only on these platforms (empty: every declared platform). |
+| `workloads[].seat` | `"node"` \| `"fleet"` | `"node"` | [beta] `node`: the owner assigns it to nodes, one seat per node; `fleet`: the owner asks for a count and the coordinator places the seats once on eligible nodes (it never moves one on its own). |
+| `workloads[].identity` | `"none"` \| `"per_node"` | `"none"` | [beta] `per_node`: the seat is named by the node's values of the workload's secrets and runs only under a coordinator seat lease with a fence, so at most one node runs an identity at a time; every secret must be set per node. |
+| `workloads[].secrets` | list of str | `[]` | [beta] Declared secrets delivered to this workload only, in OARBANK_SECRETS_FILE. |
+| `workloads[].listeners` | list of str | `[]` | [beta] Inbound listeners it serves through its endpoint channel ([sandbox].net.inbound). |
+| `workloads[].resources` | WorkloadResources | `"cpu_cores=1.0 mem_gb=0.5"` |  |
+| `workloads[].resources.cpu_cores` | float | `1.0` | [beta] Cores it uses at full speed. |
+| `workloads[].resources.mem_gb` | float | `0.5` | [beta] Memory it holds (GB). |
+| `workloads[].gpu` | ServiceGPU | `"use='none' apis_any=[]"` | [beta] GPU use; not `none` needs sandbox.devices.gpu = 'compute'. |
+| `workloads[].gpu.use` | `"none"` \| `"shared"` \| `"exclusive"` | `"none"` | [beta] A running service that is not `none` is GPU-resident fleet work: host protection stops it, when yieldable, while GPU work may not run, and a job reserving one of its pools is a GPU job. Needs sandbox.devices.gpu = 'compute' and requires.core >= 2.5. |
+| `workloads[].gpu.apis_any` | list of str | `[]` | [beta] Any of these GPU APIs; jobs run only on nodes providing one (open set; detected: cuda, directml, metal, opencl, rocm, vulkan). Needs `use` shared or exclusive and requires.core >= 2.5. |
+| `workloads[].control` | list of `"cooperative_throttle"` \| `"cooperative_pause"` \| `"freeze_ok"` | `[]` | [beta] What host protection may do besides stopping it: `cooperative_throttle` (it honours the control document's `threads` and `gpu_duty`), `cooperative_pause` (it pauses itself on `pause`), `freeze_ok` (the agent may freeze its process container). |
+| `workloads[].pause_tolerance_s` | float (optional) |  | [beta] The longest pause its peers survive: protection stops and holds it instead of pausing longer. Default: 20 when it can be paused (cooperative_pause or freeze_ok), else 0 (never paused). |
+| `workloads[].stop_timeout_s` | float | `30.0` | [beta] From the stop request to the kill. |
+| `workloads[].restart` | WorkloadRestart | `"backoff_initial_s=10.0 backoff_max_s=600.0 max_failures=5 jitter='full'"` |  |
+| `workloads[].restart.backoff_initial_s` | float | `10.0` |  |
+| `workloads[].restart.backoff_max_s` | float | `600.0` |  |
+| `workloads[].restart.max_failures` | int | `5` | [beta] Consecutive failures before it is withdrawn (until a restart operation, a new version or a reassignment). |
+| `workloads[].restart.jitter` | `"full"` \| `"none"` | `"full"` | [beta] `full`: each delay is uniform between 0 and the exponential backoff (AWS full jitter). |
+| `workloads[].health` | WorkloadHealth (optional) |  | [beta] The `status` op's period; absent: a running process is healthy. |
+| `workloads[].health.period_s` | float | `15.0` |  |
+| `workloads[].health.timeout_s` | float | `5.0` |  |
+| `workloads[].health.failures` | int | `3` | [beta] Consecutive unhealthy answers that end the run as a failure. |
+| `workloads[].reports` | bool | `false` | [beta] Its `report` events reach the module's workload.report verb on the coordinator, whose effects keep the module's own records (coordinator.workload_effects). |
 | `settings` | Settings | `"schema_=None"` |  |
 | `settings.schema` | str (optional) |  | [stable] JSON Schema (bundle path) whose properties are the module's settings: each one's type, default and constraints, title and description, and an `x-oarbank` annotation (scope fleet or node, required, unit, advanced, campaign). The core validates every value against it and hands node-scoped values to the module's runners and services (spec/manifest.md, "Settings"). |
 | `secrets` | list of Secret | `[]` | [beta] Write-only credentials. Needs requires.core >= 2.5. |
-| `secrets[].name` | str | required | [beta] The secret's name; unique. Stages list it in `secrets`. |
+| `secrets[].name` | str | required | [beta] The secret's name; unique. Stages and workloads list it in `secrets`. |
 | `secrets[].description` | str | `""` | [beta] What it is for, shown where the owner sets it. |
 | `results` | Results | required |  |
 | `results.schema` | str | required | [stable] JSON Schema (bundle path) for the result payload. |
@@ -243,11 +273,24 @@ Cross-field rules are in [manifest.md](manifest.md).
 | `operations[].preview` | bool | `false` | Implements op.plan (required when the effective tier is T2/T3). |
 | `cli` | CLI (optional) |  |  |
 | `cli.exec` | list of str | required | [beta] Module CLI; `oarbank cli <module> ...` runs it on the coordinator, sandboxed, with a token scoped to the module (OARBANKD_URL, OARBANK_TOKEN). |
-| `sandbox` | SandboxSection | `"contract=1 net=SandboxNet(mode='none', allow=[]) tools=[] devices=SandboxDevices(gpu='none') containers=[] container_sets=[] exec_writable=False folders=[]"` |  |
+| `sandbox` | SandboxSection | `"contract=1 net=SandboxNet(mode='none', allow=[], inbound=[]) tools=[] devices=SandboxDevices(gpu='none') containers=[] container_sets=[] exec_writable=False folders=[]"` |  |
 | `sandbox.contract` | `1` | `1` | [beta] Sandbox contract version. |
-| `sandbox.net` | SandboxNet | `"mode='none' allow=[]"` |  |
+| `sandbox.net` | SandboxNet | `"mode='none' allow=[] inbound=[]"` |  |
 | `sandbox.net.mode` | str | `"none"` | [beta] Open set. `none`; `egress-allowlist`: only the `allow` hosts, through the agent's local proxy (the SDK sets HTTPS_PROXY/ALL_PROXY); `egress-any`: any public address, a separately approved full-trust grant. Never loopback or link-local, never listening. |
 | `sandbox.net.allow` | list of str | `[]` | [beta] `host[:port]` entries (a leading `*.` matches subdomains); never IP addresses or CIDRs. Required with egress-allowlist; port defaults to 443. |
+| `sandbox.net.inbound` | list of InboundListener | `[]` | [beta] Listeners the agent opens on nodes the owner assigns, each served by one endpoint service that lists it (`services[].listeners`); module code never listens. A grant approved by digest, independent of `mode` (answering an accepted connection is not egress). Needs requires.core >= 2.10. |
+| `sandbox.net.inbound[].name` | str | required | [beta] The listener's name, unique in the module; the node statement and every report call it `<module>/<name>`. Needs requires.core >= 2.10. |
+| `sandbox.net.inbound[].protocol` | `"tcp"` | `"tcp"` | [beta] `tcp` only (UDP is not built). |
+| `sandbox.net.inbound[].port_hint` | int (optional) |  | [beta] The external port the module would like; the owner decides the real one per node. |
+| `sandbox.net.inbound[].port_policy` | `"stable"` \| `"flexible"` | `"stable"` | [beta] `stable`: the external port is published somewhere costly to change (a chain, a registry), so a port someone else holds on the router is refused rather than replaced; `flexible`: the agent may take the next free port of a small range. The owner may override it per node. |
+| `sandbox.net.inbound[].tls` | `"passthrough"` \| `"none"` | `"passthrough"` | [beta] The agent relays bytes untouched either way; the service terminates its own TLS, if any. |
+| `sandbox.net.inbound[].handover` | `"connections"` \| `"listen_fd"` | `"connections"` | [beta] `connections`: each connection arrives on the service's endpoint channel (every OS). `listen_fd` (macOS and Linux): the service's `start` inherits a listening unix socket the agent made, in OARBANK_LISTEN_FD_<NAME>, and only accepts on it (a third-party server that serves on an inherited socket); Windows nodes refuse such a listener. |
+| `sandbox.net.inbound[].proxy_protocol` | bool (optional) |  | [beta] The agent writes a PROXY protocol v2 header before the first byte of each connection. Absent: true with handover `listen_fd` (the header is then the only way a server learns the client's address), else false (the address arrives in the `connection` message). |
+| `sandbox.net.inbound[].max_conns` | int | `256` | [beta] Open connections at once. |
+| `sandbox.net.inbound[].max_conns_per_ip` | int | `16` | [beta] Open connections at once from one client address (IPv6: per /64). |
+| `sandbox.net.inbound[].new_conns_per_ip_per_s` | float | `4.0` | [beta] New connections per second from one client address (a token bucket with a burst of twice the rate). |
+| `sandbox.net.inbound[].idle_timeout_s` | float | `120.0` | [beta] A connection with no bytes either way for this long is closed. |
+| `sandbox.net.inbound[].max_bytes_per_s` | float (optional) |  | [beta] A byte-rate cap for the listener, both directions together. Absent: none. |
 | `sandbox.tools` | list of ToolGrant | `[]` | [beta] Host tools runners, services and probes may read and execute: fleet tool ids with version constraints, resolved per node to one detected installation each (OARBANK_TOOLS_FILE). |
 | `sandbox.tools[].id` | str | required | [beta] The fleet's tool definition id: `jdk` and `python` are built in; an admin defines others (`tools.define`). |
 | `sandbox.tools[].version` | str (optional) |  | [beta] Versions the module accepts, comma-separated clauses all of which hold: `=`, `!=`, `>`, `>=`, `<`, `<=`, `~>` (Nomad's version operators), e.g. `">=17, <22"`. Leave it out for any version. Needs requires.core >= 2.9. |

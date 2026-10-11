@@ -5,6 +5,7 @@ never listens: the kit fails one that does)."""
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -29,26 +30,32 @@ def service_env(man, svc, data: Path, grants_env: dict, limits: Path) -> dict:
 
 
 class ServiceRun:
-    """One service run under the kit. `policy(data)`: the sandbox policy to render (None: run unconfined)."""
+    """One service run under the kit. `policy(data)`: the sandbox policy to render (None: run unconfined). Its files (the
+    module data directory, the limits file, the sandbox profile, start's output) live in one directory of its own, made
+    in `scratch` (default: the temp directory) and removed by stop()."""
 
-    def __init__(self, root: Path, man, svc, grants_env: dict, policy=None):
+    def __init__(self, root: Path, man, svc, grants_env: dict, policy=None, scratch: str | None = None):
         self.root, self.man, self.svc, self.policy = root, man, svc, policy
-        self.data = Path(tempfile.mkdtemp(prefix="conform-svc-"))
-        (self.data / "tmp").mkdir()
-        limits = self.data.parent / f"{self.data.name}.limits.json"
+        self.dir = Path(tempfile.mkdtemp(prefix="conform-svc-", dir=scratch))
+        self.data = self.dir / "data"
+        (self.data / "tmp").mkdir(parents=True)
+        limits = self.dir / "limits.json"
         limits.write_text("{}", encoding="utf-8")
         self.env = service_env(man, svc, self.data, grants_env, limits)
         self.host: H.ServiceHost | None = None
         self.leader: int | None = None
         self.started = False
         self.output = ""
+        self.extra_env: dict = {}                    # more of what the agent gives `start` (listeners)
+        self.extra_fds: list[int] = []               # descriptors `start` inherits besides its channel (listen_fd)
+        self.own_sockets: list[str] = []             # listening sockets the agent made and passed in (not the service's)
 
     def _launch(self, op: str) -> list[str]:
         argv = _argv(self.svc.exec, self.root) + [op]
         if self.policy is not None:
             from . import sandbox as S
             text, params = S.render(self.policy(self.data))
-            argv = S.launch_argv(S.write_profile(text, self.data.parent / f"{self.data.name}.sb"), params, argv)
+            argv = S.launch_argv(S.write_profile(text, self.dir / "service.sb"), params, argv)
         return argv
 
     def op(self, op: str, timeout: float | None = None) -> tuple[int | str, dict | None, str]:
@@ -71,16 +78,18 @@ class ServiceRun:
     def start(self) -> str | None:
         """Start the service (an endpoint service with its channel) and wait for hello and `ready`: None, or what went
         wrong."""
-        env, kwargs = dict(self.env), {}
+        env, kwargs = {**self.env, **self.extra_env}, {}
         if self.svc.endpoint:
             self.host = H.ServiceHost()
             env.update(self.host.env)
             kwargs = self.host.popen_kwargs
+        if self.extra_fds:
+            kwargs = {**kwargs, "pass_fds": list(kwargs.get("pass_fds", [])) + self.extra_fds}
         if os.name != "nt":
             kwargs = {**kwargs, "start_new_session": True}       # its process group is its container here
         limit = self.svc.start_timeout_s
         # files, not pipes: what `start` leaves running may keep its output open for as long as it runs
-        err_path = self.data.parent / f"{self.data.name}.start.err"
+        err_path = self.dir / "start.err"
         with open(err_path, "wb") as err, open(os.devnull, "wb") as null:
             try:
                 p = subprocess.Popen(self._launch("start"), cwd=self.root, env=env, stdin=subprocess.DEVNULL, stdout=null,
@@ -150,14 +159,21 @@ class ServiceRun:
         return sorted(out)
 
     def listening(self) -> list[str]:
-        """The listening sockets the service's processes hold, described."""
-        return listening(self.processes())
+        """The listening sockets the service's processes hold, described (not those the agent passed in)."""
+        return [x for x in listening(self.processes()) if not any(p in x for p in self.own_sockets)]
 
     def connect(self, attempt: int):
         return H.connect_here(self.host, attempt)
 
     def stop(self) -> str | None:
-        """`stop`, then the channel closed and whatever is left of the service ended. None, or what went wrong."""
+        """`stop`, then the channel closed and whatever is left of the service ended, then its directory removed. None,
+        or what went wrong."""
+        try:
+            return self._stop()
+        finally:
+            shutil.rmtree(self.dir, ignore_errors=True)
+
+    def _stop(self) -> str | None:
         if not self.started:
             return None
         code, doc, err = self.op("stop", self.svc.stop_timeout_s)
