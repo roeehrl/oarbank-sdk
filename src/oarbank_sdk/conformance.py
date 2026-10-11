@@ -331,8 +331,17 @@ def portability_issues(root: Path, man) -> list[str]:
     return out
 
 
+SCRATCH: dict = {}           # the running conform()'s scratch directory: every directory and file the kit makes goes in it
+
+
+def _scratch(prefix: str) -> Path:
+    """A fresh directory for one part of a conform() run, inside the run's scratch directory, which conform() removes
+    when it ends however it ends (the processes the kit starts never own a directory: a killed runner leaves nothing)."""
+    return Path(tempfile.mkdtemp(prefix=prefix, dir=SCRATCH.get("dir")))
+
+
 def check_bundle(root: Path, r: Report):
-    with tempfile.TemporaryDirectory() as td:
+    with tempfile.TemporaryDirectory(prefix="conform-bundle-", dir=SCRATCH.get("dir")) as td:
         try:
             out, info = B.build(root, Path(td) / "m.mfb")
             B.verify(out)
@@ -551,7 +560,7 @@ class Grants:
     folder is a fresh empty outbox."""
 
     def __init__(self, man, fx: dict, root: Path | None = None):
-        self.dir = Path(tempfile.mkdtemp(prefix="conform-grants-"))
+        self.dir = _scratch("conform-grants-")
         from . import toolversion
         given = fx.get("tools") or {}
         self.missing = [t.id for t in man.sandbox.tools if t.id not in given]
@@ -612,6 +621,7 @@ class Grants:
     def close(self):
         if self.proxy:
             self.proxy.stop()
+        shutil.rmtree(self.dir, ignore_errors=True)
 
 
 GRANTS: dict = {}
@@ -620,7 +630,7 @@ SERVICES: dict = {}          # the endpoint services the runner suite started, b
 
 def _service_run(root: Path, man, svc, g: "Grants") -> ServiceRun:
     policy = (lambda data: g.policy(man, root, None, data, kind="service")) if SANDBOX["on"] else None
-    return ServiceRun(root, man, svc, g.env(), policy)
+    return ServiceRun(root, man, svc, g.env(), policy, scratch=SCRATCH.get("dir"))
 
 
 def _connectors(root: Path, man, stage, attempt: int) -> tuple[list, str | None]:
@@ -753,7 +763,7 @@ def _run(root: Path, man, env_doc: dict, fx: dict, locale: str = "C", stop: bool
     """One runner run. `stop`: a stop request once the runner wrote its first phase (`checkpoint`: checkpoint, then stop,
     within checkpoint_grace_s). `resume`: (a directory holding a checkpoint by name, the envelope's `resume`): the files
     go read-only under <W>/checkpoint/ and the envelope names it."""
-    ws = Path(tempfile.mkdtemp(prefix="conform-"))
+    ws = _scratch("conform-")
     if resume is not None:
         src, doc = resume
         shutil.copytree(src, ws / "checkpoint")
@@ -768,7 +778,7 @@ def _run(root: Path, man, env_doc: dict, fx: dict, locale: str = "C", stop: bool
             shutil.copytree(root / src, ws / mount)              # relative to the module (an absolute dir stays as is)
     (ws / "spec.json").write_text(json.dumps(env_doc), encoding="utf-8", newline="\n")
     (ws / "tmp").mkdir()
-    data = Path(tempfile.mkdtemp(prefix="conform-data-"))
+    data = _scratch("conform-data-")
     g = GRANTS["g"]
     nudge = _Nudge()
     run = man.runner.for_platform(portable.host_platform())
@@ -999,7 +1009,7 @@ def _take_checkpoint(o: Outcome, man, stage_name) -> tuple:
     names = [f.checkpoint_name() for f in ev.files]
     if len(set(names)) != len(names):
         return None, None, "checkpoint names are not unique"
-    out = Path(tempfile.mkdtemp(prefix="conform-ckpt-"))
+    out = _scratch("conform-ckpt-")
     entries, total = [], 0
     for f in ev.files:
         src = o.ws / f.path
@@ -1095,7 +1105,7 @@ def _check_runner(root: Path, man, fx: dict, runs: list, r: Report, g: "Grants")
     if g.unmet:
         r.add("runner", "host tool versions", False, f"fixtures `tools` give versions the module does not accept: "
               f"{', '.join(g.unmet)} (a node grants only an installation that satisfies [sandbox].tools[].version)")
-    data = Path(tempfile.mkdtemp(prefix="conform-data-"))
+    data = _scratch("conform-data-")
     (data / "tmp").mkdir()
     host = portable.host_platform()
     argv = _argv(man.runner.for_platform(host).exec, root) + ["doctor", "--json"]
@@ -1416,8 +1426,22 @@ SANDBOX = {"on": sys.platform == "darwin"}
 
 
 def conform(root, fixtures: dict | None = None, runner: bool = True, sandbox: bool | None = None) -> Report:
-    """`sandbox`: run the runner under the module sandbox (default: on macOS)."""
-    root = Path(root).resolve()
+    """`sandbox`: run the runner under the module sandbox (default: on macOS). Everything the run writes (workdirs, data
+    directories, grants, checkpoints, sandbox profiles) goes into one scratch directory, removed when it returns or
+    raises."""
+    outer = SCRATCH.get("dir")
+    with tempfile.TemporaryDirectory(prefix="conform-run-", ignore_cleanup_errors=True) as td:
+        SCRATCH["dir"] = td
+        try:
+            return _conform(Path(root).resolve(), fixtures, runner, sandbox)
+        finally:
+            if outer is None:
+                SCRATCH.pop("dir", None)
+            else:
+                SCRATCH["dir"] = outer
+
+
+def _conform(root: Path, fixtures: dict | None, runner: bool, sandbox: bool | None) -> Report:
     if sandbox is not None:
         SANDBOX["on"] = sandbox and sys.platform == "darwin"
     fx = fixtures if fixtures is not None else (json.loads((root / "conformance.json").read_text(encoding="utf-8"))
