@@ -4,10 +4,38 @@ What changed in each oarbank-sdk release, for module authors. The core's changel
 [roeehrl/oarbank](https://github.com/roeehrl/oarbank/blob/main/CHANGELOG.md). Contract rules:
 [spec/versioning.md](spec/versioning.md).
 
-## Unreleased (for core 2.10)
+## 1.7.0 (unreleased)
+
+For Oarbank core 2.10.0. Everything is additive within manifest 1 and module protocol 1; workload protocol 1 is new.
 
 ### New
 
+- **Inbound listeners** ([spec/sandbox.md](spec/sandbox.md#inbound-listeners),
+  [spec/service-protocol.md](spec/service-protocol.md#listeners), [docs/inbound-listeners.md](docs/inbound-listeners.md),
+  [docs/make-a-node-reachable.md](docs/make-a-node-reachable.md)). A module may ask for TCP listeners the node's agent
+  opens on nodes the owner assigns: `[sandbox].net.inbound` entries with a `name`, `port_hint`, `port_policy`
+  (`stable` or `flexible`), `tls`, `handover` (`connections`, or `listen_fd` on macOS and Linux), `proxy_protocol`
+  and the connection limits that are the module's ceilings (`max_conns`, `max_conns_per_ip`, `new_conns_per_ip_per_s`,
+  `idle_timeout_s`, `max_bytes_per_s`). An endpoint service lists the listeners it serves in `services[].listeners`
+  (rule 22). The module never listens: each accepted connection arrives over the service's endpoint channel
+  (`{"op": "connection", "listener", "peer"}`), the agent announces each listener's external address
+  (`{"op": "listener", ...}`, seeded from `OARBANK_LISTENERS_FILE`), and the service may narrow who connects
+  (`listener_allow`). `oarbank_sdk.service_endpoint` serves listener connections (`Acceptor`, `serve_http`, PROXY v2
+  with `read_proxy_v2`), and `listen_socket()` / `exec_with_listen_fds()` hand `listen_fd` sockets to a program that
+  must accept itself. `inbound` is a sandbox request approved by digest. The conformance kit's **listener suite** plays
+  the agent: it announces an address, hands a connection, runs `listener_specs` and fails a service that listens
+  itself. **`examples/publicecho`** is the reference module.
+- **Workloads** ([spec/manifest.md](spec/manifest.md#workloads), [spec/workload-protocol.md](spec/workload-protocol.md),
+  [docs/workloads.md](docs/workloads.md)). `[[workloads]]` declares a long-running process that is the work itself (a
+  node of a peer-to-peer network, a public inference server), assigned to nodes by the owner: its executable,
+  `identity` (`none`, or `per_node` for one seat per identity under a coordinator lease), the secrets it receives,
+  `restart` backoff and `max_failures`, `health`, `pause_tolerance_s`, `resources` and the listeners it serves
+  (rule 24). Workload protocol 1 specifies its control document (`pause`, `threads`, `gpu_duty`, `stop`), events,
+  health and containment; `requires.workload_protocol` names it, and the `workload.report` verb gives the coordinator
+  side the workload's reports. `oarbank_sdk.workload.Supervisor` runs a third-party daemon as a workload (it keeps the
+  daemon in the foreground, applies cooperative pause and thread limits, answers `status`) with the event helpers
+  `progress`, `report` and `error`. The conformance kit's **workload suite** runs each workload as an agent would and
+  fails one that leaves its process group, listens or ignores a stop. **`examples/workload`** is the reference module.
 - **Holding a GPU duty** ([spec/runner-protocol.md](spec/runner-protocol.md#holding-a-gpu-duty),
   [docs/gpu-duty.md](docs/gpu-duty.md)). `oarbank_sdk.duty.Duty` (also `oarbank_sdk.gpu.Duty`, stdlib only) holds the
   `gpu_duty` of a runner's control document: wrap each unit of GPU work in `duty.unit()`; it idles `b·(1−d)/d` after a
@@ -29,6 +57,29 @@ What changed in each oarbank-sdk release, for module authors. The core's changel
   workload, move a lot of data over the node's internet line themselves. Where the owner groups nodes into sites (nodes
   sharing one line, core 2.10), such work runs only within the site's budget and pauses on every node of the site while a protected process there is in an upload phase. Older cores
   ignore it.
+
+### Changed
+
+- **The core-version gate for 1.7 features** (cross-field rule 12). Older cores ignore them, so the SDK refuses them
+  unless `requires.core` admits only 2.10 and later: `[sandbox].net.inbound`, `services[].listeners` and
+  `[[workloads]]`. `stages[].requires.resources.network` and `cooperative_throttle` duty specs need no gate (older cores
+  ignore them harmlessly).
+- An endpoint service now needs a pool or a listener (rule 18).
+
+### Migrating from 1.6
+
+Nothing a 1.6 module uses changes: rebuild and republish only to use a 1.7 feature.
+
+- **Accepting connections:** move code that bound a port into an endpoint service that lists the listener and takes
+  connections from its endpoint channel (or, for a program that must accept itself, `handover = "listen_fd"` and
+  `exec_with_listen_fds()`); add the `[sandbox].net.inbound` entry, set `requires.core = ">=2.10,<3"`, run the listener
+  suite, and publish a new version (the owner approves the new grant and assigns the listener per node).
+- **A daemon that was a long job or an `always` service:** declare it as a workload, wrap a third-party daemon with
+  `oarbank_sdk.workload.Supervisor`, give it `identity = "per_node"` if one key may run on one node at a time, and set
+  `requires.core = ">=2.10,<3"`.
+- **GPU work beside a protected program:** declare `cooperative_throttle`, wrap each unit in `Duty.unit()`, add duty
+  specs, and check with `oarbank-sdk conform`.
+- **Work that moves a lot of data over the node's line:** mark the stage or workload `resources.network = "heavy"`.
 
 ## 1.6.0 (unreleased)
 
