@@ -21,7 +21,7 @@ description = "Renders frames of a scene and scores them against a reference fra
 [requires]
 platforms = ["darwin-arm64"]
 os = { darwin = ">=15.0" }
-core = ">=2.0,<3"
+core = ">=2.9,<3"
 agent = ">=0.4"
 module_protocol = [1]
 runner_protocol = [1]

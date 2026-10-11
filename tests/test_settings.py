@@ -137,6 +137,45 @@ def test_verify_refuses_a_bundle_whose_settings_schema_is_invalid(tmp_path, monk
         B.verify(out)
 
 
+
+@pytest.mark.parametrize("ann, uses", [({"scope": "node"}, "greeting: x-oarbank.scope node"),
+                                       ({"required": True}, "greeting: required"),
+                                       ({"campaign": True}, "greeting: x-oarbank.campaign")])
+def test_node_required_and_campaign_keys_need_core_2_9(ann, uses):
+    """Cores before 2.9 kept settings as one opaque object: no node key reached a runner, no required key held work
+    back and no campaign override applied. A schema relying on them needs requires.core >= 2.9."""
+    man = m.load(TOY / "oarbank-module.toml")
+    sch = S.parse(schema(greeting={"type": "string", "default": "hi", "x-oarbank": ann} if "required" not in ann else
+                         {"type": "string", "x-oarbank": ann}))
+    for core in (">=2.1,<3", ">=2.8.9", "<3"):
+        old = man.model_copy(update={"requires": man.requires.model_copy(update={"core": core})})
+        (err,) = S.core_gate(sch, old, "s")
+        assert uses in err and "need requires.core >= 2.9" in err
+    for core in (">=2.9,<3", "~=2.9", ">=3"):
+        assert S.core_gate(sch, man.model_copy(update={"requires": man.requires.model_copy(update={"core": core})})) == []
+
+
+def test_fleet_keys_with_a_unit_or_advanced_need_no_new_core():
+    man = m.load(TOY / "oarbank-module.toml")
+    old = man.model_copy(update={"requires": man.requires.model_copy(update={"core": ">=2.1,<3"})})
+    sch = S.parse(schema(n={"type": "integer", "default": 1, "x-oarbank": {"unit": "GB", "advanced": True}}))
+    assert S.gated_uses(sch) == [] and S.core_gate(sch, old) == []
+
+
+def test_check_build_and_verify_refuse_a_node_key_for_an_older_core(tmp_path, capsys, monkeypatch):
+    d = _toy(tmp_path, lambda doc: None)
+    t = d / "oarbank-module.toml"
+    t.write_text(t.read_text(encoding="utf-8").replace('core = ">=2.9,<3"', 'core = ">=2.5,<3"'), encoding="utf-8")
+    assert main(["check", str(t)]) == 1
+    assert "greeting: x-oarbank.scope node need requires.core >= 2.9" in capsys.readouterr().out
+    with pytest.raises(B.BundleError, match="need requires.core >= 2.9"):
+        B.build(d, tmp_path / "old.mfb")
+    monkeypatch.setattr(S, "core_gate", lambda *a, **k: [])                    # build without the gate
+    out, _ = B.build(d, tmp_path / "old.mfb")
+    monkeypatch.undo()
+    with pytest.raises(B.BundleError, match="need requires.core >= 2.9"):
+        B.verify(out)
+
 def test_check_prints_settings_lint_as_warnings(tmp_path, capsys):
     d = _toy(tmp_path, lambda doc: doc["properties"].update(enabled={"type": "boolean"}))
     assert main(["check", str(d / "oarbank-module.toml")]) == 0
