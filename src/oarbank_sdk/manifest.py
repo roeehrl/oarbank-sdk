@@ -37,6 +37,8 @@ SDK13_KEYS_CORE = (2, 3)          # stage determinism and default, structured ti
 BOOTSTRAP_KEYS_CORE = (2, 4)      # bootstrap stages and the pinned dataset table (SDK 1.4)
 SDK15_KEYS_CORE = (2, 5)          # SDK 1.5: secrets, signed container image sets, the container GPU pool, service
                                   # endpoints and GPU use, folder grants, portable checkpoints, artifact_ref
+SDK16_KEYS_CORE = (2, 9)          # SDK 1.6: host tool version constraints and arch; the settings annotations that change
+                                  # what a core does (oarbank_sdk.settings.CORE_GATED: node scope, required, campaign)
 INBOUND_KEYS_CORE = (2, 10)       # inbound listeners: sandbox.net.inbound and services[].listeners
 KNOWN_FEATURES = ("placement",)          # requires.features this SDK understands (must-understand)
 ENV_NAME = r"^[A-Z][A-Z0-9_]*$"
@@ -376,10 +378,11 @@ class ToolGrant(Contract):
         "(`tools.define`)."))
     version: str | None = Field(None, description=(
         "[beta] Versions the module accepts, comma-separated clauses all of which hold: `=`, `!=`, `>`, `>=`, `<`, "
-        "`<=`, `~>` (Nomad's version operators), e.g. `\">=17, <22\"`. Leave it out for any version."))
+        "`<=`, `~>` (Nomad's version operators), e.g. `\">=17, <22\"`. Leave it out for any version. Needs "
+        "requires.core >= 2.9."))
     arch: Literal["any", "native", "arm64", "amd64"] = Field("any", description=(
         "[beta] `any`: any architecture, the node's own preferred; `native`: only the node's own (no x86_64 JDK under "
-        "Rosetta on Apple silicon); `arm64` or `amd64`: exactly that one."))
+        "Rosetta on Apple silicon); `arm64` or `amd64`: exactly that one. Anything but `any` needs requires.core >= 2.9."))
     trust: Literal["read", "code-exec"] = Field("read", description=(
         "[beta] `code-exec`: the tool runs arbitrary code (a JVM, an interpreter, a shell); the approval UI flags it. On "
         "Windows any readable binary is executable."))
@@ -577,7 +580,8 @@ class Runner(Contract):
     capabilities: list[Capability] = Field(default_factory=list, description=(
         "[stable] By intent: cancellable (honours a stop request within stop_grace_s), freeze_ok (safe to freeze at any "
         "instruction), cooperative_pause (pauses on control.json), resumable (resumes from its own checkpoint after a "
-        "restart), progress_events, deterministic_output, cooperative_throttle, checkpoint (writes portable checkpoints, "
+        "restart), progress_events, deterministic_output, cooperative_throttle (honours threads and gpu_duty in control.json; "
+        "only such GPU runners run beside a protected GPU program), checkpoint (writes portable checkpoints, "
         "honours a checkpoint-then-stop request and resumes from <W>/checkpoint/; needs requires.core >= 2.5)."))
     stop_grace_s: Annotated[float, Field(ge=1, le=600)] = Field(20.0, description="[stable] Seconds between the stop request and forced termination of the process container.")
     checkpoint_grace_s: Annotated[float, Field(ge=1, le=1800)] = Field(120.0, description=(
@@ -967,12 +971,16 @@ class Manifest(Contract):
             ("runner capability checkpoint", "checkpoint" in self.runner.capabilities),
             ("ui.views.columns[].type artifact_ref", any(c.type == "artifact_ref" for v in self.ui.views.values() for c in v.columns)),
         ]
+        sdk16 = [
+            ("sandbox.tools[].version", any(t.version for t in self.sandbox.tools)),
+            ("sandbox.tools[].arch", any(t.arch != "any" for t in self.sandbox.tools)),
+        ]
         inbound = [
             ("sandbox.net.inbound", bool(self.sandbox.net.inbound)),
             ("services[].listeners", any(s.listeners for s in self.services)),
         ]
         return (out + [(k, SDK13_KEYS_CORE) for k, on in sdk13 if on] + [(k, BOOTSTRAP_KEYS_CORE) for k, on in sdk14 if on]
-                + [(k, SDK15_KEYS_CORE) for k, on in sdk15 if on]
+                + [(k, SDK15_KEYS_CORE) for k, on in sdk15 if on] + [(k, SDK16_KEYS_CORE) for k, on in sdk16 if on]
                 + [(k, INBOUND_KEYS_CORE) for k, on in inbound if on])
 
     # ------------------------------------------------------------------------ stages

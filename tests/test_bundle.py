@@ -110,9 +110,12 @@ def test_a_manifest_that_does_not_validate_makes_the_bundle_invalid(tmp_path, mo
     src = tmp_path / "toy"
     shutil.copytree(TOY, src, ignore=shutil.ignore_patterns("__pycache__", "dist"))
     m = src / "oarbank-module.toml"
-    m.write_text(m.read_text(encoding="utf-8").replace('name = "run"\n', 'name = "run"\ndefault = true\n'), encoding="utf-8")
+    m.write_text(m.read_text(encoding="utf-8").replace('name = "run"\n', 'name = "run"\ndefault = true\n')
+                 .replace('core = ">=2.9,<3"', 'core = ">=2.1,<3"'), encoding="utf-8")
+    from oarbank_sdk import settings as S
     with monkeypatch.context() as p:
         p.setattr(mf.Manifest, "core_keys_used", lambda self: [])
+        p.setattr(S, "core_gate", lambda *a, **k: [])
         out, _ = B.build(src, tmp_path / "t.mfb")
         B.verify(out, tmp_path / "unpacked")
     with pytest.raises(B.BundleError, match=r"(?s)oarbank-module.toml: .*stages\[\]\.default need requires.core >= 2.3"):

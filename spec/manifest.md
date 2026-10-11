@@ -101,6 +101,11 @@ The models enforce these, beyond the per-field types:
       `services[].gpu`, `sandbox.folders`,
       `stages[].checkpoint`, `runner.checkpoint_grace_s`, the runner capability `checkpoint` and the view cell type
       `artifact_ref`.
+    - **2.9:** a `sandbox.tools[]` entry with a `version` or an `arch` other than `any`
+      ([sandbox.md](sandbox.md#host-tools)), and, in the settings schema, a key with `x-oarbank` scope `node`, a
+      required key (`x-oarbank.required` or the schema's `required` list) or `x-oarbank.campaign`
+      ([Settings](#settings)). `oarbank-sdk check`, `bundle build` and `bundle verify` apply the settings part, since
+      the schema is a bundle file.
     - **2.10:** `sandbox.net.inbound` and `services[].listeners`.
 
     Every entry of `requires.features` is one this SDK knows.
@@ -209,9 +214,9 @@ schema = "schemas/settings.schema.json"
   "vm_mem_gb": {"type": "number", "minimum": 2, "maximum": 64, "default": 8,
                 "title": "VM memory", "description": "Memory the module's VM gets on a node.",
                 "x-oarbank": {"scope": "node", "unit": "GB"}},
-  "pool_tao_per_round": {"type": "number", "minimum": 0,
-                         "title": "Miner pool per round", "description": "For the gate's expected value.",
-                         "x-oarbank": {"scope": "fleet", "unit": "TAO", "required": true}}
+  "credits_per_round": {"type": "number", "minimum": 0,
+                        "title": "Credit pool per round", "description": "For the gate's expected value.",
+                        "x-oarbank": {"scope": "fleet", "unit": "credits", "required": true}}
  }
 }
 ```
@@ -228,9 +233,9 @@ schema = "schemas/settings.schema.json"
   |---|---|---|
   | `scope` | `"fleet"` | `fleet`: one value for the whole fleet, which the module's coordinator side reads (`host.settings.get`, `initialize`). `node`: a value the owner sets for the fleet, a node group or one node (the most specific wins); each node's runners, doctor and services receive it in `OARBANK_SETTINGS_FILE` |
   | `required` | `false` (or the schema's own `required` list) | The owner must set it: until a value exists the module's work waits (`SETTINGS_NOT_SET`) and its readiness checklist shows the step "Required settings". A required setting has no `default` |
-  | `unit` | none | A short word shown beside the value (`GB`, `s`, `TAO`) |
+  | `unit` | none | A short word shown beside the value (`GB`, `s`, `credits`) |
   | `advanced` | `false` | Shown under the module's Advanced disclosure |
-  | `campaign` | `false` | A campaign of the module may override it while the campaign runs (`campaigns.create` or `campaigns.update` `settings`, or the owner on the campaign's page), bounded by the owner's locks. The campaign's value reaches that campaign's jobs only: a `node` key in their runners' `OARBANK_SETTINGS_FILE`, every key in `campaign.tick` (`campaign.settings`). Core 2.9 and later (an older core refuses the annotation at install) |
+  | `campaign` | `false` | A campaign of the module may override it while the campaign runs (`campaigns.create` or `campaigns.update` `settings`, or the owner on the campaign's page), bounded by the owner's locks. The campaign's value reaches that campaign's jobs only: a `node` key in their runners' `OARBANK_SETTINGS_FILE`, every key in `campaign.tick` (`campaign.settings`). Core 2.9 and later (`requires.core >= 2.9`, rule 12) |
 
 - **What a process receives.** Runners, `doctor` and services get the node-scoped settings, resolved for their node:
   every `node` key with the owner's value, else its default (a key with neither is absent), and nothing else, in
@@ -251,6 +256,11 @@ schema = "schemas/settings.schema.json"
 
 `oarbank-sdk check`, `bundle build` and `bundle verify` refuse a schema the core would not read, and the conformance kit
 checks the fixtures' settings against it ([conformance.md](conformance.md)).
+
+**Which core.** Cores before 2.9 stored a module's settings as one opaque object, so a schema that relies on a `node`
+key, a required key or a campaign override needs `requires.core >= 2.9` ([cross-field rule 12](#cross-field-rules));
+`oarbank-sdk check`, `bundle build` and `bundle verify` refuse it otherwise. Fleet keys with a `unit` or `advanced`
+need no newer core.
 
 **Migrating a module written for SDK 1.5 or earlier.** The core used to store a module's settings as one opaque
 object. Now: (1) declare every key the module reads or writes in its settings schema, (2) mark those its runners or

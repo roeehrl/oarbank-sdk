@@ -1853,7 +1853,7 @@
           "title": "Bandwidth Class"
         },
         "capabilities": {
-          "description": "[stable] By intent: cancellable (honours a stop request within stop_grace_s), freeze_ok (safe to freeze at any instruction), cooperative_pause (pauses on control.json), resumable (resumes from its own checkpoint after a restart), progress_events, deterministic_output, cooperative_throttle, checkpoint (writes portable checkpoints, honours a checkpoint-then-stop request and resumes from <W>/checkpoint/; needs requires.core >= 2.5).",
+          "description": "[stable] By intent: cancellable (honours a stop request within stop_grace_s), freeze_ok (safe to freeze at any instruction), cooperative_pause (pauses on control.json), resumable (resumes from its own checkpoint after a restart), progress_events, deterministic_output, cooperative_throttle (honours threads and gpu_duty in control.json; only such GPU runners run beside a protected GPU program), checkpoint (writes portable checkpoints, honours a checkpoint-then-stop request and resumes from <W>/checkpoint/; needs requires.core >= 2.5).",
           "items": {
             "maxLength": 64,
             "pattern": "^[a-z0-9][a-z0-9._-]*$",
@@ -2672,7 +2672,7 @@
       "properties": {
         "arch": {
           "default": "any",
-          "description": "[beta] `any`: any architecture, the node's own preferred; `native`: only the node's own (no x86_64 JDK under Rosetta on Apple silicon); `arm64` or `amd64`: exactly that one.",
+          "description": "[beta] `any`: any architecture, the node's own preferred; `native`: only the node's own (no x86_64 JDK under Rosetta on Apple silicon); `arm64` or `amd64`: exactly that one. Anything but `any` needs requires.core >= 2.9.",
           "enum": [
             "any",
             "native",
@@ -2708,7 +2708,7 @@
             }
           ],
           "default": null,
-          "description": "[beta] Versions the module accepts, comma-separated clauses all of which hold: `=`, `!=`, `>`, `>=`, `<`, `<=`, `~>` (Nomad's version operators), e.g. `\">=17, <22\"`. Leave it out for any version.",
+          "description": "[beta] Versions the module accepts, comma-separated clauses all of which hold: `=`, `!=`, `>`, `>=`, `<`, `<=`, `~>` (Nomad's version operators), e.g. `\">=17, <22\"`. Leave it out for any version. Needs requires.core >= 2.9.",
           "title": "Version"
         }
       },

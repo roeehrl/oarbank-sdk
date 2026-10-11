@@ -150,7 +150,8 @@ def test_the_default_stage_is_explicit_when_several_stages_are_standalone():
     bad(lambda d: two(d), "mark the one a job runs when it names no stage", name="toy")
     bad(lambda d: two(d, default=True) or d["stages"][1].update(default=True), "at most one stage", name="toy")
     bad(lambda d: d["requires"].update(core=">=2.3,<3") or d["stages"][2].update(default=True), "only a standalone stage")
-    bad(lambda d: d["stages"][0].update(default=True), r"stages\[\]\.default need requires.core >= 2.3")
+    bad(lambda d: d["requires"].update(core=">=2.2,<3") or d["stages"][0].update(default=True),
+        r"stages\[\]\.default need requires.core >= 2.3")
     d = copy.deepcopy(doc("toy"))
     two(d, default=True)
     man = m.Manifest.model_validate(d)
