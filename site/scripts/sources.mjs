@@ -52,6 +52,41 @@ export const PAGES = [
     order: 5,
   },
   {
+    src: 'docs/gpu-duty.md',
+    dest: 'build/gpu-duty.md',
+    type: 'how-to',
+    title: 'Share a GPU with a protected program',
+    description:
+      'Hold the GPU duty the agent asks for with the SDK’s duty governor, prove it with the conformance kit’s duty specs, and run the llmserve reference module on MLX or llama.cpp with a model you install.',
+    platforms: ['macos', 'linux', 'windows'],
+    order: 11,
+  },
+  {
+    src: 'docs/inbound-listeners.md',
+    dest: 'build/inbound-listeners.md',
+    type: 'how-to',
+    title: 'Accept connections from the internet',
+    description:
+      'Declare an inbound listener the agent owns, serve its connections in an endpoint service, read its announced external address, narrow who may connect, read PROXY v2 headers and test it with the conformance kit.',
+    order: 7,
+  },
+  {
+    src: 'docs/make-a-node-reachable.md',
+    dest: 'operate/make-a-node-reachable.md',
+    type: 'how-to',
+    description:
+      'Assign a module’s inbound listener to a node, let the agent map the port on the router or forward it by hand, and read what the reachability check found and how to fix it.',
+    order: 3,
+  },
+  {
+    src: 'docs/workloads.md',
+    dest: 'build/workloads.md',
+    type: 'how-to',
+    description:
+      'Ship a long-running process that is the work itself: declare a workload, wrap a third-party daemon in the supervisor shim, answer status, report into your own records and pass the conformance kit.',
+    order: 10,
+  },
+  {
     src: 'docs/compatibility.md',
     dest: 'operate/compatibility.md',
     type: 'reference',
@@ -143,11 +178,19 @@ export const PAGES = [
     order: 7,
   },
   {
+    src: 'spec/workload-protocol.md',
+    dest: 'spec/workload-protocol.md',
+    type: 'spec',
+    description:
+      'How the agent runs a workload, a long-running process that is the work itself: invocation, environment, the control document, events, health, containment and the supervisor shim.',
+    order: 8,
+  },
+  {
     src: 'spec/envelopes.md',
     dest: 'spec/envelopes.md',
     type: 'spec',
     description: 'The spec and result envelopes every job travels in: what the core reads and what belongs to the module.',
-    order: 8,
+    order: 9,
   },
   {
     src: 'spec/bundles.md',
@@ -156,7 +199,7 @@ export const PAGES = [
     title: 'Bundles and the module lifecycle',
     description:
       'The .mfb bundle and its digest, dependencies, and the lifecycle from install and approval through canary, promote and rollback.',
-    order: 9,
+    order: 10,
   },
   {
     src: 'spec/sandbox.md',
@@ -166,7 +209,7 @@ export const PAGES = [
     description:
       'What every module process may and may not reach on every platform, the [sandbox] grants an operator approves, and the container broker.',
     platforms: ['macos', 'linux', 'windows'],
-    order: 10,
+    order: 11,
   },
   {
     src: 'spec/sandbox/backends/macos.md',
@@ -175,7 +218,7 @@ export const PAGES = [
     title: 'Sandbox on macOS',
     description: 'How macOS nodes enforce the module sandbox contract with Seatbelt: profiles, launch, verification and the mapping.',
     platforms: ['macos'],
-    order: 11,
+    order: 12,
   },
   {
     src: 'spec/sandbox/backends/linux.md',
@@ -185,7 +228,7 @@ export const PAGES = [
     description:
       'How Linux nodes enforce the module sandbox contract with Landlock, seccomp and cgroup v2, and what each kernel version can enforce.',
     platforms: ['linux'],
-    order: 12,
+    order: 13,
   },
   {
     src: 'spec/sandbox/backends/windows.md',
@@ -195,7 +238,7 @@ export const PAGES = [
     description:
       'How Windows nodes enforce the module sandbox contract with AppContainers in Job Objects and the elevated helper for the egress allowlist.',
     platforms: ['windows'],
-    order: 13,
+    order: 14,
   },
   {
     src: 'spec/ui-contract.md',
@@ -203,14 +246,14 @@ export const PAGES = [
     type: 'spec',
     description:
       'How a module defines console pages as data: placements, pages, data bindings, actions, forms, the sandboxed iframe and the tooling.',
-    order: 14,
+    order: 15,
   },
   {
     src: 'spec/conformance.md',
     dest: 'spec/conformance.md',
     type: 'spec',
     description: 'The checks oarbank-sdk conform runs on a module before a host relies on it, and what it does not cover.',
-    order: 15,
+    order: 16,
   },
   {
     src: 'spec/manifest-reference.md',

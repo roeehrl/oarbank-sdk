@@ -4,6 +4,32 @@ What changed in each oarbank-sdk release, for module authors. The core's changel
 [roeehrl/oarbank](https://github.com/roeehrl/oarbank/blob/main/CHANGELOG.md). Contract rules:
 [spec/versioning.md](spec/versioning.md).
 
+## Unreleased (for core 2.10)
+
+### New
+
+- **Holding a GPU duty** ([spec/runner-protocol.md](spec/runner-protocol.md#holding-a-gpu-duty),
+  [docs/gpu-duty.md](docs/gpu-duty.md)). `oarbank_sdk.duty.Duty` (also `oarbank_sdk.gpu.Duty`, stdlib only) holds the
+  `gpu_duty` of a runner's control document: wrap each unit of GPU work in `duty.unit()`; it idles `b·(1−d)/d` after a
+  unit of `b` seconds, applies a newer document while it idles, holds at duty 0, sizes units with `scale()`, and writes
+  `gpu_duty` metric events. Core 2.10 sets the duty under `gpu_jobs = "certified"` from an AIMD budget on the
+  protected program's progress and pauses, then stops, a runner its measured GPU time shows over the duty plus 0.1.
+- **`Duty.set(d)`** feeds a governor made without a control document, such as a workload's supervisor `gpu_duty`
+  callback; a workload holds its duty the same way a runner does.
+- **`Control.poll()`** applies a nudged document without blocking or raising; **`Control.wait()`** blocks until the next
+  nudge.
+- **Conformance: duty specs** ([spec/conformance.md](spec/conformance.md)). A `cooperative_throttle` runner runs each
+  `duty_specs` task, is given `gpu_duty` once it names a phase, and must hold it: in its own reports and in what the kit
+  measures (GPU time on macOS, CPU time per thread for a CPU stand-in). A GPU runner without duty specs is a warning.
+- **`examples/llmserve`**: the reference module for GPU work beside a protected program. A `batch` stage on MLX or
+  llama.cpp that holds its duty, and a deterministic `selftest` stage whose golden certifies it and whose CPU stand-in
+  lets the duty spec run in CI without a GPU or a model.
+- **Network-heavy stages** ([spec/manifest.md](spec/manifest.md#network-heavy-stages)).
+  `stages[].requires.resources.network = "heavy"` (and `workloads[].resources.network`) says a stage's jobs, or a
+  workload, move a lot of data over the node's internet line themselves. Where the owner groups nodes into sites (nodes
+  sharing one line, core 2.10), such work runs only within the site's budget and pauses on every node of the site while a protected process there is in an upload phase. Older cores
+  ignore it.
+
 ## 1.6.0 (unreleased)
 
 For Oarbank core 2.9.0. Everything is additive within manifest 1 and module protocol 1.
@@ -37,12 +63,6 @@ For Oarbank core 2.9.0. Everything is additive within manifest 1 and module prot
   module's runner starts (`Manifest.certification_exempt`). A failed doctor check named after a capability withdraws
   only that capability (`Manifest.capability_names`), and doctor check details are kept whole or by their end.
 
-- **Network-heavy stages** ([spec/manifest.md](spec/manifest.md#network-heavy-stages)).
-  `stages[].requires.resources.network = "heavy"` says a stage's jobs move a lot of data over the node's internet line
-  themselves. Where the owner groups nodes into sites (nodes sharing one line, core 2.10), such jobs run only within the
-  site's budget and pause on every node of the site while a protected process there is in an upload phase. Older cores
-  ignore it.
-
 ### Changed
 
 - **The core-version gate for 1.6 features.** Older cores ignore these, so the SDK refuses them unless `requires.core`
@@ -50,6 +70,9 @@ For Oarbank core 2.9.0. Everything is additive within manifest 1 and module prot
   schema a `node` key, a required key or a `campaign` key. `unit` and `advanced` need no newer core.
   `oarbank_sdk.settings.core_gate` applies the settings part in `check`, `bundle build` and `bundle verify`.
 - The `toy` example declares a fleet setting and a node setting and needs core 2.9.
+- **The conformance kit cleans up after itself.** A run of the kit (`oarbank-sdk conform`, `conform()`) kept every
+  runner workdir, data directory, grants directory, checkpoint and sandbox profile it made in the temp directory,
+  hundreds per test session. They now go in one directory, removed when the run ends, however it ends.
 
 ### Migrating from 1.5
 

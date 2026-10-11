@@ -1,0 +1,90 @@
+{
+  "$defs": {
+    "WorkloadReportEvent": {
+      "additionalProperties": true,
+      "description": "One `report` event a workload wrote to its events file (spec/workload-protocol.md, \"Events\"). [beta]",
+      "properties": {
+        "data": {
+          "additionalProperties": true,
+          "description": "[beta] The event's `data`, as the workload wrote it (at most 4 KiB as JSON).",
+          "title": "Data",
+          "type": "object"
+        },
+        "seq": {
+          "description": "[beta] Rising per workload on its node; a repeat (same seq) is a retry and is already handled.",
+          "minimum": 0,
+          "title": "Seq",
+          "type": "integer"
+        },
+        "t": {
+          "description": "[beta] When the workload wrote it (the node's Unix time).",
+          "title": "T",
+          "type": "number"
+        }
+      },
+      "required": [
+        "seq",
+        "t"
+      ],
+      "title": "WorkloadReportEvent",
+      "type": "object"
+    }
+  },
+  "$id": "https://codonic.dev/oarbank/schemas/module-workload-report-params-1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "description": "What one of the module's workloads observed, as the agent shipped it (capability `workload.report`). [beta]",
+  "properties": {
+    "events": {
+      "items": {
+        "$ref": "#/$defs/WorkloadReportEvent"
+      },
+      "maxItems": 200,
+      "title": "Events",
+      "type": "array"
+    },
+    "fence": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "[beta] The seat's fence when the events were written.",
+      "title": "Fence"
+    },
+    "node": {
+      "description": "[beta] The node it runs on.",
+      "title": "Node",
+      "type": "string"
+    },
+    "seat_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "[beta] Its seat (None: a workload without an identity).",
+      "title": "Seat Id"
+    },
+    "workload": {
+      "description": "[beta] The workload's name.",
+      "title": "Workload",
+      "type": "string"
+    }
+  },
+  "required": [
+    "workload",
+    "node",
+    "events"
+  ],
+  "title": "WorkloadReportParams",
+  "type": "object"
+}

@@ -1,0 +1,65 @@
+# publicecho: the reference module for inbound listeners (spec/sandbox.md, "Inbound listeners"). The agent opens the
+# `echo` listener on nodes the owner assigns and hands every connection it accepts to the `echo` service, which never
+# listens itself. The service answers a line protocol: each line it reads is answered with `echo <line> <external>`,
+# where <external> is the listener's latest external address as the agent announced it (`-` before the first). Its one
+# stage is a stand-in so the module is complete: a job computes the answer the service would give, without a network.
+manifest = 1
+
+[module]
+id = "dev.codonic.oarbank.publicecho"
+version = "0.1.0"
+compat = "publicecho1"
+publisher = "oarbank"
+license = "Apache-2.0"
+codeowners = ["roeehrl"]
+stability = "beta"
+description = "Answers connections from the internet through an inbound listener the agent owns"
+
+[requires]
+core = ">=2.10,<3"
+platforms = ["darwin-arm64", "darwin-amd64", "linux-arm64", "linux-amd64", "windows-arm64", "windows-amd64"]
+module_protocol = [1]
+runner_protocol = [1]
+service_protocol = [1]
+
+[coordinator]
+exec = ["python", "-I", "{bundle}/echo_module.py"]
+runtime = { kind = "python" }
+
+[runner]
+exec = ["python", "-I", "{bundle}/echo_runner.py"]
+runtime = { kind = "python" }
+capabilities = ["deterministic_output"]
+
+[[stages]]
+name = "echo"
+timeout_s = 60
+requires.resources = { cpu = 1, mem_gb = 0.1 }
+
+[[sandbox.net.inbound]]             # the network mode stays `none`: answering an accepted connection is not egress
+name = "echo"
+port_hint = 9000
+port_policy = "flexible"             # any free port of a small range will do: nothing publishes this one
+max_conns = 32
+max_conns_per_ip = 4
+new_conns_per_ip_per_s = 2
+idle_timeout_s = 60
+
+[[services]]
+name = "echo"
+exec = ["python", "-I", "{bundle}/echo_service.py"]
+lifecycle = "always"               # a listener is wanted for as long as the module is enabled on the node
+start_timeout_s = 30
+stop_timeout_s = 20
+endpoint = true                    # connections and announcements arrive on its endpoint channel
+listeners = ["echo"]
+
+[results]
+schema = "schemas/result.schema.json"
+schema_version = 1
+determinism = "exact"
+digest = { version = 1, over = ["lines"] }
+fields = [{ name = "lines", type = "integer", ui = { column = "Lines", format = "d" } }]
+
+[goldens]
+fixtures = "goldens/*.json"

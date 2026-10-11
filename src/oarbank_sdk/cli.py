@@ -9,7 +9,8 @@
     oarbank-sdk bundle wheels <module-dir>         download the wheels for the declared platforms into wheels/
     oarbank-sdk deps compile <module-dir> <requirements.in> [-o FILE] [-- uv args]
                                                    one marker-free, hash-pinned requirements file for every platform
-    oarbank-sdk conform <module-dir>               the conformance kit (manifest, bundle, protocol, runner)
+    oarbank-sdk conform <module-dir>               the conformance kit (manifest, bundle, protocol, runner, workload)
+    oarbank-sdk conform <module-dir> --only workload   only the workload suite
     oarbank-sdk gpu-apis                           the GPU APIs this host provides (JSON), as an agent detects them
 """
 import argparse
@@ -139,7 +140,10 @@ def main(argv=None) -> int:
     cf = sub.add_parser("conform", help="run the conformance kit against a module directory")
     cf.add_argument("dir")
     cf.add_argument("--fixtures", help="fixtures JSON (default: <dir>/conformance.json if present)")
-    cf.add_argument("--no-runner", action="store_true", help="skip the runner suite")
+    cf.add_argument("--no-runner", action="store_true", help="skip the suites that run node processes (runner, gpu, "
+                    "service, workload)")
+    cf.add_argument("--no-workloads", action="store_true", help="skip the workload suite")
+    cf.add_argument("--only", choices=["workload"], help="run only this suite (with the manifest it needs)")
     cf.add_argument("--json", action="store_true")
     sub.add_parser("gpu-apis", help="the GPU APIs this host provides, as a node's agent would detect them (JSON)")
     a = ap.parse_args(argv)
@@ -150,9 +154,13 @@ def main(argv=None) -> int:
         return 0
     if a.cmd == "conform":
         import json as _json
-        from .conformance import conform
+        from .conformance import conform, conform_workloads
         from pathlib import Path as _P
-        rep = conform(a.dir, _json.loads(_P(a.fixtures).read_text(encoding="utf-8")) if a.fixtures else None, runner=not a.no_runner)
+        fixtures = _json.loads(_P(a.fixtures).read_text(encoding="utf-8")) if a.fixtures else None
+        if a.only == "workload":
+            rep = conform_workloads(a.dir, fixtures)
+        else:
+            rep = conform(a.dir, fixtures, runner=not a.no_runner, workloads=not a.no_workloads)
         print(_json.dumps(rep.as_dict(), indent=1) if a.json else rep.text())
         return 0 if rep.ok else 1
     if a.cmd == "deps":
