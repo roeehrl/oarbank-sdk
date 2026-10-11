@@ -100,9 +100,38 @@ oarbank protection ab sweep studio --rule trainer
 ```
 
 It runs the harness at `gpu_duty` 0.1, 0.2, 0.35, 0.5, … and stops at the first level that does not pass. Then set the
-node's `gpu_jobs` to `certified` (in its protection section). Fleet GPU work whose runner declares
-`cooperative_throttle` then runs beside the protected program at the certified duty; other GPU work still waits, and
-without a valid certificate `certified` behaves as the default (`when_no_gpu_protected`).
+node's `gpu_jobs` to `certified` (in its protection section). Without a valid certificate for every rule whose program
+uses the GPU, `certified` behaves as the default (`when_no_gpu_protected`): GPU work waits.
 
-Module authors: a runner that declares `cooperative_throttle` honours `gpu_duty` in its control document
-([runner protocol](/oarbank/spec/runner-protocol#control)).
+## The duty governor
+
+With a certificate, fleet GPU work whose runner declares `cooperative_throttle` runs beside the protected program at a
+**GPU budget** the agent keeps under the certified duty, on the program's own progress:
+
+- It first holds GPU work for a minute to measure the program without it (again every 30 minutes, and whenever the
+  last measurement is that old), then starts at the certified duty.
+- Every minute it compares the program's progress with that baseline. Harm at the rule's target (`max_slowdown`, 5 %
+  by default) halves the budget; harm under half the target lets it grow by 0.05, never above the certificate.
+- Harm over twice the target, the program's progress falling under half its baseline, or the memory guard takes the
+  budget to 0 at once for five minutes. A progress source that cannot be read takes it to 0 until it reads again.
+- Each cooperative GPU job gets an equal share as its `gpu_duty`. The agent checks each one's GPU time every two
+  seconds: one over its duty plus 0.1 for three samples is paused for a minute, and the third time within an hour it is
+  stopped and its module gets no duty for an hour. A job whose GPU time cannot be read waits.
+
+```sh
+oarbank protection duty studio
+```
+
+```text
+studio: gpu_duty budget 0.3 of ceiling 0.35 (running) beside trainer; 2 unit(s) at 0.15 each
+  baseline trainer: 9.94/s, 312 s old, last pressure 0.21
+  dev.codonic.oarbank.llmserve/batch attempt 812    duty 0.15   measured 0.14   ok
+  dev.codonic.oarbank.llmserve/batch attempt 813    duty 0.15   measured 0.16   ok
+```
+
+The protection page's **GPU duty** card shows the same, with each job's state (holds its duty, held, not trusted,
+cannot throttle) and the node conditions `GPU_DUTY_EXCEEDED` and `GPU_DUTY_UNVERIFIED`. While a harness run measures GPU
+work, the governor stands down and the run alone decides what runs.
+
+Module authors: a runner that declares `cooperative_throttle` holds `gpu_duty` with the SDK's duty governor
+([Share a GPU with a protected program](/oarbank/build/gpu-duty/)).

@@ -4,6 +4,25 @@ What changed in each oarbank-sdk release, for module authors. The core's changel
 [roeehrl/oarbank](https://github.com/roeehrl/oarbank/blob/main/CHANGELOG.md). Contract rules:
 [spec/versioning.md](spec/versioning.md).
 
+## Unreleased (for core 2.10)
+
+### New
+
+- **Holding a GPU duty** ([spec/runner-protocol.md](spec/runner-protocol.md#holding-a-gpu-duty),
+  [docs/gpu-duty.md](docs/gpu-duty.md)). `oarbank_sdk.duty.Duty` (also `oarbank_sdk.gpu.Duty`, stdlib only) holds the
+  `gpu_duty` of a runner's control document: wrap each unit of GPU work in `duty.unit()`; it idles `b·(1−d)/d` after a
+  unit of `b` seconds, applies a newer document while it idles, holds at duty 0, sizes units with `scale()`, and writes
+  `gpu_duty` metric events. Core 2.10 sets the duty under `gpu_jobs = "certified"` from an AIMD budget on the
+  protected program's progress and pauses, then stops, a runner its measured GPU time shows over the duty plus 0.1.
+- **`Control.poll()`** applies a nudged document without blocking or raising; **`Control.wait()`** blocks until the next
+  nudge.
+- **Conformance: duty specs** ([spec/conformance.md](spec/conformance.md)). A `cooperative_throttle` runner runs each
+  `duty_specs` task, is given `gpu_duty` once it names a phase, and must hold it: in its own reports and in what the kit
+  measures (GPU time on macOS, CPU time per thread for a CPU stand-in). A GPU runner without duty specs is a warning.
+- **`examples/llmserve`**: the reference module for GPU work beside a protected program. A `batch` stage on MLX or
+  llama.cpp that holds its duty, and a deterministic `selftest` stage whose golden certifies it and whose CPU stand-in
+  lets the duty spec run in CI without a GPU or a model.
+
 ## 1.6.0 (unreleased)
 
 For Oarbank core 2.9.0. Everything is additive within manifest 1 and module protocol 1.

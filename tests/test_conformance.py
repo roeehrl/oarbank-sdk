@@ -269,3 +269,34 @@ def test_an_import_with_a_plain_http_origin_fails(tmp_path):
     next(o for o in fx["ops"] if o["verb"] == "import_asset")["params"]["url"] = "http://assets.example.org/clip.webm"
     rep = conform(d, fx, runner=False)
     assert any("datasets.create files" in n for n in failed(rep)), rep.text()
+
+
+LLMSERVE = Path(__file__).parents[1] / "examples" / "llmserve"
+
+
+def test_the_gpu_reference_module_conforms_and_holds_its_duty():
+    """llmserve's batch stage holds the gpu_duty the kit writes (its stand-in backend's units run on the CPU, so the kit
+    measures its CPU time on any machine), and its selftest golden certifies it."""
+    rep = conform(LLMSERVE)
+    assert rep.ok, rep.text()
+    names = {c.name for c in rep.checks if c.status == "pass"}
+    assert {"duty spec stand-in-at-0.3 (gpu_duty 0.3): reports the duty it holds",
+            "duty spec stand-in-at-0.3 (gpu_duty 0.3): its reports stay within the duty",
+            "duty spec stand-in-at-0.3 (gpu_duty 0.3): its measured time stays within the duty",
+            "golden llmserve-selftest (selftest): matches the golden"} <= names, rep.text()
+
+
+def test_a_runner_that_does_not_hold_its_duty_is_caught(tmp_path):
+    d = tmp_path / "llmserve"
+    shutil.copytree(LLMSERVE, d, ignore=shutil.ignore_patterns("__pycache__", "dist"))
+    r = d / "llm_runner.py"
+    # it reports the duty asked, but never idles for it
+    r.write_text(r.read_text().replace('    completions, tokens = [], 0\n',
+                                       '    duty.after = lambda b: duty._report()\n    completions, tokens = [], 0\n'))
+    rep = conform(d)
+    bad = failed(rep)
+    assert "duty spec stand-in-at-0.3 (gpu_duty 0.3): its reports stay within the duty" in bad, rep.text()
+    assert "duty spec stand-in-at-0.3 (gpu_duty 0.3): its measured time stays within the duty" in bad, rep.text()
+    # and one that writes no reports at all cannot show it holds anything
+    r.write_text(r.read_text().replace("Duty(ctl, events=events,", "Duty(ctl, events=None,"))
+    assert "duty spec stand-in-at-0.3 (gpu_duty 0.3): reports the duty it holds" in failed(conform(d))
