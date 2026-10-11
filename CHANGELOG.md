@@ -4,7 +4,7 @@ What changed in each oarbank-sdk release, for module authors. The core's changel
 [roeehrl/oarbank](https://github.com/roeehrl/oarbank/blob/main/CHANGELOG.md). Contract rules:
 [spec/versioning.md](spec/versioning.md).
 
-## 1.7.0 (unreleased)
+## 1.7.0 (2026-10-12)
 
 For Oarbank core 2.10.0. Everything is additive within manifest 1 and module protocol 1; workload protocol 1 is new.
 
@@ -81,7 +81,7 @@ Nothing a 1.6 module uses changes: rebuild and republish only to use a 1.7 featu
   specs, and check with `oarbank-sdk conform`.
 - **Work that moves a lot of data over the node's line:** mark the stage or workload `resources.network = "heavy"`.
 
-## 1.6.0 (unreleased)
+## 1.6.0 (2026-10-11)
 
 For Oarbank core 2.9.0. Everything is additive within manifest 1 and module protocol 1.
 

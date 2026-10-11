@@ -4,7 +4,7 @@ description: Install, run, troubleshoot and build modules for Oarbank, the self-
 license: Apache-2.0
 compatibility: Needs a shell and network access to docs.codonic.dev, github.com and api.github.com.
 metadata:
-  version: "1.2.0"
+  version: "1.3.0"
   docs: "https://docs.codonic.dev/oarbank/llms.txt"
 ---
 
