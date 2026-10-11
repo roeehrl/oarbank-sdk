@@ -726,6 +726,7 @@ class Outcome:
     stop: str | None = None
     ack_s: float | None = None
     exit_s: float | None = None
+    duty: dict | None = None
 
 
 def _why(o: Outcome) -> str:
@@ -749,7 +750,7 @@ def _read_json(path: Path) -> dict | None:
 
 
 def _run(root: Path, man, env_doc: dict, fx: dict, locale: str = "C", stop: bool = False, bootstrap: bool = False,
-         checkpoint: bool = False, resume: tuple | None = None) -> Outcome:
+         checkpoint: bool = False, resume: tuple | None = None, duty: "DutySpec | None" = None) -> Outcome:
     """One runner run. `stop`: a stop request once the runner wrote its first phase (`checkpoint`: checkpoint, then stop,
     within checkpoint_grace_s). `resume`: (a directory holding a checkpoint by name, the envelope's `resume`): the files
     go read-only under <W>/checkpoint/ and the envelope names it."""
@@ -811,7 +812,9 @@ def _run(root: Path, man, env_doc: dict, fx: dict, locale: str = "C", stop: bool
         reader.start()
         limit = float(env_doc.get("timeout_s") or 1800)
         o = Outcome("timeout", None, None, "", ws)
-        if stop:
+        if duty is not None:
+            _hold_duty(p, ws, nudge, exited, duty, limit, o, "cancellable" in run.capabilities, run.stop_grace_s)
+        elif stop:
             _stop(p, ws, nudge, exited, run.checkpoint_grace_s if checkpoint else run.stop_grace_s, limit, o, checkpoint)
         elif not exited.wait(limit):
             _kill_tree(p)
@@ -897,6 +900,108 @@ def _stop(p, ws: Path, nudge: "_Nudge", exited: threading.Event, grace: float, l
             o.stop, o.exit_s = "stopped", time.monotonic() - t
             if o.ack_s is None and _acknowledged(ws):
                 o.ack_s = o.exit_s                       # written just before it exited, between two looks
+    if not exited.is_set():
+        _kill_tree(p)
+
+
+DUTY_SLACK = 0.1          # the agent holds a unit over its gpu_duty plus this for three samples (D50)
+DUTY_SETTLE_S = 1.0       # after the nudge, the runner applies the duty at its next unit
+
+
+def _tree_cpu_s(pgid: int) -> float | None:
+    """CPU seconds the processes of a group have used so far (None where the kit cannot read them)."""
+    try:
+        if sys.platform.startswith("linux"):
+            tick, total = os.sysconf("SC_CLK_TCK"), 0.0
+            for d in Path("/proc").iterdir():
+                if d.name.isdigit():
+                    try:
+                        f = (d / "stat").read_text().rsplit(")", 1)[1].split()
+                    except (OSError, IndexError):
+                        continue
+                    if int(f[2]) == pgid:              # fields after the name: state ppid pgrp ...; utime stime at 11, 12
+                        total += (int(f[11]) + int(f[12])) / tick
+            return total
+        if sys.platform == "darwin":
+            ps = subprocess.run(["ps", "-A", "-o", "pgid=,time="], capture_output=True, text=True, check=True).stdout
+            total = 0.0
+            for line in ps.splitlines():
+                g, _, t = line.strip().partition(" ")
+                if g.isdigit() and int(g) == pgid:
+                    parts = [float(x) for x in t.strip().replace("-", ":").split(":")]
+                    total += sum(v * m for v, m in zip(reversed(parts), (1, 60, 3600, 86400)))
+            return total
+    except (OSError, ValueError, subprocess.CalledProcessError):
+        return None
+    return None
+
+
+def _gpu_ns_by_pid() -> dict[int, float] | None:
+    """macOS: each process's accumulated GPU time (ns) from the AGX driver's user clients, as the agent reads it
+    (undocumented; None where it cannot be read)."""
+    if sys.platform != "darwin":
+        return None
+    try:
+        out = subprocess.run(["ioreg", "-r", "-c", "AGXDeviceUserClient", "-d", "1", "-l"], capture_output=True,
+                             text=True, timeout=10).stdout
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    import re
+    got: dict[int, float] = {}
+    for entry in out.split("+-o ")[1:]:
+        m = re.search(r'"IOUserClientCreator" = "pid (\d+),', entry)
+        if m:
+            got[int(m.group(1))] = got.get(int(m.group(1)), 0.0) + sum(
+                float(x) for x in re.findall(r'"accumulatedGPUTime"=(\d+)', entry))
+    return got
+
+
+def _group_pids(pgid: int) -> list[int]:
+    try:
+        return _live_members(pgid) if os.name == "posix" else []
+    except (OSError, subprocess.CalledProcessError):
+        return []
+
+
+def _hold_duty(p, ws: Path, nudge: "_Nudge", exited: threading.Event, spec: "DutySpec", limit: float, o: Outcome,
+               cancellable: bool, grace: float):
+    """The agent's gpu_duty, measured: once the runner wrote its first `phase`, write `gpu_duty` into control.json and
+    nudge; after DUTY_SETTLE_S, measure the runner's process group for `window_s` (its GPU time where this host shows it,
+    its CPU time, its own `gpu_duty` reports); then stop it (a cancellable runner) or let it finish."""
+    t0 = time.monotonic()
+    while not exited.is_set() and not (ws / "phase").exists() and time.monotonic() - t0 < limit:
+        exited.wait(0.005)
+    if exited.is_set() or not (ws / "phase").exists():
+        o.duty = {"state": "no_phase" if not (ws / "phase").exists() else "finished_first"}
+        if not exited.is_set():
+            exited.wait(max(0.0, limit - (time.monotonic() - t0)))
+        return
+    doc = json.loads((ws / "control.json").read_text(encoding="utf-8"))
+    tmp = ws / "control.json.tmp"
+    tmp.write_text(json.dumps({**doc, "seq": int(doc.get("seq", 0)) + 1, "gpu_duty": spec.duty}), encoding="utf-8")
+    os.replace(tmp, ws / "control.json")
+    nudge.send(p)
+    exited.wait(DUTY_SETTLE_S)
+    pids = _group_pids(p.pid)
+    cpu0, gpu0, a = _tree_cpu_s(p.pid), _gpu_ns_by_pid(), time.monotonic()
+    exited.wait(spec.window_s)
+    pids = sorted(set(pids) | set(_group_pids(p.pid)))
+    cpu1, gpu1, b = _tree_cpu_s(p.pid), _gpu_ns_by_pid(), time.monotonic()
+    span = b - a
+    gpu_s = None
+    if gpu0 is not None and gpu1 is not None:
+        gpu_s = sum(max(0.0, gpu1.get(x, 0.0) - gpu0.get(x, 0.0)) for x in pids) / 1e9
+    o.duty = {"state": "finished_first" if exited.is_set() else "measured", "span_s": span,
+              "cpu": (cpu1 - cpu0) / span if cpu0 is not None and cpu1 is not None and span > 0 else None,
+              "gpu": gpu_s / span if gpu_s is not None and span > 0 else None, "since": time.time() - span}
+    if not exited.is_set():
+        if cancellable:
+            t = _request_stop(p, ws, nudge)
+            exited.wait(grace)
+            o.stop = "stopped" if exited.is_set() else "ignored"
+            o.exit_s = time.monotonic() - t if exited.is_set() else None
+        else:
+            exited.wait(max(0.0, limit - (time.monotonic() - t0)))
     if not exited.is_set():
         _kill_tree(p)
 
@@ -1121,6 +1226,7 @@ def _check_runner(root: Path, man, fx: dict, runs: list, r: Report, g: "Grants")
               why or f"needs one of {', '.join(need.apis_any)}; this host provides {', '.join(host_gpu_apis())}")
     _check_goldens(root, man, fx, runs, r)
     _check_runner_specs(root, man, fx, r)
+    _check_duty_specs(root, man, fx, r)
 
 
 def _check_goldens(root: Path, man, fx: dict, runs: list, r: Report):
@@ -1300,6 +1406,92 @@ def _check_runner_specs(root: Path, man, fx: dict, r: Report):
             if spec.expect.reason is not None:
                 r.add("runner", f"{label}: failure reason", f.reason == spec.expect.reason,
                       f"{f.reason!r}" + (f" ({f.detail[:200]})" if f.detail else ""))
+
+
+class DutySpec(StrictContract):
+    """A conformance fixture's GPU duty check (`duty_specs`): a task the runner runs while the kit asks it, as the agent
+    does beside a protected GPU program, to hold `duty`."""
+    name: str = Field(min_length=1, max_length=80)
+    stage: Name | None = None
+    payload: dict
+    datasets: list[str] = Field(default_factory=list)
+    mounts: dict[str, str] = Field(default_factory=dict)
+    duty: float = Field(0.3, gt=0, lt=1, description="The gpu_duty the kit writes once the runner has named a phase.")
+    window_s: float = Field(4.0, ge=1, le=60, description="How long it measures, after a settling second.")
+
+
+def _check_duty_specs(root: Path, man, fx: dict, r: Report):
+    """`cooperative_throttle` runners: every `duty_specs` entry runs as a golden does, and once the runner has written its
+    first `phase` the kit writes `gpu_duty` into control.json and nudges it, as the agent does beside a protected GPU
+    program. Then it measures: the runner reports the duty it held (`gpu_duty` metric events, oarbank_sdk.duty) at most
+    the duty plus 0.1, and so does what the kit measures itself: the runner's GPU time where this host shows it (macOS),
+    else its CPU time per thread when its reports say its units run on the CPU (a CPU stand-in backend). A GPU runner
+    with no duty spec is a warning: the agent measures its GPU time and stops a runner that does not hold its duty."""
+    run = man.runner.for_platform(portable.host_platform())
+    specs = fx.get("duty_specs") or []
+    if "cooperative_throttle" not in run.capabilities:
+        if specs:
+            r.add("runner", "gpu_duty", False, "duty_specs need a runner that declares cooperative_throttle")
+        return
+    if not specs:
+        if run.gpu.use != "none":
+            r.warn("runner", "gpu_duty", "a cooperative_throttle GPU runner without duty_specs in conformance.json: the kit "
+                   "cannot show that it holds gpu_duty (the agent measures its GPU time beside protected GPU work and "
+                   "stops a runner that does not)")
+        return
+    for i, raw in enumerate(specs):
+        try:
+            spec = DutySpec.model_validate(raw)
+        except ValidationError as e:
+            r.add("runner", f"duty spec #{i}: fixture", False, str(e).replace("\n", " ")[:300])
+            continue
+        label = f"duty spec {spec.name} (gpu_duty {spec.duty:g})"
+        stage = man.stage(spec.stage) if spec.stage else man.stage(man.default_stage() or "")
+        if spec.stage and stage is None:
+            r.add("runner", f"{label}: fixture", False, f"stage {spec.stage!r} is not a declared stage")
+            continue
+        short = gpu_shortfall(man, stage.name if stage else None)
+        if short:
+            r.add("runner", label, None, f"not run here: {short}")
+            continue
+        sent = None if stage is None or stage.name == man.default_stage() else stage.name
+        env_doc = _spec_envelope(man, sent, spec.payload, spec.datasets, spec.mounts, 1,
+                                 job_key(man.module.id, man.module.compat, spec.payload, sent))
+        o = _run(root, man, env_doc, fx, duty=spec)
+        _egress(r, label, o)
+        _check_duty(r, label, o, spec)
+
+
+def _check_duty(r: Report, label: str, o: Outcome, spec: DutySpec):
+    d = o.duty or {}
+    if d.get("state") == "no_phase":
+        r.add("runner", f"{label}: holds its duty", None, "the runner wrote no <W>/phase: the kit writes gpu_duty once work "
+              "is underway (Control.phase)")
+        return
+    if d.get("state") == "finished_first":
+        r.add("runner", f"{label}: holds its duty", None, "the task finished before the kit could measure it; make the duty "
+              f"spec's task run longer than {DUTY_SETTLE_S + spec.window_s:g} s")
+        return
+    cap = spec.duty + DUTY_SLACK
+    reports = [e for e in o.events if e.get("kind") == "metric" and e.get("name") == "gpu_duty"
+               and (e.get("data") or {}).get("asked") == spec.duty and isinstance(e.get("value"), (int, float))]
+    r.add("runner", f"{label}: reports the duty it holds", bool(reports),
+          "" if reports else "no `gpu_duty` metric events at the asked duty (oarbank_sdk.duty.Duty with the events file)")
+    if reports:
+        worst = max(e["value"] for e in reports[1:] or reports)
+        r.add("runner", f"{label}: its reports stay within the duty", worst <= cap, f"reported up to {worst:.3f}, at most {cap:.2f}")
+    devices = {(e.get("data") or {}).get("device") for e in reports}
+    threads = max([int((e.get("data") or {}).get("threads") or 1) for e in reports] or [1])
+    if d.get("gpu"):
+        r.add("runner", f"{label}: its measured GPU time stays within the duty", d["gpu"] <= cap,
+              f"busy {d['gpu']:.3f} of {d['span_s']:.1f} s (AGX GPU time), at most {cap:.2f}")
+    elif devices == {"cpu"} and d.get("cpu") is not None:
+        per = d["cpu"] / max(1, threads)
+        r.add("runner", f"{label}: its measured time stays within the duty", per <= cap,
+              f"CPU {per:.3f} per thread over {d['span_s']:.1f} s (its units run on the CPU), at most {cap:.2f}")
+    else:
+        r.add("runner", f"{label}: its measured GPU time stays within the duty", None,
+              "this host shows no GPU time for the runner (no GPU, or not macOS): only its own reports are checked")
 
 
 class ServiceSpecExpect(StrictContract):

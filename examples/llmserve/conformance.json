@@ -1,0 +1,14 @@
+{
+ "params": [{"prompts": ["a duty is"], "per_job": 1, "max_tokens": 8, "backend": "stub"}],
+ "runner_specs": [
+  {"name": "batch-on-the-stand-in", "stage": "batch", "payload": {"prompts": ["fleet work", "the owner"], "max_tokens": 12, "backend": "stub"},
+   "expect": {"exit": 0}},
+  {"name": "no-prompts", "stage": "batch", "payload": {"prompts": []}, "expect": {"exit": 2, "reason": "llmserve/bad_spec"}},
+  {"name": "backend-not-installed", "stage": "batch", "payload": {"prompts": ["x"], "backend": "elsewhere"},
+   "expect": {"exit": 3, "reason": "llmserve/no_backend"}}
+ ],
+ "duty_specs": [
+  {"name": "stand-in-at-0.3", "stage": "batch", "duty": 0.3, "window_s": 4,
+   "payload": {"prompts": ["the fleet runs work beside the programs its owner protects"], "max_tokens": 4000, "backend": "stub", "work": 192}}
+ ]
+}

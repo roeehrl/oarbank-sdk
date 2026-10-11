@@ -56,12 +56,16 @@ The Python package `oarbank_sdk` implements these contracts:
 - **`oarbank_sdk.gpu`**, the GPU APIs this host provides, detected as a node's agent detects them (`oarbank-sdk
   gpu-apis`), and whether a node meets a stage's GPU needs. Stdlib only. A how-to:
   [docs/gpu-placement.md](docs/gpu-placement.md); the reference module: [`examples/gpuinfo`](examples/gpuinfo).
+- **`oarbank_sdk.duty`**, the governor that holds the `gpu_duty` the agent writes for GPU work beside a protected GPU
+  program: it idles after each unit of GPU work for as long as the duty needs, says how much shorter units should be,
+  and reports what it held. Stdlib only. A how-to: [docs/gpu-duty.md](docs/gpu-duty.md); the reference module:
+  [`examples/llmserve`](examples/llmserve).
 - **The conformance kit** (`oarbank-sdk conform`): it checks the manifest, builds and verifies the bundle, drives the
   coordinator side over the module protocol and runs the runner on its goldens, and on any other runner specs its
   fixtures list, as this host's platform would (sandboxed, through the egress proxy; a bootstrap stage's with the
   bootstrap grants, its artifacts checked against the module's pinned datasets; a stage that reserves an endpoint
   service's pool with that service up), and drives each endpoint service through its endpoint channel, failing one that
-  listens itself. Secrets reach only the stages that list them and must never appear in what a run or a verb returns;
+  listens itself. A `cooperative_throttle` runner is given a `gpu_duty` mid-run and measured holding it. Secrets reach only the stages that list them and must never appear in what a run or a verb returns;
   container sets' members verify against their key, and images outside a set or unsigned are refused. A stage that
   keeps checkpoints is stopped with checkpoint-then-stop and resumed in a fresh workdir, which must give the same
   digest.
@@ -100,7 +104,9 @@ approved by their signing key ([Use secrets and signed container images](docs/se
 [`examples/reel`](examples/reel) shows datasets by URL, folders on the node, media on module pages and portable
 checkpoints ([Files, media and checkpoints](docs/files-media-checkpoints.md)).
 [`examples/gpuinfo`](examples/gpuinfo) runs only where a node provides one of its GPU APIs, a different set per platform
-([Place work by GPU API](docs/gpu-placement.md)). Every example has pages; [Build your module's GUI](docs/module-gui.md)
+([Place work by GPU API](docs/gpu-placement.md)). [`examples/llmserve`](examples/llmserve) runs language-model batches on MLX
+or llama.cpp and holds the GPU duty the agent asks for beside a protected GPU program
+([Share a GPU with a protected program](docs/gpu-duty.md)). Every example has pages; [Build your module's GUI](docs/module-gui.md)
 explains them, and toy's frame is a complete bridge client.
 
 ## Developing the SDK

@@ -52,6 +52,16 @@ export const PAGES = [
     order: 5,
   },
   {
+    src: 'docs/gpu-duty.md',
+    dest: 'build/gpu-duty.md',
+    type: 'how-to',
+    title: 'Share a GPU with a protected program',
+    description:
+      'Hold the GPU duty the agent asks for with the SDK’s duty governor, prove it with the conformance kit’s duty specs, and run the llmserve reference module on MLX or llama.cpp with a model you install.',
+    platforms: ['macos', 'linux', 'windows'],
+    order: 9,
+  },
+  {
     src: 'docs/compatibility.md',
     dest: 'operate/compatibility.md',
     type: 'reference',

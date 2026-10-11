@@ -1,0 +1,70 @@
+# llmserve: the reference module for GPU work beside a protected GPU program (PLAN D50, D53). Its `batch` stage runs a
+# batch of prompts through a language model in process, on MLX (Metal, macOS on Apple Silicon) or llama.cpp (Metal,
+# CUDA, Vulkan or the CPU), and holds the `gpu_duty` the agent writes into its control document with the SDK's duty
+# governor, so under a node's `gpu_jobs = "certified"` it may run beside a protected GPU program up to a certified duty.
+# The default stage, `selftest`, runs a small deterministic stand-in model on the CPU: its golden certifies the module on
+# every node, and the conformance kit's duty check runs on any machine, with or without a GPU. Models are not bundled:
+# an owner installs MLX or llama.cpp and a model (docs: "Run GPU work beside a protected program").
+manifest = 1
+
+[module]
+id = "dev.codonic.oarbank.llmserve"
+version = "0.1.0"
+compat = "llmserve1"
+publisher = "oarbank"
+license = "Apache-2.0"
+codeowners = ["roeehrl"]
+stability = "experimental"
+description = "Batch inference that holds the GPU duty the agent asks for beside protected GPU work"
+
+[requires]
+core = ">=2.10,<3"
+platforms = ["darwin-arm64", "linux-arm64", "linux-amd64", "windows-amd64"]
+module_protocol = [1]
+runner_protocol = [1]
+
+[coordinator]
+exec = ["python", "-I", "{bundle}/llm_module.py"]
+runtime = { kind = "python" }
+capabilities = ["result.merge", "op.plan", "op.apply"]
+
+[runner]
+exec = ["python", "-I", "{bundle}/llm_runner.py"]
+runtime = { kind = "python" }
+capabilities = ["cancellable", "cooperative_pause", "cooperative_throttle", "progress_events"]
+gpu = { use = "shared" }
+stop_grace_s = 15
+
+[[stages]]
+name = "selftest"
+default = true
+timeout_s = 300
+requires.resources = { cpu = 1, mem_gb = 0.2 }
+
+[[stages]]
+name = "batch"
+determinism = "none"
+timeout_s = 7200
+requires.resources = { cpu = 2, mem_gb = 8 }
+
+[sandbox]
+devices = { gpu = "compute" }
+
+[results]
+schema = "schemas/result.schema.json"
+schema_version = 1
+determinism = "exact"
+digest = { version = 1, over = ["digest"] }
+fields = [{ name = "tokens", type = "integer", ui = { column = "Tokens", format = ",d" } },
+          { name = "backend", type = "string", ui = { column = "Backend" } }]
+
+[goldens]
+fixtures = "goldens/*.json"
+
+[[operations]]
+verb = "queue_prompts"
+title = "Queue prompts"
+tier = "T1"
+target = "none"
+params_schema = "schemas/queue_prompts.json"
+effects = ["campaigns.create", "jobs.enqueue"]

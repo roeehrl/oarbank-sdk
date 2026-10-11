@@ -169,8 +169,45 @@ except Stopped:
     unlimited. The agent writes it for GPU work beside a protected GPU program: at the level a co-tenancy measurement
     tests, and at a co-tenancy certificate's level under the node's `gpu_jobs = "certified"` (core 2.10). Only runners
     that declare `cooperative_throttle` get it and may run beside such a program; others are paused there. The agent
-    measures each process's GPU time, and a runner that does not hold the duty will be treated as one that cannot.
+    measures each process's GPU time, and a runner that does not hold the duty is treated as one that cannot
+    ([Holding a GPU duty](#holding-a-gpu-duty)).
   - Time spent held is left out of any speed the result reports.
+
+### Holding a GPU duty
+
+`oarbank_sdk.duty.Duty` (also `oarbank_sdk.gpu.Duty`; standard library only, vendorable with `control.py`) holds
+`gpu_duty` in the runner's own loop:
+
+```python
+ctl = Control()
+duty = Duty(ctl, events=events_path)    # reads ctl.gpu_duty; reports what it held
+for batch in batches:
+    ctl.safe_point()
+    with duty.unit():                   # one unit of GPU work, finished on the GPU when the block ends
+        out = model(batch)
+        mx.eval(out); mx.synchronize()  # MLX; llama.cpp: one eval call; Metal: waitUntilCompleted
+duty.close()
+```
+
+- **A unit** is timed from its start to the end of the GPU's work (end the block only once the GPU is done). After a
+  unit of `b` seconds at duty `d` the governor idles `b·(1−d)/d`, in slices of at most 0.25 s, applying a newer
+  control document between slices: a stop raises `Stopped`, a new duty changes the idle. Duty 0 holds before the next
+  unit until a document with a duty above 0 (or a stop) arrives (`Control.wait`); no duty runs flat out.
+- **Keep units short.** A unit longer than a second is one burst that long whatever the duty: `duty.scale()` says by how
+  much the next units should shrink (a batch, a prefill step, a ubatch) for one to fit `d` of a second.
+- **Reports.** With `events`, it writes `{"t", "kind": "metric", "name": "gpu_duty", "value": <busy share>, "data":
+  {"asked", "busy_s", "elapsed_s", "units", "device", "threads"}}` every 2 s (and when the duty changes). `device` is
+  `gpu`, or `cpu` for a stand-in whose units run on the CPU. The conformance kit checks these against what it measures
+  ([conformance.md](conformance.md), `duty_specs`).
+- **What the agent checks** (core 2.10, D50): every two seconds it reads each job's GPU time (all processes of its
+  container). A job over its `gpu_duty` plus 0.1 for three consecutive samples, judged from the second sample after it
+  was given a duty, is paused for 60 s (`GPU_DUTY_EXCEEDED`); the third such pause of the same module's work within an
+  hour stops it, and that module's jobs get no duty for an hour, so they wait beside protected GPU work like a runner that
+  cannot throttle. A job whose GPU time the node cannot read is paused the same way (`GPU_DUTY_UNVERIFIED`): a duty
+  nobody can check is not granted. A runner that cannot be paused is stopped instead.
+- **The duty itself** is the agent's: under `gpu_jobs = "certified"` it is the node's GPU budget (an AIMD loop on the
+  protected program's progress, never above the certified level) divided among the cooperative GPU jobs; during a
+  co-tenancy measurement it is the level under test.
 
 - **Checkpoint, then stop** (`stop: true` with `checkpoint: true`, runners that declare `checkpoint`): write a
   checkpoint at the next safe point, then acknowledge the stop as above, within `runner.checkpoint_grace_s` instead of
