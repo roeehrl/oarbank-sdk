@@ -3,13 +3,13 @@ title: Running modules
 description: Install, approve, enable and sign a module's releases, follow its readiness checklist to running work, and understand which stages run before a node is certified and why a failed doctor check stops only some jobs.
 type: how-to
 platforms: [macos, linux, windows]
-core: '2.9.0'
+core: '2.10.0'
 sidebar:
   order: 6
 ---
 
 Oarbank runs no work of its own: every job type is a **module**, delivered as a bundle (`.mfb`). This page takes a
-module from its bundle to running jobs, as of Oarbank 2.9.0. The commands work from the console's **Modules** page too.
+module from its bundle to running jobs, as of Oarbank 2.10.0. The commands work from the console's **Modules** page too.
 
 ## From bundle to running work
 
@@ -20,8 +20,10 @@ module from its bundle to running jobs, as of Oarbank 2.9.0. The commands work f
    oarbank module install reel-1.2.0.mfb
    ```
 
-2. **Approve its sandbox grants**, if it asks for any: network hosts, host tools, the GPU, containers, folders. The
-   approval is for that exact version; a new version that asks for something new needs a new approval.
+2. **Approve its sandbox grants**, if it asks for any: network hosts, host tools, the GPU, containers, folders, inbound
+   listeners. The approval is for that exact version; a new version that asks for something new needs a new approval.
+   Approving a listener opens nothing until you assign it to a node
+   ([Make a node reachable](/oarbank/operate/make-a-node-reachable)).
 
    ```sh
    oarbank module approve reel@1.2.0
@@ -39,6 +41,9 @@ module from its bundle to running jobs, as of Oarbank 2.9.0. The commands work f
 
 5. **Finish what its checklist asks.** The module's page opens with **Getting this module running**; `oarbank module
    ready reel` prints the same.
+
+6. **Assign its workloads**, if it declares any: a workload runs only on the nodes you assign it to, from the module's
+   **Workloads** tab or `oarbank workload assign` ([Workloads](/oarbank/operate/workloads)).
 
 ## Sign each platform's release
 
@@ -65,7 +70,7 @@ Until a release is signed, Oarbank names it everywhere you look:
 
 The coordinator builds a platform's release once per set of modules, so nodes connecting while a candidate waits change
 nothing. Signing, the owner key set and developer mode are explained in
-[release-signing.md](https://github.com/roeehrl/oarbank/blob/v2.9.0/docs/release-signing.md) in the core's repository.
+[release-signing.md](https://github.com/roeehrl/oarbank/blob/v2.10.0/docs/release-signing.md) in the core's repository.
 
 ## The readiness checklist
 

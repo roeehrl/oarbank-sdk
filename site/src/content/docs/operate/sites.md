@@ -3,9 +3,9 @@ title: Sites and shared internet lines
 description: Group the nodes that share one internet line into a site, so fleet transfers and network-heavy jobs pause on all of them while a protected program at the site uploads, and keep to an uplink budget otherwise.
 type: how-to
 platforms: [macos, linux, windows]
-core: "2.10.0"
+core: '2.10.0'
 sidebar:
-  order: 10
+  order: 15
 ---
 
 Machines behind one internet line slow each other's large transfers down. A large upload that takes about 40 s alone can
@@ -46,12 +46,17 @@ connect from. Only keyed fingerprints are kept, never an address. Accept a sugge
 ```sh
 oarbank sites suggest                                   # nodes that look like they share a line
 oarbank sites accept 3f9a1c0b2d4e5f60 --name home       # a suggestion as a new site
-oarbank sites create home --node mini --node studio     # or by hand
+oarbank sites create home --node mac-01 --node mac-02   # or by hand
 oarbank sites add home laptop                           # a node at another site moves here
 oarbank sites show home
 ```
 
 Two routers on one line (double NAT) look like two gateways: create one site and add both groups of nodes to it.
+
+`oarbank sites remove laptop` takes a node out of its site, `oarbank sites delete home` deletes a site, and
+`oarbank sites dismiss <key>` drops a suggestion. On the console, the **Sites** page offers **Create site**, **Add to
+<site>** and **Dismiss** for each suggestion, and a site's page has **Add**, **Remove**, the budget form and **Delete**.
+Creating, changing and adding are previewed: the preview names each node that joins or moves.
 
 ## 3. Set the budget
 
@@ -64,6 +69,10 @@ Two routers on one line (double NAT) look like two gateways: create one site and
 ```sh
 oarbank sites update home --transfers 2 --mbps 150
 ```
+
+Each transfer is paced at the smallest of its share of the site's rate, the node's `staging_mbps` cap (a setting that
+is enforced from 2.10) and a protection rule's staging cap. Only large transfers (8 MiB and more) take part; small ones
+are never held.
 
 The site's page shows how fast large transfers there have gone ("large transfers here reached 230 Mbit/s up"): a
 ceiling to start from, not the line's capacity, since many of them go to the coordinator on your own network.
@@ -78,16 +87,30 @@ While the site holds:
 - **Network-heavy jobs** pause (their runners pause on request or are frozen). A job that can do neither, or that would
   wait longer than the node's longest pause, is released and requeued without counting as a failure.
 - **New network-heavy jobs** are not started at the site. `oarbank explain job <id>` says why: "Network-heavy: site home
-  holds such work while mini's rule uploader is in an upload phase".
+  holds such work while mac-01's rule uploader is in an upload phase" (`SITE_UPLINK_BUSY`). Outside a hold, a job that
+  would exceed the budget waits with `SITE_UPLINK_BUDGET` ("site home already runs 1 of its 1 network-heavy jobs"), whose
+  remedy is raising the budget (`oarbank sites update home --heavy-jobs 2`).
+
+- **Network-heavy workloads** ([Workloads](/oarbank/operate/workloads)) pause too, for at most their pause tolerance,
+  then stop and hold until the phase ends; one that cannot pause stops and holds at once. They are not started while the
+  site holds. Running network-heavy workloads count against the site's budget of network-heavy jobs, but being
+  assigned by you, they are never refused for it.
+
+A released job ends as `PREEMPT_SITE`: requeued, never charged to the job or the node. Inbound listeners keep relaying
+connections during a hold; a workload that serves heavy traffic declares itself network-heavy and is paused at the
+source.
 
 A module author marks a stage network-heavy in its manifest (`requires = { resources = { network = "heavy" } }`,
 [manifest reference](/oarbank/spec/manifest#network-heavy-stages)). The agent's own transfers need no declaration.
 
 ## Read what happened
 
-- The **Sites** page: each site's state in words ("paused because mini's rule uploader is in an upload phase"), its
-  members, budget and transfers. A node's page names its site.
-- The node's decision timeline: `transfer_paused` and `transfer_resumed`, with why and for how long.
+- The **Sites** page: each site's state in words ("paused because mac-01's rule uploader is in an upload phase"), its
+  members, budget and transfers. A site's page adds each member's `uplink` phases and its agent's transfers, the leases in
+  force and recent holds. A node's page has a **Site** card naming its site, or "at no site".
+- `oarbank sites list` and `oarbank sites show home` print the same.
+- The node's decision timeline: `TRANSFER_PAUSED` and `TRANSFER_RESUMED`, with why and for how long, and `SITE_PAUSE`
+  and `SITE_RESUME` for network-heavy jobs paused and resumed for the site.
 - `oarbank verify` checks that a site's leases never exceed its budget and none is live while it holds (S27).
 
 Releases and agent updates are not paused, and container image pulls are made by the container runtime outside the

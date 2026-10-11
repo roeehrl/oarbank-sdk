@@ -164,3 +164,11 @@ Job Object (breakaway refused), and on macOS the leader's process group plus eve
 sandbox profile. The agent freezes a container with SIGSTOP on macOS, the cgroup freezer on Linux and by suspending every
 process on Windows. Linux cannot enforce
 `net.mode = "egress-any"`, so such a workload is placed on macOS and Windows nodes only.
+
+## What the owner does
+
+Nothing runs until the owner assigns the workload: per node (`seat = "node"`) or as a number of copies the coordinator
+places once (`seat = "fleet"`), from the module's **Workloads** tab or `oarbank workload assign`. With
+`identity = "per_node"` the owner sets each secret for each node. The tab shows each node's state, seat, lease, restarts,
+last error and log tail; a workload that fails `max_failures` times in a row is withdrawn until the owner restarts it.
+See [Workloads](https://docs.codonic.dev/oarbank/operate/workloads) in the operator guide.

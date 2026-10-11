@@ -23,7 +23,9 @@ These come first because they matter most.
 
 1. **Ask before changing anything.** Show the exact command and wait for the user's yes before you install, update or
    remove Oarbank, enroll or approve a node, change a service, firewall or startup setting, cancel or retry jobs,
-   install, promote or uninstall a module, set secrets, or move the coordinator. Reading (`show`, `list`, `explain`,
+   install, promote or uninstall a module, set secrets, assign or restart a workload, assign a listener (it opens a port
+   on the user's router), create or change a site, start a co-tenancy run, change protection rules or `gpu_jobs`, turn
+   on delegated processes, or move the coordinator. Reading (`show`, `list`, `explain`,
    `verify`, `--help`) needs no confirmation. Prefer `--dry-run` first where a command has it.
 2. **Never run elevated commands yourself.** Anything needing `sudo`, an administrator prompt or an installer
    (`.pkg`, `.deb`, `.rpm`, `.msi`) is for the user to run. Give them the command.
@@ -74,6 +76,11 @@ instructions to an older version without saying so.
 | Coordinator service, owners' group, menu bar app | `operate/coordinator.md` |
 | Change node or fleet settings, groups, locks, managed policy | `operate/settings.md` (the `oarbank settings` commands) |
 | Get a module running: release signing, readiness checklist, host tools, containers | `operate/modules.md`, `operate/host-tools.md`, `operate/containers.md` |
+| Run a module's long-running workload (assign, seats, leases, withdrawn) | `operate/workloads.md` |
+| Accept connections from the internet on a node (listeners, router port mapping, firewall) | `operate/make-a-node-reachable.md` |
+| Protect the user's own programs, delegate a program to protection | `operate/host-protection.md`, `operate/delegated-processes.md` |
+| Measure co-tenancy, certificates, `gpu_jobs = "certified"`, the GPU duty | `operate/prove-co-tenancy.md`, `operate/llmserve.md` |
+| Nodes that share one internet line | `operate/sites.md` |
 | Run the fleet: commands, jobs, campaigns, data | `reference/cli.md`, `operate/datasets-and-folders.md` |
 | Fix something | `operate/troubleshooting.md`, then `reference/reason-codes.md` for any code |
 | Find versions or compatibility | `operate/versions.md` |
@@ -91,7 +98,11 @@ Paths are relative to `https://docs.codonic.dev/oarbank/`.
   `node limits` any more).
 - Diagnose before acting: `oarbank fleet`, `oarbank explain job <id>`, `oarbank explain node <node>`,
   `oarbank node show <node>`, `oarbank alerts list`, `oarbank verify`. Explain the reason codes they print using
-  `reference/reason-codes.md`; each code lists its remedy.
+  `reference/reason-codes.md`; each code lists its remedy. From 2.10 the read-only views also include
+  `oarbank workload list`, `oarbank listener list|show`, `oarbank sites list|show`, `oarbank protection duty` and
+  `oarbank protection certificates`.
+- Workloads, listeners, sites, delegation and the GPU duty need the 2.10 agent on the node, not only a 2.10
+  coordinator (`operate/upgrading.md`).
 - A node joins with `oarbank-node join` on that machine (the user runs it; the join code is a secret they paste).
   `oarbank-node status` and `oarbank-node check` are read-only; their `E_…` codes are explained in
   `operate/adding-machines.md`.

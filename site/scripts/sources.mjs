@@ -75,8 +75,9 @@ export const PAGES = [
     dest: 'operate/make-a-node-reachable.md',
     type: 'how-to',
     description:
-      'Assign a module’s inbound listener to a node, let the agent map the port on the router or forward it by hand, and read what the reachability check found and how to fix it.',
-    order: 3,
+      'Assign a module’s inbound listener to a node, let the agent map the port on the router (PCP, NAT-PMP, UPnP) or forward it by hand, read the Network card and the dial-back check, fix firewalls, and use the kill switch.',
+    platforms: ['macos', 'linux', 'windows'],
+    order: 13,
   },
   {
     src: 'docs/workloads.md',

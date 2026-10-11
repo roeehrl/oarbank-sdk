@@ -3,8 +3,9 @@ title: Prove co-tenancy is safe
 description: Measure what fleet work costs one of your protected programs with the paired on/off harness, read its report, earn a co-tenancy certificate, and let cooperative GPU work run beside a protected GPU program up to the certified duty.
 type: how-to
 core: "2.10.0"
+platforms: [macos, linux, windows]
 sidebar:
-  order: 4
+  order: 11
 ---
 
 import { Aside } from '@astrojs/starlight/components';
@@ -47,13 +48,38 @@ treats the phase as on and the progress as unknown, and holds fleet work back un
 **source … needs the session helper**. Put a source outside your home, readable by the service account, if the
 program runs while you are logged out.</Aside>
 
-Check the source reads before a run: the node's **Protection** page, **Co-tenancy** card, shows a rate and who reads
+Check the source reads before a run: the node's **Protection** page, **Co-tenancy** section, shows a rate and who reads
 it (the agent or your session helper).
+
+### Sources are watched, and `immediate` rules act at once
+
+Protection reads sources as they change, not only on its two-second tick: the agent watches the file (kqueue on macOS,
+inotify on Linux, a 250 ms check on Windows), follows a rename or a new file, and starts again from the top after a
+truncation. A source can be:
+
+| Kind | Keys | What it gives |
+|---|---|---|
+| Progress from a JSONL file | `jsonl`, `event`, `event_key` | a rate: matching lines per second |
+| Progress from a log | `path`, `log_regex` | a rate: regex matches per second |
+| Progress from a program you write | `exec` | a rate the program prints (run by the agent, never by a session helper) |
+| A phase from events | `jsonl`, `enter`, `exit`, `enter_soon`, `event_key` | on after an `enter` event, off after `exit` |
+| A phase from a field | `jsonl`, `event`, `field`, `on`, `soon` | on while the field holds one of the `on` values |
+| A phase while a program runs | `on_exec = { match, tree }` | on while a matching process of yours runs |
+
+A rule with `immediate = true` pauses the fleet work its `during` block names the moment the phase begins, between
+ticks, and releases it on the phase's own end. The **Co-tenancy** section shows each phase and progress source with its
+state and who reads it, and the event path's latency from the source's write to the pause (p50 and p99). The node's
+timeline records `PROTECTION_PHASE_ON` and `PROTECTION_PHASE_OFF` with how the change was seen.
+
+Protection never guesses in your favour: a progress source that cannot be read counts as harm, and a phase that cannot
+be read counts as on, so fleet work under the rule is held back. The node says so with its fix:
+`PROTECTION_SOURCE_UNREADABLE` (the agent cannot read the file) or `PROTECTION_SOURCE_NEEDS_HELPER` (the file is in a
+home folder and no session helper reports it).
 
 ## Run the harness
 
 ```sh
-oarbank protection ab start studio --rule trainer --work cpu
+oarbank protection ab start mac-01 --rule trainer --work cpu
 ```
 
 | Option | Default | Meaning |
@@ -68,7 +94,7 @@ oarbank protection ab start studio --rule trainer --work cpu
 
 It is a reviewed change (T2): you see the rule, its source, the work and the planned hours before anything starts.
 Protection stays active throughout, and a collapse of the program's progress in an ON window aborts the run at once
-as a slowdown. Watch it with `oarbank protection ab status studio`, stop it with `oarbank protection ab abort <run>`.
+as a slowdown. Watch it with `oarbank protection ab status mac-01`, stop it with `oarbank protection ab abort <run>`.
 
 <Aside>Run the harness in a window you choose, for example overnight while the program works. A block is left out and
 repeated, never counted, when something outside the fleet changed: a phase of the rule, a restart of the program,
@@ -91,17 +117,37 @@ and lists the blocks left out and why.
 
 A certificate names the node, the rule, the fleet work and duty, `R` with its interval, the margin and the run. It is
 valid for 14 days, and only while the node's hardware, OS major version and agent and the protected program are the
-ones it was earned under: `oarbank protection certificates studio` shows each as valid, expired or stale with why.
+ones it was earned under: `oarbank protection certificates mac-01` shows each as valid, expired or stale with why.
 
 To find how much GPU work a protected GPU program tolerates, sweep the duty:
 
 ```sh
-oarbank protection ab sweep studio --rule trainer
+oarbank protection ab sweep mac-01 --rule trainer
 ```
 
-It runs the harness at `gpu_duty` 0.1, 0.2, 0.35, 0.5, … and stops at the first level that does not pass. Then set the
-node's `gpu_jobs` to `certified` (in its protection section). Without a valid certificate for every rule whose program
-uses the GPU, `certified` behaves as the default (`when_no_gpu_protected`): GPU work waits.
+It runs the harness at `gpu_duty` 0.1, 0.2, 0.35, 0.5, 0.65, 0.8 and 1.0 (or your `--levels`), one run each, and stops
+at the first level that does not pass. The highest passing level is the node's certified duty for that rule. Then set the
+node's `gpu_jobs` to `certified` in its protection section:
+
+```toml
+[node]
+gpu_jobs = "certified"
+```
+
+```sh
+oarbank protection preview mac-01 node-protection.toml
+oarbank protection set mac-01 node-protection.toml
+```
+
+`set` replaces the node's own section, so keep its rules in the same file. `gpu_jobs` takes `never`,
+`when_no_gpu_protected` (the default: fleet GPU work runs only while no protected program uses the GPU), `certified` and
+`always`; across scopes the strictest wins. Without a valid certificate for every rule that holds GPU work back on the
+node, `certified` behaves as `when_no_gpu_protected`: GPU work waits, and the node shows `GPU_NOT_CERTIFIED` with the
+sweep as its remedy.
+
+A rule holds GPU work back while its program uses the GPU (more than 5 % of the GPU's time) and the rule protects
+`gpu_share` or, from 2.10, `progress_rate`. Your own explicit pause always binds, certificate or not: a rule's or a
+phase's `pause_fleet` with scope `gpu`, `all` or `io` pauses GPU work and admits none.
 
 ## The duty governor
 
@@ -119,19 +165,40 @@ With a certificate, fleet GPU work whose runner declares `cooperative_throttle` 
   stopped and its module gets no duty for an hour. A job whose GPU time cannot be read waits.
 
 ```sh
-oarbank protection duty studio
+oarbank protection duty mac-01
 ```
 
 ```text
-studio: gpu_duty budget 0.3 of ceiling 0.35 (running) beside trainer; 2 unit(s) at 0.15 each
+mac-01: gpu_duty budget 0.3 of ceiling 0.35 (running) beside trainer; 2 unit(s) at 0.15 each
   baseline trainer: 9.94/s, 312 s old, last pressure 0.21
   dev.codonic.oarbank.llmserve/batch attempt 812    duty 0.15   measured 0.14   ok
   dev.codonic.oarbank.llmserve/batch attempt 813    duty 0.15   measured 0.16   ok
 ```
 
-The protection page's **GPU duty** card shows the same, with each job's state (holds its duty, held, not trusted,
-cannot throttle) and the node conditions `GPU_DUTY_EXCEEDED` and `GPU_DUTY_UNVERIFIED`. While a harness run measures GPU
-work, the governor stands down and the run alone decides what runs.
+Without a node name it shows every node that has a budget. The protection page's **GPU duty** card shows the same,
+with each unit's asked and measured duty and its state (holds its duty, held, not trusted, cannot throttle, stopped).
+While a harness run measures GPU work, the governor stands down and the run alone decides what runs.
+
+GPU workloads take part like jobs: a running [workload](/oarbank/operate/workloads) that uses the GPU and declares
+`cooperative_throttle` gets an equal share of the budget, and the same compliance check holds and stops it through its
+own ladder.
+
+The node measures each unit's GPU time from the operating system (per-process GPU time on macOS, the DRM driver's
+counters or NVML on Linux, the GPU engine counters on Windows). A unit whose GPU time the node cannot read is held
+(`GPU_DUTY_UNVERIFIED`): on a node that reads no per-process GPU time, `certified` therefore runs no GPU work.
+
+What the timeline records:
+
+| Code | What happened |
+|---|---|
+| `GPU_DUTY_START` | the budget started beside the protected GPU work, at the certified ceiling or its last level |
+| `GPU_DUTY_BASELINE` | GPU work held for a minute to measure the program without it |
+| `GPU_DUTY_GROW` | the budget grew by 0.05 after a clean minute |
+| `GPU_DUTY_HALVE` | the program slowed to its target: the budget halved |
+| `GPU_DUTY_TAKE_BACK` | the budget went to 0 (harm over twice the target, a collapse, the memory guard, an unreadable source) |
+| `GPU_DUTY_CLAMP` | the budget fell to a lower certified ceiling (a new or an expired certificate) |
+| `GPU_DUTY_EXCEEDED` | a unit kept the GPU busier than its duty for three samples: held, or on the third time in an hour stopped and its module not trusted for an hour |
+| `GPU_DUTY_UNVERIFIED` | a unit's GPU time could not be read: held |
 
 Module authors: a runner that declares `cooperative_throttle` holds `gpu_duty` with the SDK's duty governor
-([Share a GPU with a protected program](/oarbank/build/gpu-duty/)).
+([Share a GPU with a protected program](/oarbank/build/gpu-duty)).

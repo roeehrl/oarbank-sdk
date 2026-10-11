@@ -3,14 +3,14 @@ title: Versions and compatibility
 description: Find the Oarbank, agent and module SDK versions you have installed, the latest release, which SDK features need which core, and where the docs for an older version are.
 type: reference
 platforms: [macos, linux, windows]
-core: '2.9.0'
+core: '2.10.0'
 sidebar:
-  order: 13
+  order: 19
 ---
 
 Oarbank has two version lines. The **core** (the coordinator and the node agent, in
-[roeehrl/oarbank](https://github.com/roeehrl/oarbank)) is at 2.9.0. The **module SDK** (`oarbank-sdk`, in
-[roeehrl/oarbank-sdk](https://github.com/roeehrl/oarbank-sdk)) is at 1.6.0. These docs describe those releases.
+[roeehrl/oarbank](https://github.com/roeehrl/oarbank)) is at 2.10.0. The **module SDK** (`oarbank-sdk`, in
+[roeehrl/oarbank-sdk](https://github.com/roeehrl/oarbank-sdk)) is at 1.7.0. These docs describe those releases.
 
 ## Find the installed versions
 
@@ -43,6 +43,7 @@ The first line of [llms.txt](/oarbank/llms.txt) names the release these docs des
 
 | Core | Date | Module SDK |
 |---|---|---|
+| 2.10.0 | 2026-10-11 | 1.7.0 |
 | 2.9.0 | 2026-10-11 | 1.6.0 |
 | 2.8.0 | 2026-10-10 | 1.5.0 |
 | 2.7.0 | 2026-10-09 | 1.5.0 |
@@ -66,9 +67,21 @@ whose `requires.core` excludes it ([Versioning and deprecation](/oarbank/spec/ve
 | Bootstrap stages and pinned datasets | 1.4 | `>= 2.4` |
 | Secrets, container image sets, the container GPU pool, GPU placement by API, service endpoints, service GPU use, folder grants, portable checkpoints, the `artifact_ref` cell type | 1.5 | `>= 2.5` |
 | Host tool version constraints and `arch` other than `any` (`[sandbox].tools`), module settings with `x-oarbank` `scope = "node"`, `required` or `campaign` | 1.6 | `>= 2.9` |
+| Inbound listeners: `[sandbox].net.inbound` and `services[].listeners` | 1.7 | `>= 2.10` |
+| Workloads: `[[workloads]]`, `requires.workload_protocol` and the `workload.report` capability | 1.7 | `>= 2.10` |
 
 Stages that run before certification ([Running modules](/oarbank/operate/modules#which-stages-run-before-certification))
 need no new key and no core floor: a 2.9 coordinator applies the rule to modules as they are.
+
+Some 1.7 features need no floor because older cores ignore them harmlessly; they take effect only on 2.10:
+
+| Manifest feature | Added in SDK | On a core before 2.10 |
+|---|---|---|
+| Network-heavy stages: `stages[].requires.resources.network = "heavy"` (a workload's `resources.network` comes with workloads, which need 2.10) | 1.7 | Ignored: the job runs as any other, with no [site](/oarbank/operate/sites) hold or budget |
+| A `cooperative_throttle` runner that holds `gpu_duty` with the SDK's duty governor, and `duty_specs` in `conformance.json` | 1.7 | No `gpu_duty` is ever written, so the runner runs flat out ([Share a GPU with a protected program](/oarbank/build/gpu-duty)) |
+
+A module with a workload or a listener also needs nodes that run the 2.10 agent: an older agent runs neither
+([Upgrading](/oarbank/operate/upgrading#upgrade-the-nodes-to-210)).
 
 The `oarbank-sdk` package follows SemVer. Its major equals the highest module protocol major it speaks, and the latest
 two majors receive fixes.

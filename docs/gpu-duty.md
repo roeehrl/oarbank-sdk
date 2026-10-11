@@ -118,6 +118,8 @@ uv run oarbank-sdk conform examples/llmserve
 
 ### Install a real backend and model (owners)
 
+The operator guide walks through it end to end: [Run language-model batches with llmserve](https://docs.codonic.dev/oarbank/operate/llmserve).
+
 The module ships no model and depends on neither MLX nor llama.cpp, so CI never downloads one. On a node where you want
 real inference:
 
@@ -132,7 +134,7 @@ real inference:
    "my-model.gguf", "backend": "llamacpp"}`. The runner's doctor lists the backends it can load (`attrs.backends`).
 4. **Measure before you share.** Run a co-tenancy measurement of llmserve's work against your protected program
    (`oarbank protection ab sweep <node> --rule <id> --work llmserve`), and set the node's `gpu_jobs
-   = "certified"` only once a level passes ([Prove co-tenancy is safe](https://docs.codonic.dev/oarbank/operate/prove-co-tenancy/)).
+   = "certified"` only once a level passes ([Prove co-tenancy is safe](https://docs.codonic.dev/oarbank/operate/prove-co-tenancy)).
 
 ## Checklist
 

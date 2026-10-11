@@ -3,24 +3,24 @@ title: Updating and removing
 description: Update the coordinator and the nodes' agents, move the coordinator to another computer, and remove a node or the coordinator on macOS, Linux and Windows without losing your owner keys by accident.
 type: how-to
 platforms: [macos, linux, windows]
-core: '2.9.0'
+core: '2.10.0'
 sidebar:
-  order: 11
+  order: 17
 ---
 
-This page covers Oarbank 2.9.0. Coming from 2.8, follow [Upgrading from 2.8 to 2.9](/oarbank/operate/upgrading)
-first: the macOS and Linux coordinator moves to a system service once. The full install guide, including building the
-packages, is [docs/install.md](https://github.com/roeehrl/oarbank/blob/v2.9.0/docs/install.md) in the core's
-repository.
+This page covers Oarbank 2.10.0. Coming from an older release, read [Upgrading](/oarbank/operate/upgrading) first:
+from 2.8 the macOS and Linux coordinator moves to a system service once, and from 2.9 nodes need the 2.10 agent for the
+new features. The full install guide, including building the packages, is
+[docs/install.md](https://github.com/roeehrl/oarbank/blob/v2.10.0/docs/install.md) in the core's repository.
 
 ## Update the coordinator
 
 Download the new installer from the [releases](https://github.com/roeehrl/oarbank/releases) and check it. Each
-package set has its own checksum file beside it, for example `SHA256SUMS-coordinator-packages-2.9.0-linux-amd64` for
-the Linux `.deb` and `.rpm`, or `SHA256SUMS-coordinator-msi-2.9.0-windows-x64` for the Windows MSI:
+package set has its own checksum file beside it, for example `SHA256SUMS-coordinator-packages-2.10.0-linux-amd64` for
+the Linux `.deb` and `.rpm`, or `SHA256SUMS-coordinator-msi-2.10.0-windows-x64` for the Windows MSI:
 
 ```sh
-sha256sum --ignore-missing -c SHA256SUMS-coordinator-packages-2.9.0-linux-amd64   # macOS: shasum -a 256 --ignore-missing -c …
+sha256sum --ignore-missing -c SHA256SUMS-coordinator-packages-2.10.0-linux-amd64   # macOS: shasum -a 256 --ignore-missing -c …
 ```
 
 Then run the installer as you did the first time.
@@ -44,19 +44,19 @@ shows how to look at the services and their logs.
 
 Nodes update their agent from the coordinator; nobody needs to log in to them.
 
-Upload the release's agent binary for each platform your nodes run (`oarbank-agent-2.9.0-darwin-arm64`,
+Upload the release's agent binary for each platform your nodes run (`oarbank-agent-2.10.0-darwin-arm64`,
 `-darwin-amd64`, `-linux-amd64`, `-linux-arm64`, `-windows-x64.exe`, `-windows-arm64.exe`; each has a
 `SHA256SUMS-agent-…` file), then sign, try and promote it:
 
 ```sh
-oarbank agent upload oarbank-agent-2.9.0-linux-amd64
+oarbank agent upload oarbank-agent-2.10.0-linux-amd64
 oarbank agent list                               # the uploaded builds, with their sha256
 oarbank agent sign <build>
 oarbank agent canary <build> --node <node>       # try it on one node first
 oarbank agent promote <build>
 ```
 
-`<build>` is the version (`2.9.0`) when only one uploaded build has it; with one build per platform, use the first 8 or
+`<build>` is the version (`2.10.0`) when only one uploaded build has it; with one build per platform, use the first 8 or
 more characters of its sha256 from `oarbank agent list`. `oarbank agent list` also shows which version each node
 runs. The launcher keeps the previous version and rolls back a build
 that does not confirm itself within 10 minutes. Installing a newer node package also works: it replaces the launcher and
@@ -89,6 +89,11 @@ again with a new code. Retire it on the coordinator's Fleet page too. To remove 
 | macOS | `sudo /Library/Oarbank/bin/oarbank-uninstall --purge` unloads the service, deletes the node's home (its key, certificate, caches and logs) and removes the programs and **Oarbank Node.app**. Without `--purge` the home stays. |
 | Linux | `sudo apt remove oarbank-agent` or `sudo dnf remove oarbank-agent` stops and removes the service and keeps the node's home, `/var/lib/oarbank`; `sudo apt purge oarbank-agent` also deletes it. |
 | Windows | Uninstall **Oarbank agent** from Installed apps. |
+
+Removing the node service first stops the node's [workloads](/oarbank/operate/workloads) and deletes the router port
+mappings its agent made for [inbound listeners](/oarbank/operate/make-a-node-reachable) (`oarbank-agent stop-workloads`,
+`oarbank-agent portmap release-all`). A mapping on a router that cannot be reached at that moment stays until its lease
+runs out (at most two hours). Retiring a node that is offline warns that its router mappings may persist until then.
 
 ## Remove the coordinator
 
