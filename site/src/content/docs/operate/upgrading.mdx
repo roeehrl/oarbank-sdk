@@ -1,0 +1,221 @@
+---
+title: Upgrading from 2.8 to 2.9
+description: Upgrade an Oarbank fleet from 2.8 to 2.9 on macOS, Linux and Windows, including the one-time move of a per-user coordinator to a system service, what to check afterwards, what happens if it fails, and the commands and module requests 2.9 removed.
+type: how-to
+platforms: [macos, linux, windows]
+core: '2.9.0'
+sidebar:
+  order: 12
+---
+
+import { Aside, TabItem, Tabs } from '@astrojs/starlight/components';
+
+Oarbank 2.9 changes how the coordinator runs on macOS and Linux (a system service instead of its owner's per-user
+services), replaces per-node policy and caps with one [settings](/oarbank/operate/settings) model, and replaces the
+tool registry with [host tools](/oarbank/operate/host-tools) that each node detects. Running jobs keep running through
+the upgrade, and nodes reconnect by themselves.
+
+Upgrade the **coordinator first**, then the nodes. The downloads are on the
+[2.9.0 release page](https://github.com/roeehrl/oarbank/releases/tag/v2.9.0); check each file against its
+`SHA256SUMS-…` file there ([Get started](/oarbank/get-started#download)).
+
+## Before you start
+
+- Note how the coordinator runs now: `oarbank coordinator status`, and the address nodes reach it on. The upgrade keeps
+  the same address, port and identity.
+- Make sure the agent address exists before anyone logs in (a LAN address, or a VPN that connects at boot): from 2.9
+  the coordinator starts at boot ([The coordinator service](/oarbank/operate/coordinator#setting-up)).
+- On macOS, be logged in at the Mac, as the person who set the coordinator up, when you install the package. That lets
+  the package move the coordinator's keys out of your login Keychain by itself.
+- Your owner signing keys are not touched: they stay in your home.
+
+## Upgrade the coordinator
+
+<Tabs syncKey="os">
+  <TabItem label="macOS" icon="apple">
+    1. Double-click `oarbank-coordinator-2.9.0-macos-arm64.pkg` and follow Installer (it asks for an administrator
+       password, as any package does).
+
+    2. If you were logged in, the package moves the coordinator by itself: it exports the coordinator's keys from your
+       Keychain into the coordinator's own key files (as you, in your session), stops the old LaunchAgents, copies the
+       coordinator's home to `/Library/Application Support/Oarbank/coordinator` (an APFS clone, so it is instant and
+       takes no extra space), starts the two launchd daemons as `_oarbankd`, checks that they serve the same fleet, and
+       removes the LaunchAgents. You are added to the owners' group, `_oarbankadmin`.
+
+    3. If the package could not reach your Keychain (nobody logged in, an install over SSH or MDM), the coordinator
+       keeps running as before, now on 2.9's code and still using its Keychain keys. **Oarbank Coordinator** then shows
+       **Move the coordinator to a system service…**, and the console and `oarbank coordinator status` say the move is
+       waiting. Click it (macOS asks for an administrator once), or in Terminal, as yourself:
+
+       ```sh
+       oarbank coordinator migrate
+       ```
+
+  </TabItem>
+  <TabItem label="Linux" icon="linux">
+    1. Install the package with `sudo`, as the person who set the coordinator up:
+
+       ```sh
+       sudo apt install ./oarbank-coordinator-2.9.0-linux-amd64.deb      # Fedora, RHEL: sudo dnf install ./oarbank-coordinator-2.9.0-linux-amd64.rpm
+       ```
+
+    2. The package moves the coordinator at once (its keys were already files): it stops the systemd user units,
+       copies the home to `/var/lib/oarbank/coordinator`, starts the system units as `oarbankd`, checks them and removes
+       the user units. The installing person is added to the owners' group, `oarbank-admin`.
+
+    3. Log out and in again (or run `newgrp oarbank-admin`) so your `oarbank` reaches the coordinator without a token.
+
+    Lingering is no longer needed. The package leaves it as you set it; if you enabled it only for Oarbank,
+    `sudo loginctl disable-linger <user>` turns it off.
+  </TabItem>
+  <TabItem label="Windows" icon="seti:windows">
+    The Windows coordinator was already a system service, so there is nothing to move. Install
+    `oarbank-coordinator-2.9.0-windows-x64.msi` (or `-arm64`); it restarts both services on the new payload and puts
+    `oarbank` on the system PATH. Open a new elevated prompt to use it.
+  </TabItem>
+</Tabs>
+
+A coordinator installed from an archive upgrades with the new archive's helper, as before
+([Updating and removing](/oarbank/operate/update-and-remove#update-the-coordinator)); on macOS and Linux it installs
+the system services too.
+
+## Check the result
+
+```sh
+oarbank coordinator status             # form  system service — runs from boot, as _oarbankd (oarbankd on Linux)
+oarbank coordinator migrate --status   # what is installed, and the migration record
+oarbank fleet                          # every node back online
+```
+
+- On macOS, Oarbank Coordinator's window says "Runs as a system service".
+- The console's **Coordinator** page shows the same form; a coordinator still in the per-user form shows a warning and
+  a banner across the console.
+- Every step of the move is recorded in `/Library/Application Support/Oarbank/coordinator-migration.json` (macOS) or
+  `/var/lib/oarbank/coordinator-migration.json` (Linux): its state is `done` when it finished, `needs-person` while it
+  waits for you (macOS), `rolled-back` with the error if it failed. It holds no secrets.
+- Open a new terminal and run `oarbank --help`: from 2.9 the command is on the PATH
+  ([The coordinator service](/oarbank/operate/coordinator#the-oarbank-command-on-the-path)).
+
+## If the move fails
+
+Nothing of the old home is changed until the very last step. If any step after stopping the old services fails, the
+move removes the new system services, sets the new home aside as `coordinator.failed-<time>` for diagnosis, and starts
+the per-user coordinator again on its untouched home; the record says `rolled-back` with the error. Running the move
+again (`oarbank coordinator migrate`, or reinstalling the package) starts over; after `done` it does nothing.
+
+If it rolled back, the coordinator keeps working in its 2.8 form on 2.9's code. Open an issue on
+[roeehrl/oarbank](https://github.com/roeehrl/oarbank/issues) with the error from the record (it holds no secrets),
+your OS version and the output of `oarbank coordinator migrate --status`.
+
+## After a successful move
+
+- The old home stays, renamed `coordinator.migrated-<time>` and marked so that no coordinator starts on it:
+  `~/Library/Application Support/Oarbank/coordinator.migrated-<time>` on macOS,
+  `~/.local/share/oarbank/coordinator.migrated-<time>` (or under `$XDG_DATA_HOME`) on Linux. The old Keychain items
+  stay in your Keychain on macOS. Delete both once you are content.
+- 2.9 has no command that moves a coordinator back to the per-user form.
+- Other owners need to be added to the owners' group ([Who may use the CLI](/oarbank/operate/coordinator#who-may-use-the-cli)).
+- Removing the coordinator now works differently ([Updating and removing](/oarbank/operate/update-and-remove#remove-the-coordinator)).
+
+## Settings after the upgrade
+
+When the 2.9 coordinator first opens its database, it converts the old per-node policy and caps into
+[settings](/oarbank/operate/settings), once:
+
+- A node's policy value becomes a node value only where it differs from what the node now inherits, so copies of the
+  default disappear and real choices stay. Caps become node values.
+- Fleet-wide keys (notifications, console host names, the replica rate, the folder registry, dataset origins) become
+  fleet values; the ntfy token moves to the secrets store.
+- Each module's kill switch becomes its `enabled` setting set to off for the fleet; a module's pipeline becomes its
+  `pipeline` setting; disabled services become `services.disabled`.
+- Protection rules every node had in common become the fleet's; the rest stay per node.
+- A module's old settings become one value per key its settings schema declares; values the module does not declare,
+  or that its schema refuses, are dropped and named in the coordinator's `settings_migrated` event.
+
+Then look at what you have: `oarbank settings get --node <node>` for a node, `oarbank settings shadowed` for values that
+change nothing.
+
+### Removed commands and operations
+
+| 2.8 | 2.9 |
+|---|---|
+| `oarbank node policy …` | `oarbank settings get\|set\|reset … --node <node>` |
+| `oarbank node limits <node> --cpu-cores N --mem-gb N --jobs N …` | `oarbank settings set cpu_cores N --node <node>` (and `mem_gb`, `jobs`, `enforce`, …); `reset` removes one |
+| `oarbank pipeline single\|split --module <m>` | `oarbank settings set pipeline split --module <m>` |
+| `oarbank protection canary\|promote\|restore` | a canary group and `oarbank settings promote protection.rules --group <group>` ([Host protection](/oarbank/operate/host-protection#roll-rules-out-through-a-canary-group)) |
+| the tool registry (`settings.tools.update`) and its `trust` setting | host tool definitions: `oarbank tools define\|delete`, and `tool.<id>.path` per node |
+| operations `settings.update`, `nodes.set_policy`, `nodes.set_caps`, `settings.notifications.update`, `modules.set_pipeline`, `protection.rules.canary`, `protection.rules.restore` | `settings.apply` (with its dry run), `settings.promote`, `settings.secrets.set` |
+
+Scripts that call the removed operations through `oarbank op` need updating; `oarbank ops` lists what exists.
+
+## Modules that used tool registry ids
+
+Before 2.9 a module could ask for an operator-defined registry id such as `java17`. On upgrade, each registry entry
+becomes a [host tool definition](/oarbank/operate/host-tools) of the same id with its paths as search paths (an id
+named like a JDK becomes a JDK tool). If your fleet had no entry for an id a module asks for, the module's jobs wait
+with `TOOL_NOT_FOUND`, and its readiness checklist says it asks for an unknown tool id and needs a new module version.
+
+The module's author publishes a version that asks for the built-in tool with a version constraint, for example
+`{ id = "jdk", version = ">=17", trust = "code-exec" }`, with `requires.core >= 2.9`
+([Ask for host tools](/oarbank/build/host-tools)). Install it, approve it once (its grants changed), enable it and sign
+the releases.
+
+## Nodes
+
+Nodes update their agent from the coordinator; nobody needs to log in to them. Upload the 2.9.0 agent binary for each
+platform your nodes run, then sign, try and promote it:
+
+```sh
+oarbank agent upload oarbank-agent-2.9.0-linux-amd64
+oarbank agent sign <build>
+oarbank agent canary <build> --node <node>
+oarbank agent promote <build>
+```
+
+[Updating and removing](/oarbank/operate/update-and-remove#update-the-nodes) has the details. Update every node: a 2.9
+agent is what detects host tools (an older one reports none, so modules that ask for tools wait with `TOOL_NOT_FOUND`),
+reports which settings revision it applied, enforces managed settings, offers modules whose doctor is not healthy for
+the stages that need no certification, and brings up the container runtime on Macs.
+
+The agent update replaces the agent only. Some 2.9 changes come with the node **package**:
+
+- **Macs:** install `oarbank-agent-2.9.0-macos-arm64.pkg` (Intel: `-macos-x86_64.pkg`) too. It brings the new
+  **Oarbank Node** menu bar app (one setting, `ShowStatusIcon`), its administrator helper (joining and leaving as the
+  system service now asks for an administrator as "Oarbank Node", not as a script), and the node runtime that lets
+  modules load native Python packages. Installing it keeps the node joined:
+
+  ```sh
+  sudo installer -pkg oarbank-agent-2.9.0-macos-arm64.pkg -target /
+  ```
+
+  Nodes that run containers also need Colima, Docker and Rosetta installed ([Containers on nodes](/oarbank/operate/containers#macos)).
+- **Windows:** install `oarbank-agent-2.9.0-windows-x64.msi` (or `-arm64`) for the new tray model and container support
+  installed after the MSI. Deploy the 2.9 ADMX template (`oarbank-agent-2.9.0-windows-admx.zip`) for the new policies.
+- **Linux:** the agent update is enough for the new agent; install the 2.9 package too for the new service
+  definition (below).
+
+**A package upgrade renders the node's service again.** Installing the 2.9 package over a 2.8 node (pkg, deb or rpm)
+rewrites the agent's launchd job or systemd unit with the new launcher's settings (`oarbank-launcher service refresh`),
+keeping its program, account and environment, and restarts it. That is how a node gets 2.9's 60-second stop time
+([below](#nodes-stop-their-jobs-cleanly)). A Windows MSI upgrade recreates the service. Nothing needs to rejoin.
+
+### Nodes stop their jobs cleanly
+
+From 2.9, when a node's agent is stopped or restarted (an upgrade, a reboot, `launchctl`, `systemctl`, the Windows
+service manager), it asks every job to stop as a release does (checkpointing first), ends what is left after at most
+15 seconds, and releases each attempt as `AGENT_STOPPED`: the job is requeued and nothing is charged to the job or the
+node. Then it exits. The service definitions give it 60 seconds for this. An agent that is killed leaves no job
+processes behind: a watchdog, or the next agent before it takes work, ends them.
+
+<Aside type="note">
+  New managed policy keys in 2.9: `ShowStatusIcon` and a `Settings` dictionary that may only make settings stricter
+  ([Adding machines](/oarbank/operate/adding-machines#many-machines-mdm-intune-ansible),
+  [Settings](/oarbank/operate/settings#managed-on-this-machine)).
+</Aside>
+
+## Module authors
+
+The module SDK for this release is 1.6.0. A manifest that uses a 2.9 feature (a host tool `version` or an `arch` other
+than `any`, or a settings schema with `x-oarbank` `scope = "node"`, `required` or `campaign`) needs
+`requires.core >= 2.9`; see [Versions and compatibility](/oarbank/operate/versions#which-sdk-features-need-which-core),
+[Ask for host tools](/oarbank/build/host-tools) and [Declare module settings](/oarbank/build/module-settings).

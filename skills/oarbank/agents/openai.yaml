@@ -1,0 +1,6 @@
+interface:
+  display_name: "Oarbank"
+  short_description: "Install, run, troubleshoot and build modules for Oarbank"
+  default_prompt: "Use $oarbank to help me with my Oarbank fleet."
+policy:
+  allow_implicit_invocation: true

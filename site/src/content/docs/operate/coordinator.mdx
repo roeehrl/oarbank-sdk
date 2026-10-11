@@ -1,0 +1,202 @@
+---
+title: The coordinator service
+description: Where the Oarbank coordinator runs and keeps its state on macOS, Linux and Windows, who may use its CLI, the menu bar and tray app, the oarbank command on the PATH, logs, restarts and what to check after a reboot.
+type: reference
+platforms: [macos, linux, windows]
+core: '2.9.0'
+sidebar:
+  order: 4
+---
+
+import { Aside, TabItem, Tabs } from '@astrojs/starlight/components';
+
+From Oarbank 2.9 the coordinator is a **system service on every operating system**. It starts when the computer
+starts, before anyone logs in, keeps running when you log out or someone else uses the computer, and runs under an
+account of its own. The menu bar or tray app, **Oarbank Coordinator**, only shows it: quitting or hiding the app never
+stops the coordinator.
+
+<Aside type="note">
+  Before 2.9 the macOS and Linux coordinator ran as its owner's per-user services (LaunchAgents, systemd user units).
+  Installing the 2.9 package moves such a coordinator to the system service once: see
+  [Upgrading](/oarbank/operate/upgrading). A Windows coordinator was already a system service.
+</Aside>
+
+## Where it runs
+
+There are two services, `dev.codonic.oarbank.oarbankd` (the coordinator) and `dev.codonic.oarbank.console` (the web
+console), on every OS.
+
+| | macOS | Linux | Windows |
+|---|---|---|---|
+| Services | launchd daemons in `/Library/LaunchDaemons` | systemd system units in `/etc/systemd/system` | Windows services, delayed automatic start, restarted after a crash |
+| Account | `_oarbankd` (hidden, no login shell) | `oarbankd` (a system account) | a virtual account per service |
+| Owners' group | `_oarbankadmin` | `oarbank-admin` | administrators (an elevated prompt) |
+| State | `/Library/Application Support/Oarbank/coordinator` (only `_oarbankd` may enter) | `/var/lib/oarbank/coordinator` (only `oarbankd`) | `C:\ProgramData\Oarbank\coordinator` (SYSTEM, administrators and the two services) |
+| Logs | `logs/` in the state directory (read with `sudo`) | `logs/` in the state directory (read with `sudo`); `systemctl status dev.codonic.oarbank.oarbankd` | `logs\` in the state directory |
+| Programs | `/Applications/Oarbank Coordinator.app` | `/opt/oarbank/coordinator` | `C:\Program Files\Oarbank\Coordinator\package` |
+| Your owner signing keys | `~/Library/Application Support/Oarbank/keys` | `${XDG_CONFIG_HOME:-~/.config}/oarbank/keys` | `%APPDATA%\Oarbank\keys` of the account that set it up |
+
+The coordinator's account is not the node agent's (`_oarbank` on macOS, `oarbank` on Linux): on a computer that is both
+coordinator and node, a compromised agent cannot reach the coordinator's database or keys. The programs belong to root,
+so the service cannot change what it runs. Your **owner signing keys stay with you**, in your own home: the service
+never reads them, so a compromised coordinator cannot sign releases or moves as you.
+
+The coordinator's own secrets (its audit key, the module secrets key) are files only the service account can read, on
+macOS too (before 2.9 they were in the owner's login Keychain, which stays locked until that person logs in).
+
+## Who may use the CLI
+
+The `oarbank` command reaches the coordinator through a local admin channel. Whoever is in the **owners' group** is an
+owner and needs no token; anyone else on the computer cannot even see the channel. The person who sets up the
+coordinator is added to the group. To add another owner:
+
+<Tabs syncKey="os">
+  <TabItem label="macOS" icon="apple">
+    ```sh
+    sudo dseditgroup -o edit -a <user> -t user _oarbankadmin
+    dscl . -read /Groups/_oarbankadmin GroupMembership     # who is in it
+    ```
+    The new member can use `oarbank` at once.
+  </TabItem>
+  <TabItem label="Linux" icon="linux">
+    ```sh
+    sudo usermod -aG oarbank-admin <user>
+    getent group oarbank-admin                             # who is in it
+    ```
+    Linux reads groups at login: the new member logs in again (or runs `newgrp oarbank-admin`) first.
+  </TabItem>
+  <TabItem label="Windows" icon="seti:windows">
+    Use an elevated prompt. The CLI talks to the coordinator over a named pipe that only administrators and the
+    services can open.
+  </TabItem>
+</Tabs>
+
+Anywhere else (another account, another computer), sign in with `oarbank console login` or use a personal access token
+from `oarbank token create`.
+
+## The `oarbank` command on the PATH
+
+From 2.9 the coordinator packages put `oarbank` on the PATH. Open a new terminal after installing.
+
+| | `oarbank` | `oarbank-setup` |
+|---|---|---|
+| macOS | `/usr/local/bin/oarbank`, a link into `/Applications/Oarbank Coordinator.app/Contents/Resources/coordinator/bin/oarbank` (an existing `oarbank` there that is not a link is left alone) | `/usr/local/bin/oarbank-setup` |
+| Linux | `/usr/bin/oarbank`, a link to `/opt/oarbank/coordinator/bin/oarbank` | `/usr/bin/oarbank-setup` |
+| Windows | `C:\Program Files\Oarbank\Coordinator\package\cli` is on the system PATH; its `oarbank.cmd` runs the build the services use | `C:\Program Files\Oarbank\Coordinator\package\oarbank-setup.ps1` |
+
+The full paths keep working and behave the same.
+
+## The menu bar and tray app
+
+**Oarbank Coordinator** shows the coordinator's status and opens the web console (**Open web app**). It runs as you
+and never holds account credentials or keys.
+
+<Tabs syncKey="os">
+  <TabItem label="macOS" icon="apple">
+    The app has one setting, **Show Oarbank Coordinator in the menu bar** (in its Settings…). It is on after the app's
+    first launch: the item is shown and the app opens when you log in. **Hide from Menu Bar** (⌘Q) turns it off and
+    quits the app; the coordinator keeps running. Open the app from Applications to get its window back.
+
+    The window says how the coordinator runs: "Runs as a system service — starts with the Mac, before anyone logs in,
+    as _oarbankd, and keeps running when this app quits." The coordinator's glyph is the logo's three oars; the node's
+    is one oar.
+
+    When the node package is installed on the same Mac, the coordinator's menu also shows **This Mac's Node** (its
+    state, **Join this Mac…** while it has not joined, **Oarbank Node…** for the node's window), and Oarbank Node keeps
+    out of the menu bar, so each Mac has one Oarbank item.
+
+    In System Settings, **General → Login Items → Allow in the Background** lists the coordinator's two services under
+    **Oarbank Coordinator**. Switching that entry off stops them from starting; the app then offers **Open Login
+    Items…** to switch it back on.
+  </TabItem>
+  <TabItem label="Linux" icon="linux">
+    The tray icon (StatusNotifierItem) has **Open web app**, the status and **Preferences**, where **Start
+    automatically at sign-in** (off until you turn it on) writes a per-user autostart entry. **Quit** closes the app
+    only. A desktop without a tray host gets a small window with the same controls. Headless computers use
+    `oarbank-setup` from a terminal.
+  </TabItem>
+  <TabItem label="Windows" icon="seti:windows">
+    The notification-area icon has **Open web app**, the status and **Preferences**, where **Start automatically at
+    sign-in** (off until you turn it on) adds a per-user Run entry; Startup Apps can switch it off too. **Quit Oarbank
+    Coordinator** closes the app only. The app runs without elevation; unfinished setup asks for it.
+  </TabItem>
+</Tabs>
+
+The node's own app, **Oarbank Node**, follows the same model, with a managed policy key that hides it:
+[Adding machines](/oarbank/operate/adding-machines#oarbank-node-in-the-menu-bar-or-tray).
+
+## Setting up
+
+The package installs the software only (on macOS and Linux it also creates the service account, the owners' group and
+the state directory). The first-run wizard asks for the address nodes reach, your administrator name and password
+(at least 12 characters), checks your authenticator app and creates your primary and backup owner signing keys. Its
+one privileged step starts the system services: the system's administrator prompt on macOS, polkit on Linux, UAC on
+Windows. Run the wizard as the ordinary user who will own the coordinator; everything after the services start goes
+through the admin channel, which you reach as a member of the owners' group. [Get started](/oarbank/get-started#set-up-a-fleet)
+walks through it.
+
+**Choose an agent address that exists before anyone logs in**: a LAN address, or a tailnet address from a VPN client
+that connects at boot (for Tailscale on macOS, the `tailscaled` variant, such as Homebrew's `tailscale` service; the
+App Store and Standalone apps connect only after a login). Until the address exists, the coordinator retries every
+10 seconds.
+
+**FileVault.** A Mac with FileVault that lost power waits at the disk unlock screen until someone types a password;
+nothing on the disk runs before that, the coordinator included. Restarts that unlock the disk for you (macOS updates
+that do so, `sudo fdesetup authrestart`) bring the coordinator back with nobody logged in.
+
+**Local Network privacy (macOS).** macOS lets launchd daemons use the local network without asking, so the coordinator
+announces itself for discovery with nobody at the Mac.
+
+## Check and restart it
+
+```sh
+oarbank coordinator status      # includes "form  system service — runs from boot, as _oarbankd"
+```
+
+The console's **Coordinator** page shows the same. A coordinator still running in the 2.8 per-user form shows a
+warning there and in a banner across the console ("runs only while … is logged in; move it to a system service").
+
+If the services stopped, run `oarbank-setup` (on the PATH on macOS and Linux; on Windows
+`C:\Program Files\Oarbank\Coordinator\package\oarbank-setup.ps1`). It asks for an administrator and starts them again
+on the existing installation; it never creates a new fleet. Installing a newer package restarts the services by
+itself, from the record of how they were set up (`/Library/Application Support/Oarbank/coordinator-service.json` on
+macOS, `/etc/oarbank/coordinator-service.json` on Linux).
+
+To look at the services directly:
+
+<Tabs syncKey="os">
+  <TabItem label="macOS" icon="apple">
+    ```sh
+    sudo launchctl print system/dev.codonic.oarbank.oarbankd
+    sudo ls "/Library/Application Support/Oarbank/coordinator/logs"
+    ```
+  </TabItem>
+  <TabItem label="Linux" icon="linux">
+    ```sh
+    systemctl status dev.codonic.oarbank.oarbankd dev.codonic.oarbank.console
+    sudo ls /var/lib/oarbank/coordinator/logs
+    ```
+  </TabItem>
+  <TabItem label="Windows" icon="seti:windows">
+    ```powershell
+    Get-Service dev.codonic.oarbank.oarbankd, dev.codonic.oarbank.console
+    ```
+    Logs are in `C:\ProgramData\Oarbank\coordinator\logs` (administrators only).
+  </TabItem>
+</Tabs>
+
+## Known limitations in 2.9.0
+
+These parts of the system service were built and tested on virtual machines and containers but not yet on every real
+setup:
+
+- On macOS, **Allow in the Background** names Oarbank Coordinator only for Developer ID signed builds; ad hoc test
+  builds are listed as an unknown developer.
+- The FileVault unlock path, the administrator prompt shown from the wizard and the app, and Intel Macs have not been
+  verified.
+- On Linux, the polkit prompt and the `.deb` and `.rpm` packages themselves (as opposed to their install scripts) have
+  not been verified on a real install.
+- On macOS, whether a person added to the owners' group can use an already-running wizard without restarting it has
+  not been verified.
+
+Report what you see on [roeehrl/oarbank](https://github.com/roeehrl/oarbank/issues).
