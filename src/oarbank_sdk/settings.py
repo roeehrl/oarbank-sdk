@@ -22,7 +22,12 @@ JSON Schema (type, `default`, `minimum`, `enum`, `pattern`, ... ) is what the co
 Credentials are never settings: settings are stored and shown in clear. Declare them in `[[secrets]]`.
 
 `load(root, man)` reads and checks the file (`oarbank-sdk check`, `bundle build` and `bundle verify` refuse an invalid
-one), `effective(keys, values, scope)` is what a runner or coordinator verb receives for given owner values."""
+one), `effective(keys, values, scope)` is what a runner or coordinator verb receives for given owner values.
+
+Cores before 2.9 stored a module's settings as one opaque object: they never hand a `node` key to a runner, never hold
+work back for a `required` one and never apply a campaign's override. A schema that relies on any of those needs
+`requires.core >= 2.9` (`core_gate`; spec/versioning.md, "Additive changes within manifest 1"). `unit` and `advanced`
+only change how a key is shown, and need no gate."""
 import copy
 import json
 import re
@@ -37,6 +42,8 @@ ANNOTATIONS = {"scope", "required", "unit", "advanced", "campaign"}
 MAX_KEYS = 128
 # keys the core already has per module: the owner sets them as `[module] <key>` (spec/manifest.md, "Settings")
 CORE_QUALIFIED = ("enabled", "pipeline", "replica_rate", "services")
+CORE_GATE = (2, 9)                # the lowest core that reads the annotations below (spec/versioning.md)
+CORE_GATED = ("scope node", "required", "campaign")
 CREDENTIAL = re.compile(r"(^|_)(token|password|passwd|secret|api_?key|private_?key|credentials?)($|_)")
 _MISSING = object()
 
@@ -199,8 +206,43 @@ def parse(doc, source: str = "settings schema") -> SettingsSchema:
     return SettingsSchema(keys=keys, warnings=warnings)
 
 
+def gated_uses(schema: SettingsSchema) -> list[str]:
+    """What a schema uses that cores before 2.9 ignore (CORE_GATED), one entry per key and feature."""
+    out = []
+    for k in schema.keys:
+        if k.scope == "node":
+            out.append(f"{k.name}: x-oarbank.scope node")
+        if k.required:
+            out.append(f"{k.name}: required")
+        if k.campaign:
+            out.append(f"{k.name}: x-oarbank.campaign")
+    return out
+
+
+def core_gate(schema: SettingsSchema, man, source: str = "settings schema") -> list[str]:
+    """The errors when `schema` uses a feature only core 2.9 and later honour (a `node` key, a required key, a
+    campaign override) while the manifest's `requires.core` admits an older core: [] otherwise."""
+    from .manifest import core_lower_bound
+    uses = gated_uses(schema)
+    low = core_lower_bound(man.requires.core)
+    if not uses or (low is not None and low >= CORE_GATE):
+        return []
+    floor = ".".join(map(str, CORE_GATE))
+    return [f"{source}: {', '.join(uses)} need requires.core >= {floor} (older cores ignore them); core is "
+            f"{man.requires.core!r}"]
+
+
+def _gated(schema: SettingsSchema, man, source: str) -> SettingsSchema:
+    if man is not None:
+        errors = core_gate(schema, man, source)
+        if errors:
+            raise SettingsSchemaError(errors)
+    return schema
+
+
 def load(root, man) -> SettingsSchema:
-    """The settings a module directory's manifest declares (none without `[settings].schema`)."""
+    """The settings a module directory's manifest declares (none without `[settings].schema`), refused when they need
+    a newer core than `requires.core` admits (core_gate)."""
     rel = man.settings.schema_
     if not rel:
         return SettingsSchema()
@@ -211,15 +253,16 @@ def load(root, man) -> SettingsSchema:
         doc = json.loads(path.read_text(encoding="utf-8"))
     except (ValueError, UnicodeDecodeError) as e:
         raise SettingsSchemaError([f"settings.schema {rel}: not JSON ({e})"[:300]]) from None
-    return parse(doc, f"settings.schema {rel}")
+    return _gated(parse(doc, f"settings.schema {rel}"), man, f"settings.schema {rel}")
 
 
-def load_bytes(data: bytes, rel: str) -> SettingsSchema:
+def load_bytes(data: bytes, rel: str, man=None) -> SettingsSchema:
+    """A settings schema from a bundle's bytes; with `man`, refused as load() refuses it (core_gate)."""
     try:
         doc = json.loads(data.decode("utf-8"))
     except (ValueError, UnicodeDecodeError) as e:
         raise SettingsSchemaError([f"settings.schema {rel}: not JSON ({e})"[:300]]) from None
-    return parse(doc, f"settings.schema {rel}")
+    return _gated(parse(doc, f"settings.schema {rel}"), man, f"settings.schema {rel}")
 
 
 def effective(keys: list[SettingKey], values: dict | None = None, scope: str | None = None) -> dict:

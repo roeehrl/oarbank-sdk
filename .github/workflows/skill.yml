@@ -1,0 +1,56 @@
+name: skill
+# The Oarbank agent skill (skills/oarbank), published to agents from this repository.
+#
+#   freshness  daily and on demand: the skill's routes against the LIVE llms.txt and its links. A docs page the
+#              skill names that moved or vanished opens (or updates) an issue labelled "agent skill".
+#   release    on a tag skill-v<version>: checks the tag matches the skill's version and attaches
+#              oarbank-skill.zip (for claude.ai uploads) to a GitHub release.
+on:
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+  push:
+    tags: ["skill-v*"]
+permissions:
+  contents: write
+  issues: write
+jobs:
+  freshness:
+    if: github.event_name != 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: check the skill against the live docs
+        id: check
+        run: |
+          curl -fsS https://docs.codonic.dev/oarbank/llms.txt -o llms.txt
+          python3 scripts/check_skill.py --llms llms.txt --links | tee check.txt
+      - name: report drift as an issue
+        if: failure() && steps.check.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          title="Agent skill: docs drift"
+          body=$(printf 'The daily check of `skills/oarbank` against the live docs failed:\n\n```\n%s\n```\n\nUpdate the skill (and bump its version), or restore the page. Run: %s/%s/actions/runs/%s' \
+            "$(cat check.txt)" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID")
+          gh label create "agent skill" --color 5319E7 --description "The Oarbank agent skill" 2>/dev/null || true
+          n=$(gh issue list --state open --label "agent skill" --search "in:title \"$title\"" --json number --jq '.[0].number')
+          if [ -n "$n" ]; then gh issue comment "$n" --body "$body"; else gh issue create --title "$title" --label "agent skill" --body "$body"; fi
+  release:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: the tag is the skill's version
+        run: |
+          v=$(python3 -c "import json; print(json.load(open('.claude-plugin/plugin.json'))['version'])")
+          [ "skill-v$v" = "$GITHUB_REF_NAME" ] || { echo "tag $GITHUB_REF_NAME, skill version $v"; exit 1; }
+      - name: package and release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          (cd skills && zip -qr ../oarbank-skill.zip oarbank)
+          sha256sum oarbank-skill.zip > oarbank-skill.zip.sha256
+          gh release create "$GITHUB_REF_NAME" oarbank-skill.zip oarbank-skill.zip.sha256 \
+            --title "Oarbank agent skill ${GITHUB_REF_NAME#skill-v}" --latest=false \
+            --notes "The Oarbank skill for coding agents. Install: https://docs.codonic.dev/oarbank/get-started#use-oarbank-with-an-ai-agent . For claude.ai, upload oarbank-skill.zip under Customize, Skills."

@@ -163,7 +163,13 @@ except Stopped:
     its own data-directory checkpoint on the same node only.
 - **Throttle** (`cooperative_throttle`):
   - `threads` is the maximum number of active compute threads from the next safe point on.
-  - `gpu_duty` is the maximum GPU duty fraction.
+  - `gpu_duty` is the maximum GPU duty fraction, from 0 to 1: over any second, the share of time the runner keeps the
+    GPU busy (its submitted work executing) stays at or under it. Hold it by keeping each unit of GPU work short (a
+    smaller batch, fewer ops per command buffer) and idling between units for the rest of the second; absent means
+    unlimited. The agent writes it for GPU work beside a protected GPU program: at the level a co-tenancy measurement
+    tests, and at a co-tenancy certificate's level under the node's `gpu_jobs = "certified"` (core 2.10). Only runners
+    that declare `cooperative_throttle` get it and may run beside such a program; others are paused there. The agent
+    measures each process's GPU time, and a runner that does not hold the duty will be treated as one that cannot.
   - Time spent held is left out of any speed the result reports.
 
 - **Checkpoint, then stop** (`stop: true` with `checkpoint: true`, runners that declare `checkpoint`): write a
