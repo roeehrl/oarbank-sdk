@@ -57,7 +57,7 @@ def params_check(p: mp.ParamsCheckParams, ctx) -> mp.ParamsCheckResult:
 @module.verb("job.plan")
 def job_plan(p: mp.JobPlanParams, ctx) -> mp.JobPlanResult:
     prompts, per = p.params["prompts"], int(p.params.get("per_job") or 16)
-    rest = {k: p.params[k] for k in ("max_tokens", "backend", "model") if p.params.get(k) is not None}
+    rest = {k: p.params[k] for k in ("max_tokens", "backend", "model", "work") if p.params.get(k) is not None}
     return mp.JobPlanResult(jobs=[mp.PlanItem(key_inputs={"prompts": prompts[i:i + per], **rest}, stages=["batch"])
                                   for i in range(0, len(prompts), per)])
 
@@ -113,7 +113,10 @@ def op_apply(p: mp.OpApplyParams, ctx) -> mp.OpApplyResult:
                                                                     code="llmserve/prompts")])
     plan = job_plan(mp.JobPlanParams(params=p.params), ctx)
     cid = "c_llm_" + hashlib.sha256(json.dumps(p.params, sort_keys=True).encode()).hexdigest()[:10]
-    jobs = [fx.job(job_key(MODULE_ID, COMPAT, j.key_inputs, "batch"), dict(j.key_inputs), stage="batch") for j in plan.jobs]
+    mem = p.params.get("mem_gb")                       # the model's memory, when it is not the stage's 8 GB
+    res = {"cpu": 2, "mem_gb": float(mem)} if mem else None
+    jobs = [fx.job(job_key(MODULE_ID, COMPAT, j.key_inputs, "batch"), dict(j.key_inputs), stage="batch", resources=res)
+            for j in plan.jobs]
     return mp.OpApplyResult(effects=[fx.campaign_create(cid, p.params.get("name") or "prompts"), fx.jobs_enqueue(cid, jobs)],
                             response="redirect", message=f"{len(jobs)} batch jobs queued", result={"campaign_id": cid})
 

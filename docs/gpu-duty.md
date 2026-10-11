@@ -116,7 +116,7 @@ real inference:
 3. **Queue work** with the model's name: `oarbank mod llmserve queue_prompts` with `{"prompts": [...], "model":
    "my-model.gguf", "backend": "llamacpp"}`. The runner's doctor lists the backends it can load (`attrs.backends`).
 4. **Measure before you share.** Run a co-tenancy measurement of llmserve's work against your protected program
-   (`oarbank protection ab sweep <node> --rule <id> --work dev.codonic.oarbank.llmserve`), and set the node's `gpu_jobs
+   (`oarbank protection ab sweep <node> --rule <id> --work llmserve`), and set the node's `gpu_jobs
    = "certified"` only once a level passes ([Prove co-tenancy is safe](https://docs.codonic.dev/oarbank/operate/prove-co-tenancy/)).
 
 ## Checklist
