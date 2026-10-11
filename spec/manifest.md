@@ -347,7 +347,7 @@ workload_effects = ["store.write"]
   effects are limited to `coordinator.workload_effects`, the module's own records (`store.*`, `files.*`)
   ([module-protocol.md](module-protocol.md#workload-reports)).
 - `oarbank_sdk.workload.Supervisor` wraps a third-party daemon as a workload; `oarbank-sdk conform` runs the workload
-  suite ([conformance.md](conformance.md)).
+  suite ([conformance.md](conformance.md)). The how-to: [workloads.md](../docs/workloads.md).
 
 ## Portable checkpoints
 
