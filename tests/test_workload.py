@@ -180,7 +180,7 @@ def test_a_thread_limit_restarts_the_daemon_with_its_flag(run):
     st = r.status_file()
     assert st["restarts"] == 1 and st["daemon_running"]
     assert state(first) == ""                            # the old daemon is gone
-    cmd = subprocess.run(["ps", "-o", "command=", "-p", str(st["daemon_pid"])], capture_output=True, text=True).stdout
+    cmd = subprocess.run(["ps", "-ww", "-o", "command=", "-p", str(st["daemon_pid"])], capture_output=True, text=True).stdout
     assert "--threads=3" in cmd
     assert r.status_op()["threads"] == 3
 
