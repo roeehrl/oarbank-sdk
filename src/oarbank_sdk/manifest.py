@@ -529,6 +529,11 @@ class Runner(Contract):
 class Resources(Contract):
     cpu: Annotated[float, Field(gt=0, le=256)] = Field(1.0, description="[stable] CPU cores the job uses.")
     mem_gb: Annotated[float, Field(gt=0, le=1024)] = Field(1.0, description="[stable] Peak memory (GB) the job may use; the agent budgets it before admission.")
+    network: Literal["normal", "heavy"] = Field("normal", description=(
+        "[beta] `heavy`: the job moves a lot of data over the node's internet line (uploads or downloads of its own). "
+        "Where the owner groups nodes into sites (nodes sharing one line), the core admits such jobs only within the "
+        "site's budget of network-heavy jobs, and pauses them (cooperative pause or freeze; released when neither) on "
+        "every node of the site while a protected process there is in an upload phase. Older cores ignore it."))
 
 
 class StageRequires(Contract):
