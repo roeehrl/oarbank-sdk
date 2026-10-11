@@ -18,7 +18,7 @@ stability = "experimental"
 description = "Batch inference that holds the GPU duty the agent asks for beside protected GPU work"
 
 [requires]
-core = ">=2.10,<3"
+core = ">=2.5,<3"                     # older cores never write gpu_duty: the runner runs flat out
 platforms = ["darwin-arm64", "linux-arm64", "linux-amd64", "windows-amd64"]
 module_protocol = [1]
 runner_protocol = [1]
