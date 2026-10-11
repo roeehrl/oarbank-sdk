@@ -52,6 +52,14 @@ export const PAGES = [
     order: 5,
   },
   {
+    src: 'docs/workloads.md',
+    dest: 'build/workloads.md',
+    type: 'how-to',
+    description:
+      'Ship a long-running process that is the work itself: declare a workload, wrap a third-party daemon in the supervisor shim, answer status, report into your own records and pass the conformance kit.',
+    order: 7,
+  },
+  {
     src: 'docs/compatibility.md',
     dest: 'operate/compatibility.md',
     type: 'reference',
