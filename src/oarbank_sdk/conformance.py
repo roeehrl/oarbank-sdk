@@ -2127,7 +2127,10 @@ def _read_until(conn, want: str | None, secs: float = 10) -> bytes:
     conn.settimeout(secs)
     got = b""
     deadline = time.monotonic() + secs
+    wait = getattr(conn, "wait_readable", None)            # a Windows pipe: settimeout does nothing there
     while time.monotonic() < deadline and len(got) < 65536:
+        if wait is not None and not wait(deadline - time.monotonic()):
+            break
         try:
             chunk = conn.recv(4096)
         except (TimeoutError, OSError):

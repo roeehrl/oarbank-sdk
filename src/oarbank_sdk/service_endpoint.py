@@ -33,6 +33,7 @@ import socket
 import struct
 import sys
 import threading
+import time
 import weakref
 from collections import OrderedDict
 from dataclasses import dataclass, field
@@ -150,6 +151,19 @@ class _Pipe:
 
     def settimeout(self, t):
         self.timeout = t                                         # synchronous pipes have no timeouts: the agent bounds waits
+
+    def wait_readable(self, secs: float) -> bool:
+        """Wait up to `secs` for something to read (PeekNamedPipe; a synchronous read cannot time out). True when data
+        is there or the other end is gone (the next recv returns it, or end of file)."""
+        deadline = time.monotonic() + max(0.0, secs)
+        avail = self._wt.DWORD(0)
+        while self._h is not None:
+            if not self._k.PeekNamedPipe(self._wt.HANDLE(self._h), None, 0, None, self._ct.byref(avail), None):
+                return True
+            if avail.value or time.monotonic() >= deadline:
+                return bool(avail.value)
+            time.sleep(0.01)
+        return True
 
     def setsockopt(self, *a):
         pass
