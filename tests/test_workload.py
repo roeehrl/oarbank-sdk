@@ -332,17 +332,22 @@ def test_the_workload_module_is_stdlib_only():
 
 
 def test_descendants_finds_a_grandchild_and_never_the_caller(tmp_path):
-    code = "import subprocess, sys, time; subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(30)']); time.sleep(30)"
-    p = subprocess.Popen([sys.executable, "-c", code])
+    # the child prints its child's pid (in a Windows venv, python.exe is a launcher that starts the interpreter as its
+    # own child, so the tree has more processes than the two the test starts)
+    code = ("import subprocess, sys, time; "
+            "print(subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(30)']).pid, flush=True); time.sleep(30)")
+    p = subprocess.Popen([sys.executable, "-c", code], stdout=subprocess.PIPE, text=True)
     try:
-        found = until(lambda: W.descendants(p.pid), 10)
-        assert len(found) == 1 and os.getpid() not in found and p.pid not in found
+        grandchild = int(p.stdout.readline())
+        found = until(lambda: grandchild in W.descendants(p.pid) and W.descendants(p.pid), 10)
+        assert grandchild in found and os.getpid() not in found and p.pid not in found
         assert os.getpid() not in W.descendants(os.getppid())
     finally:
         for pid in W.descendants(p.pid):
             W._terminate(pid) if os.name == "nt" else os.kill(pid, signal.SIGKILL)
         p.kill()
         p.wait()
+        p.stdout.close()
 
 
 @WINDOWS

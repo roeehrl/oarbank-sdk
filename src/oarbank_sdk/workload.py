@@ -367,6 +367,16 @@ if WINDOWS:
             _k32.CloseHandle(snap)
         return out
 
+    _k32.GetProcessTimes.argtypes = [wintypes.HANDLE] + [ctypes.POINTER(wintypes.FILETIME)] * 4
+
+    def cpu_seconds(pid: int) -> float | None:
+        """User plus kernel CPU seconds a live process has used (None when it cannot be opened)."""
+        t = [wintypes.FILETIME() for _ in range(4)]               # creation, exit, kernel, user
+        ok = _with_process(pid, _QUERY_LIMITED, lambda h: _k32.GetProcessTimes(h, *(ctypes.byref(x) for x in t)))
+        if not ok:
+            return None
+        return sum((x.dwHighDateTime << 32 | x.dwLowDateTime) / 1e7 for x in t[2:])
+
     def _with_process(pid: int, access: int, fn) -> bool:
         h = _k32.OpenProcess(access, False, pid)
         if not h:

@@ -292,13 +292,14 @@ def test_a_runner_that_does_not_hold_its_duty_is_caught(tmp_path):
     r = d / "llm_runner.py"
     # it reports the duty asked, but never idles for it
     r.write_text(r.read_text().replace('    completions, tokens = [], 0\n',
-                                       '    duty.after = lambda b: duty._report()\n    completions, tokens = [], 0\n'))
+                                       '    duty.after = lambda b: duty._report()\n    completions, tokens = [], 0\n'),
+                 encoding="utf-8", newline="\n")
     rep = conform(d)
     bad = failed(rep)
     assert "duty spec stand-in-at-0.3 (gpu_duty 0.3): its reports stay within the duty" in bad, rep.text()
     assert "duty spec stand-in-at-0.3 (gpu_duty 0.3): its measured time stays within the duty" in bad, rep.text()
     # and one that writes no reports at all cannot show it holds anything
-    r.write_text(r.read_text().replace("Duty(ctl, events=events,", "Duty(ctl, events=None,"))
+    r.write_text(r.read_text().replace("Duty(ctl, events=events,", "Duty(ctl, events=None,"), encoding="utf-8", newline="\n")
     assert "duty spec stand-in-at-0.3 (gpu_duty 0.3): reports the duty it holds" in failed(conform(d))
 
 

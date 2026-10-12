@@ -89,6 +89,7 @@ from . import platform as pf
 from . import portable
 from . import manifest as mf
 from . import module_protocol as mp
+from . import workload
 from .envelopes import ResultEnvelope, SpecEnvelope
 from .keys import job_key
 from ._base import Name, StrictContract
@@ -959,6 +960,9 @@ DUTY_SETTLE_S = 1.0       # after the nudge, the runner applies the duty at its 
 def _tree_cpu_s(pgid: int) -> float | None:
     """CPU seconds the processes of a group have used so far (None where the kit cannot read them)."""
     try:
+        if os.name == "nt":                            # the runner and its descendants (no process groups)
+            times = [workload.cpu_seconds(x) for x in [pgid, *workload.descendants(pgid)]]
+            return sum(t for t in times if t is not None)
         if sys.platform.startswith("linux"):
             tick, total = os.sysconf("SC_CLK_TCK"), 0.0
             for d in Path("/proc").iterdir():
