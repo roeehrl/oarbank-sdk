@@ -7,6 +7,7 @@ it exits non-zero on any failure.
 |---|---|
 | manifest | Strict schema, UI contract references, no unknown fields, and the portability lint for every declared platform (Windows execs are `.exe` or the python token, CRLF line endings). A resolved view per declared platform (the runner's exec, runtime, env and file subset under `[bundle.platform_files]`) and per coordinator platform (the coordinator's exec; this host's when `coordinator_platforms` is absent): every bundle path an exec names must reach that platform. The manifest and bundle lint (an unknown runner capability, an unknown `mix`, a mix coarser than `determinism_scope` while `results.value` is set, a `platform_files` glob that matches nothing) are reported as warnings |
 | bundle | The module builds into a bundle that verifies (no host imports, no symlinks) |
+| settings | The `[settings].schema` file parses as the core reads it ([manifest.md](manifest.md#settings): supported types, valid JSON Schema per key, defaults that validate, known `x-oarbank` fields, no credential, no required key with a default); its lint (a key named like a core module key, a name that looks like a credential) is reported as warnings. The fixtures' `settings` validate against the declared keys and give a value to every required key |
 | protocol | The coordinator starts as a host on this machine starts it (its variant for this platform, `OARBANK_PLATFORM`, its `env`) and completes `initialize`, which carries `host.platform` and every host capability. It advertises every capability the manifest declares and implements every required verb. `params.check`, `golden.list` and `spec.build` are pure (same input, same output). By default there is one node class per declared platform, with `platform` set. Every node class has goldens, each golden's stage compares (never determinism `none`), each golden's `platforms` and `expected_by_platform` keys are declared platforms or their OSes, `spec.build` turns each golden into exactly the stage it names, and each golden is comparable (`expected.digest`, also per platform, or `golden.compare`). Each fixture operation (`ops`) runs through `op.apply` twice: it must be pure, ask only for the effects its `[[operations]]` entry declares, and name every `datasets.create` file well (digest and size always; `origins` https URLs on public host names) |
 | images | For each `[[sandbox.container_sets]]` entry: its key is one ECDSA P-256 public key; every member the fixtures name (`images`) verifies with the reference policy (`oarbank_sdk.images`, which the agent shares), against the fixture's OCI image layout or the set's registry; and both refusals hold: an image outside the set's prefix and an unsigned image inside it (a digest not in the index, for a set with one) are refused with `image_not_approved` |
 | secrets (in the protocol and runner suites) | Each declared secret gets a random canary (or the fixtures' `secrets` value). Runner runs of a stage that lists secrets get `OARBANK_SECRETS_FILE` (0600, in the work directory) with exactly that stage's names; every other run gets none. The fake host answers `host.secrets.get` only with `secrets:read:self` (`-32002` otherwise). Any canary in a run's output, result, `failure.json`, events or files, or in any coordinator verb's answer (a built spec, a golden), fails the check: other stages and the coordinator side never see a value unless the manifest says so |
@@ -35,7 +36,7 @@ An optional `conformance.json` next to the manifest feeds the kit's fake host:
 {"datasets": {"scene:demo": {"kind": "scene", "attrs": {"scene": "atrium"}, "dir": "fixtures/demo"},
               "upload:shots": {"kind": "upload", "files": [{"path": "a.png", "digest": "<64 hex>", "size": 2048}]}},
  "settings": {"tool_datasets": {"renderer": "tool:renderer"}},
- "tools": {"renderer": "/opt/renderer/4.2"},
+ "tools": {"renderer": "/opt/renderer/4.2", "jdk": {"path": "/opt/homebrew/opt/openjdk@17", "version": "17.0.12", "arch": "aarch64"}},
  "node_classes": [{"platform": "darwin-arm64", "os_version": "26.1", "pools": {"containers": 1}, "capabilities": []},
                   {"pools": {"imagediff": 0}}],
  "params": [{"n": 3}, {"n": -1}],
@@ -59,10 +60,13 @@ it. A dataset's `files` are what `host.datasets.query` returns with `with_files`
 says so.
 
 The runner suite gives the runner what an agent would:
-- **`tools`** maps each `[sandbox].tools` id to a path on this machine. The kit resolves it (as the agent does),
-  grants it in the sandbox and lists it in `OARBANK_TOOLS_FILE`.
-- **`settings`** is written to a file passed as `OARBANK_SETTINGS_FILE` (doctor and runs), and also initializes
-  the coordinator side.
+- **`tools`** maps each `[sandbox].tools` id to an installation on this machine: a path, or `{path, version, arch}`.
+  The kit resolves the path (as the agent does), grants it in the sandbox and lists it in `OARBANK_TOOLS_FILE`; a
+  `version` the request's constraint does not accept fails the check `host tool versions`.
+- **`settings`** are the owner's values (`{key: value}`), checked against the declared keys. As on a node, runs,
+  `doctor` and services get the **node-scoped** keys in `OARBANK_SETTINGS_FILE` (a fixture value, else the key's
+  default; a key with neither is absent); the coordinator side gets **every** key the same way (`initialize`,
+  `host.settings.get`).
 - **`secrets`** (optional `{name: value}`) replaces the random canaries; the kit delivers each to the stages that list
   it, as an agent does.
 - **`images`** (`{"<set name>": {"layout": "fixtures/images", "members": ["ghcr.io/org/tasks/t1@sha256:…"]}}`) names

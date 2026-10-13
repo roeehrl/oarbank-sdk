@@ -13,7 +13,7 @@ stability = "stable"
 description = "Sums integers; the reference module for the conformance kit"
 
 [requires]
-core = ">=2.1,<3"
+core = ">=2.9,<3"
 platforms = ["darwin-arm64", "darwin-amd64", "linux-arm64", "linux-amd64", "windows-arm64", "windows-amd64"]
 module_protocol = [1]
 runner_protocol = [1]
@@ -38,6 +38,9 @@ capabilities = ["cancellable", "deterministic_output", "freeze_ok"]
 name = "run"
 timeout_s = 60
 requires.resources = { cpu = 1, mem_gb = 0.1 }
+
+[settings]
+schema = "schemas/settings.schema.json"
 
 [results]
 schema = "schemas/result.schema.json"

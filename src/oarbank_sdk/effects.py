@@ -82,8 +82,11 @@ def placement(mix: str, unit: str | None = None, pin: str | None = None, bind: s
 
 
 def campaign_create(campaign_id: str, name: str, priority: int = 0, weight: float = 1, labels: dict | None = None,
-                    placement: dict | None = None) -> mp.Effect:
-    """A running campaign owned by the module. `placement` (from `placement()`) needs the placement.v1 host capability."""
+                    placement: dict | None = None, settings: dict | None = None) -> mp.Effect:
+    """A running campaign owned by the module. `placement` (from `placement()`) needs the placement.v1 host capability.
+    `settings` (host capability campaign_settings.v1) overrides settings while the campaign runs: {key: value}, where a
+    key is one of the module's own settings declared `"x-oarbank": {"campaign": true}` or a core key a campaign may
+    override (replica_rate, jobs, run_on_battery, user_present_slots: those may only tighten)."""
     if not CAMPAIGN_ID.fullmatch(campaign_id):
         raise ValueError(f"campaign id {campaign_id!r}: a lowercase letter, then 3-40 of [a-z0-9_]")
     args: dict[str, Any] = {"campaign_id": campaign_id, "name": name, "priority": priority, "weight": weight}
@@ -91,7 +94,16 @@ def campaign_create(campaign_id: str, name: str, priority: int = 0, weight: floa
         args["labels"] = labels
     if placement is not None:
         args["placement"] = placement
+    if settings is not None:
+        args["settings"] = dict(settings)
     return effect("campaigns.create", **args)
+
+
+def campaign_settings(campaign_id: str, settings: dict) -> mp.Effect:
+    """Change a campaign's settings overrides (campaigns.update `settings`, host capability campaign_settings.v1):
+    {key: value}, `None` resets a key to what the campaign would inherit. Refused whole (422 `bad_settings`) when a key
+    is not campaign-overridable, a value is invalid, the owner locked it, or it would loosen a safety key."""
+    return effect("campaigns.update", campaign_id=campaign_id, settings=dict(settings))
 
 
 def job(job_key: str, spec: dict, *, stage: str | None = None, group: str | None = None, platforms: list[str] | None = None,

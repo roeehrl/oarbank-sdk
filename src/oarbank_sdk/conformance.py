@@ -7,6 +7,8 @@ Suites:
 - **manifest**: strict schema, UI contract references, no unknown fields, the lint warnings, and a resolved view per
   declared platform (runner exec, runtime, env and file subset) and per coordinator platform (coordinator exec);
 - **bundle**: the module builds into a bundle (no core imports, no symlinks) that verifies;
+- **settings**: the `[settings].schema` file parses as the core reads it, and the fixtures' settings validate against it
+  (runners get the node-scoped keys, the coordinator side every key, each with its default when unset);
 - **protocol**: the coordinator starts and completes `initialize`; it advertises every capability the
   manifest declares and every required verb; verbs are pure (the same input twice gives the same output);
   `golden.list` works for each node class (by default one per declared platform, with `platform` set), its goldens'
@@ -243,6 +245,34 @@ def check_manifest(root: Path, r: Report):
     return man
 
 
+NODE_SETTINGS = "_node_settings"
+
+
+def check_settings(root: Path, man, fx: dict, r: Report) -> dict:
+    """The settings suite: the declared settings parse (spec/manifest.md, "Settings") and the fixtures' `settings` are
+    values the core would accept. Returns what the fake host hands on, as the core does: every key (the fixture's value,
+    else its default) to the coordinator side, the node-scoped ones to runners and services."""
+    from . import settings as S
+    try:
+        sch = S.load(root, man)
+    except S.SettingsSchemaError as e:
+        r.add("settings", "schema", False, "; ".join(e.errors[:3]))
+        return {}
+    if not man.settings.schema_:
+        return {}
+    r.add("settings", "schema", True, f"{len(sch.keys)} settings")
+    for w in sch.warnings:
+        r.warn("settings", "lint", w)
+    given = fx.get("settings") or {}
+    bad = S.check_values(sch.keys, given)
+    r.add("settings", "fixtures validate", not bad, "; ".join(bad[:3]))
+    missing = [k.name for k in sch.keys if k.required and k.name not in given]
+    r.add("settings", "required settings have fixture values", not missing,
+          f"set {', '.join(missing)} in the fixtures' settings (the core holds the module's work until the owner sets them)"
+          if missing else "")
+    return {"settings": S.effective(sch.keys, given), NODE_SETTINGS: S.effective(sch.keys, given, "node")}
+
+
 def platform_views(root: Path, man, r: Report):
     """What each platform resolves to: per node platform the runner's exec, runtime, env and file subset, and per
     coordinator platform the coordinator's exec. Every bundle path an exec names must reach that platform."""
@@ -301,8 +331,17 @@ def portability_issues(root: Path, man) -> list[str]:
     return out
 
 
+SCRATCH: dict = {}           # the running conform()'s scratch directory: every directory and file the kit makes goes in it
+
+
+def _scratch(prefix: str) -> Path:
+    """A fresh directory for one part of a conform() run, inside the run's scratch directory, which conform() removes
+    when it ends however it ends (the processes the kit starts never own a directory: a killed runner leaves nothing)."""
+    return Path(tempfile.mkdtemp(prefix=prefix, dir=SCRATCH.get("dir")))
+
+
 def check_bundle(root: Path, r: Report):
-    with tempfile.TemporaryDirectory() as td:
+    with tempfile.TemporaryDirectory(prefix="conform-bundle-", dir=SCRATCH.get("dir")) as td:
         try:
             out, info = B.build(root, Path(td) / "m.mfb")
             B.verify(out)
@@ -513,20 +552,30 @@ def _spec_envelope(man, stage_name, payload: dict, datasets: list, mounts: dict,
 
 class Grants:
     """What the agent would give the runner beyond its directories, from the module's [sandbox] and the fixtures:
-    the tool paths (fixtures `tools`: {id: path}, resolved as the agent does), the settings file (fixtures `settings`)
+    the tool installations (fixtures `tools`: {id: path} or {id: {path, version, arch}}, resolved as the agent does and
+    checked against the request's version), the settings file (fixtures `settings`)
     and, for egress-allowlist, a real allowlist proxy (egress_proxy). A bootstrap stage's jobs get the bootstrap grants
     instead (spec/sandbox.md, "Bootstrap jobs"): the same proxy, no tools, `{}` as settings, no module data directory.
     Folders: a read folder is the fixtures' `folders` directory (relative to the module), granted read-only; a write
     folder is a fresh empty outbox."""
 
     def __init__(self, man, fx: dict, root: Path | None = None):
-        self.dir = Path(tempfile.mkdtemp(prefix="conform-grants-"))
-        want = [t.id for t in man.sandbox.tools]
+        self.dir = _scratch("conform-grants-")
+        from . import toolversion
         given = fx.get("tools") or {}
-        self.missing = [t for t in want if t not in given]
-        self.tools = {t: [os.path.realpath(given[t])] for t in want if t in given}
+        self.missing = [t.id for t in man.sandbox.tools if t.id not in given]
+        self.tools, self.unmet = {}, []
+        for t in man.sandbox.tools:
+            if t.id not in given:
+                continue
+            g = given[t.id] if isinstance(given[t.id], dict) else {"path": given[t.id]}
+            inst = {"path": os.path.realpath(g["path"]), "version": g.get("version"), "arch": g.get("arch")}
+            if t.version and inst["version"] and not toolversion.satisfies(inst["version"], t.version):
+                self.unmet.append(f"{t.id} {inst['version']} (needs {t.version})")
+            self.tools[t.id] = [inst]
         (self.dir / "tools.json").write_text(json.dumps(self.tools), encoding="utf-8")
-        (self.dir / "settings.json").write_text(json.dumps(fx.get("settings") or {}), encoding="utf-8")
+        # the node-scoped settings, as the agent writes them (fixtures `settings` over the declared defaults)
+        (self.dir / "settings.json").write_text(json.dumps(fx.get(NODE_SETTINGS, fx.get("settings")) or {}), encoding="utf-8")
         self.folders, given_f = {}, fx.get("folders") or {}
         for fg in man.sandbox.folders:
             if fg.access == "write":
@@ -566,12 +615,13 @@ class Grants:
             return S.node_policy(man.module.id, root, ws, None, sandbox=man.sandbox.for_bootstrap(), kind=kind,
                                  tool_paths=[str(self.dir / "bootstrap"), sdk], proxy_port=self.proxy.port if self.proxy else None)
         return S.node_policy(man.module.id, root, ws, data, sandbox=man.sandbox, kind=kind,
-                             tool_paths=[p for ps in self.tools.values() for p in ps] + [str(self.dir), sdk],
+                             tool_paths=[i["path"] for ps in self.tools.values() for i in ps] + [str(self.dir), sdk],
                              proxy_port=self.proxy.port if self.proxy else None, folders=self.folders)
 
     def close(self):
         if self.proxy:
             self.proxy.stop()
+        shutil.rmtree(self.dir, ignore_errors=True)
 
 
 GRANTS: dict = {}
@@ -580,7 +630,7 @@ SERVICES: dict = {}          # the endpoint services the runner suite started, b
 
 def _service_run(root: Path, man, svc, g: "Grants") -> ServiceRun:
     policy = (lambda data: g.policy(man, root, None, data, kind="service")) if SANDBOX["on"] else None
-    return ServiceRun(root, man, svc, g.env(), policy)
+    return ServiceRun(root, man, svc, g.env(), policy, scratch=SCRATCH.get("dir"))
 
 
 def _connectors(root: Path, man, stage, attempt: int) -> tuple[list, str | None]:
@@ -713,7 +763,7 @@ def _run(root: Path, man, env_doc: dict, fx: dict, locale: str = "C", stop: bool
     """One runner run. `stop`: a stop request once the runner wrote its first phase (`checkpoint`: checkpoint, then stop,
     within checkpoint_grace_s). `resume`: (a directory holding a checkpoint by name, the envelope's `resume`): the files
     go read-only under <W>/checkpoint/ and the envelope names it."""
-    ws = Path(tempfile.mkdtemp(prefix="conform-"))
+    ws = _scratch("conform-")
     if resume is not None:
         src, doc = resume
         shutil.copytree(src, ws / "checkpoint")
@@ -728,7 +778,7 @@ def _run(root: Path, man, env_doc: dict, fx: dict, locale: str = "C", stop: bool
             shutil.copytree(root / src, ws / mount)              # relative to the module (an absolute dir stays as is)
     (ws / "spec.json").write_text(json.dumps(env_doc), encoding="utf-8", newline="\n")
     (ws / "tmp").mkdir()
-    data = Path(tempfile.mkdtemp(prefix="conform-data-"))
+    data = _scratch("conform-data-")
     g = GRANTS["g"]
     nudge = _Nudge()
     run = man.runner.for_platform(portable.host_platform())
@@ -959,7 +1009,7 @@ def _take_checkpoint(o: Outcome, man, stage_name) -> tuple:
     names = [f.checkpoint_name() for f in ev.files]
     if len(set(names)) != len(names):
         return None, None, "checkpoint names are not unique"
-    out = Path(tempfile.mkdtemp(prefix="conform-ckpt-"))
+    out = _scratch("conform-ckpt-")
     entries, total = [], 0
     for f in ev.files:
         src = o.ws / f.path
@@ -1052,7 +1102,10 @@ def _check_runner(root: Path, man, fx: dict, runs: list, r: Report, g: "Grants")
     if g.missing:
         r.add("runner", "host tools and folders", None, f"fixtures `tools` and `folders` do not map {g.missing}: the runner "
               "may fail without them")
-    data = Path(tempfile.mkdtemp(prefix="conform-data-"))
+    if g.unmet:
+        r.add("runner", "host tool versions", False, f"fixtures `tools` give versions the module does not accept: "
+              f"{', '.join(g.unmet)} (a node grants only an installation that satisfies [sandbox].tools[].version)")
+    data = _scratch("conform-data-")
     (data / "tmp").mkdir()
     host = portable.host_platform()
     argv = _argv(man.runner.for_platform(host).exec, root) + ["doctor", "--json"]
@@ -1373,8 +1426,22 @@ SANDBOX = {"on": sys.platform == "darwin"}
 
 
 def conform(root, fixtures: dict | None = None, runner: bool = True, sandbox: bool | None = None) -> Report:
-    """`sandbox`: run the runner under the module sandbox (default: on macOS)."""
-    root = Path(root).resolve()
+    """`sandbox`: run the runner under the module sandbox (default: on macOS). Everything the run writes (workdirs, data
+    directories, grants, checkpoints, sandbox profiles) goes into one scratch directory, removed when it returns or
+    raises."""
+    outer = SCRATCH.get("dir")
+    with tempfile.TemporaryDirectory(prefix="conform-run-", ignore_cleanup_errors=True) as td:
+        SCRATCH["dir"] = td
+        try:
+            return _conform(Path(root).resolve(), fixtures, runner, sandbox)
+        finally:
+            if outer is None:
+                SCRATCH.pop("dir", None)
+            else:
+                SCRATCH["dir"] = outer
+
+
+def _conform(root: Path, fixtures: dict | None, runner: bool, sandbox: bool | None) -> Report:
     if sandbox is not None:
         SANDBOX["on"] = sandbox and sys.platform == "darwin"
     fx = fixtures if fixtures is not None else (json.loads((root / "conformance.json").read_text(encoding="utf-8"))
@@ -1385,7 +1452,7 @@ def conform(root, fixtures: dict | None = None, runner: bool = True, sandbox: bo
     if man is None:
         return r
     check_bundle(root, r)
-    fx = {**fx, CANARIES: canaries(man, fx)}
+    fx = {**fx, CANARIES: canaries(man, fx), **check_settings(root, man, fx, r)}
     if man.sandbox.container_sets:
         check_images(root, man, fx, r)
     runs = check_protocol(root, man, fx, r)

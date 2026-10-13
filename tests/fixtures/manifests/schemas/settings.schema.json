@@ -1,0 +1,8 @@
+{
+ "type": "object",
+ "properties": {
+  "quality": {"type": "string", "enum": ["draft", "final"], "default": "draft", "title": "Render quality",
+              "x-oarbank": {"scope": "node"}},
+  "max_frames": {"type": "integer", "minimum": 1, "title": "Most frames per job", "x-oarbank": {"required": true}}
+ }
+}

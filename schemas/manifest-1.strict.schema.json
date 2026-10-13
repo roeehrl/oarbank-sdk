@@ -2024,7 +2024,7 @@
           "$ref": "#/$defs/SandboxNet"
         },
         "tools": {
-          "description": "[beta] Host tools (registry ids) runners may read and execute.",
+          "description": "[beta] Host tools runners, services and probes may read and execute: fleet tool ids with version constraints, resolved per node to one detected installation each (OARBANK_TOOLS_FILE).",
           "items": {
             "$ref": "#/$defs/ToolGrant"
           },
@@ -2227,7 +2227,7 @@
             }
           ],
           "default": null,
-          "description": "[stable] JSON Schema (bundle path) for the module's settings; the core stores but never interprets them.",
+          "description": "[stable] JSON Schema (bundle path) whose properties are the module's settings: each one's type, default and constraints, title and description, and an `x-oarbank` annotation (scope fleet or node, required, unit, advanced, campaign). The core validates every value against it and hands node-scoped values to the module's runners and services (spec/manifest.md, \"Settings\").",
           "title": "Schema"
         }
       },
@@ -2254,7 +2254,7 @@
         },
         "bootstrap": {
           "default": false,
-          "description": "[beta] A bootstrap stage: its jobs run on nodes whose module doctor is healthy before the goldens pass, with only the module's egress allowlist (no tools, GPU, containers, module data or settings), and the host registers their output only when it is exactly datasets of [[datasets.pinned]]. A standalone stage, not the default one, with determinism none and no pools. Needs requires.core >= 2.4.",
+          "description": "[beta] A bootstrap stage: its jobs run on nodes where the module's runner starts, before the goldens pass, with only the module's egress allowlist (no tools, GPU, containers, module data or settings), and the host registers their output only when it is exactly datasets of [[datasets.pinned]]. A standalone stage, not the default one, with determinism none and no pools. Needs requires.core >= 2.4.",
           "title": "Bootstrap",
           "type": "boolean"
         },
@@ -2291,7 +2291,7 @@
             }
           ],
           "default": null,
-          "description": "[beta] This stage's determinism (absent: results.determinism). `none`: its results depend on when it ran (an ingestion job pulling a moving feed), so the host never replicates, compares, caches or golden-tests them. Only a standalone stage sets it (a chain compares as results.determinism). Needs requires.core >= 2.3.",
+          "description": "[beta] This stage's determinism (absent: results.determinism). `none`: its results depend on when it ran (an ingestion job pulling a moving feed), so the host never replicates, compares, caches or golden-tests them; when the stage also needs no capability and no pool, its jobs run before the module is certified on a node, wherever its runner starts. Only a standalone stage sets it (a chain compares as results.determinism). Needs requires.core >= 2.3.",
           "title": "Determinism"
         },
         "name": {
@@ -2522,10 +2522,22 @@
     },
     "ToolGrant": {
       "additionalProperties": false,
-      "description": "A host tool from the operator's tool registry (logical id mapped to per-OS paths by the operator). [beta]",
+      "description": "A host tool the module's node-side processes may read and execute: a tool the fleet defines (`jdk`, `python`, or\none an admin defines), detected and version-checked on each node, never a path (spec/sandbox.md, \"Host tools\").\nThe agent grants the one installation that satisfies `version` and `arch` on each node. [beta]",
       "properties": {
+        "arch": {
+          "default": "any",
+          "description": "[beta] `any`: any architecture, the node's own preferred; `native`: only the node's own (no x86_64 JDK under Rosetta on Apple silicon); `arm64` or `amd64`: exactly that one. Anything but `any` needs requires.core >= 2.9.",
+          "enum": [
+            "any",
+            "native",
+            "arm64",
+            "amd64"
+          ],
+          "title": "Arch",
+          "type": "string"
+        },
         "id": {
-          "description": "[beta] Logical tool id, e.g. `renderer4`.",
+          "description": "[beta] The fleet's tool definition id: `jdk` and `python` are built in; an admin defines others (`tools.define`).",
           "pattern": "^[a-z][a-z0-9_.-]{0,63}$",
           "title": "Id",
           "type": "string"
@@ -2539,6 +2551,19 @@
           ],
           "title": "Trust",
           "type": "string"
+        },
+        "version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "[beta] Versions the module accepts, comma-separated clauses all of which hold: `=`, `!=`, `>`, `>=`, `<`, `<=`, `~>` (Nomad's version operators), e.g. `\">=17, <22\"`. Leave it out for any version. Needs requires.core >= 2.9.",
+          "title": "Version"
         }
       },
       "required": [

@@ -230,7 +230,7 @@
   "properties": {
     "campaign": {
       "additionalProperties": true,
-      "description": "[beta] {campaign_id, name, state, priority, weight, labels, placement}; placement [beta] is {mix, unit, class, state} (class: the bound class key or null; state: unbound, soft, hard or pinned).",
+      "description": "[beta] {campaign_id, name, state, priority, weight, labels, placement, settings}; placement [beta] is {mix, unit, class, state} (class: the bound class key or null; state: unbound, soft, hard or pinned); settings [beta] (host capability campaign_settings.v1) is the module's own settings as the campaign's jobs get them: every key at fleet scope with the campaign's overrides on top.",
       "title": "Campaign",
       "type": "object"
     },

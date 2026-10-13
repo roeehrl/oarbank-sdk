@@ -95,9 +95,9 @@ Cross-field rules are in [manifest.md](manifest.md).
 | `stages` | list of Stage | required |  |
 | `stages[].name` | str | required | [stable] Stage name; unique within the manifest. |
 | `stages[].after` | str (optional) |  | [stable] Stage whose output this stage consumes (its artifacts become inputs). |
-| `stages[].determinism` | `"exact"` \| `"within_tolerance"` \| `"none"` (optional) |  | [beta] This stage's determinism (absent: results.determinism). `none`: its results depend on when it ran (an ingestion job pulling a moving feed), so the host never replicates, compares, caches or golden-tests them. Only a standalone stage sets it (a chain compares as results.determinism). Needs requires.core >= 2.3. |
+| `stages[].determinism` | `"exact"` \| `"within_tolerance"` \| `"none"` (optional) |  | [beta] This stage's determinism (absent: results.determinism). `none`: its results depend on when it ran (an ingestion job pulling a moving feed), so the host never replicates, compares, caches or golden-tests them; when the stage also needs no capability and no pool, its jobs run before the module is certified on a node, wherever its runner starts. Only a standalone stage sets it (a chain compares as results.determinism). Needs requires.core >= 2.3. |
 | `stages[].default` | bool | `false` | [beta] The default stage: what a job runs when it names no stage (the single-stage form). Only a standalone stage sets it; exactly one does when several stages are standalone. Needs requires.core >= 2.3. |
-| `stages[].bootstrap` | bool | `false` | [beta] A bootstrap stage: its jobs run on nodes whose module doctor is healthy before the goldens pass, with only the module's egress allowlist (no tools, GPU, containers, module data or settings), and the host registers their output only when it is exactly datasets of [[datasets.pinned]]. A standalone stage, not the default one, with determinism none and no pools. Needs requires.core >= 2.4. |
+| `stages[].bootstrap` | bool | `false` | [beta] A bootstrap stage: its jobs run on nodes where the module's runner starts, before the goldens pass, with only the module's egress allowlist (no tools, GPU, containers, module data or settings), and the host registers their output only when it is exactly datasets of [[datasets.pinned]]. A standalone stage, not the default one, with determinism none and no pools. Needs requires.core >= 2.4. |
 | `stages[].secrets` | list of str | `[]` | [beta] Declared [[secrets]] this stage's runner receives in OARBANK_SECRETS_FILE (no other stage, service, probe or doctor does). A job waits until each has a value for its node. Never on a bootstrap stage. Needs requires.core >= 2.5. |
 | `stages[].checkpoint` | StageCheckpoint (optional) |  | [beta] The stage keeps portable checkpoints: the latest one a job's runner wrote is uploaded, and the job's next attempt, on any node, resumes from it. Needs the runner capability `checkpoint` and requires.core >= 2.5. |
 | `stages[].checkpoint.max_mb` | int | required | [beta] The largest checkpoint (all its files) the agent uploads, MB. |
@@ -151,7 +151,7 @@ Cross-field rules are in [manifest.md](manifest.md).
 | `probes[].period_s` | float | `3600.0` |  |
 | `probes[].platforms` | list of str | `[]` | [beta] Only on these platforms (empty: every declared platform). |
 | `settings` | Settings | `"schema_=None"` |  |
-| `settings.schema` | str (optional) |  | [stable] JSON Schema (bundle path) for the module's settings; the core stores but never interprets them. |
+| `settings.schema` | str (optional) |  | [stable] JSON Schema (bundle path) whose properties are the module's settings: each one's type, default and constraints, title and description, and an `x-oarbank` annotation (scope fleet or node, required, unit, advanced, campaign). The core validates every value against it and hands node-scoped values to the module's runners and services (spec/manifest.md, "Settings"). |
 | `secrets` | list of Secret | `[]` | [beta] Write-only credentials. Needs requires.core >= 2.5. |
 | `secrets[].name` | str | required | [beta] The secret's name; unique. Stages list it in `secrets`. |
 | `secrets[].description` | str | `""` | [beta] What it is for, shown where the owner sets it. |
@@ -248,8 +248,10 @@ Cross-field rules are in [manifest.md](manifest.md).
 | `sandbox.net` | SandboxNet | `"mode='none' allow=[]"` |  |
 | `sandbox.net.mode` | str | `"none"` | [beta] Open set. `none`; `egress-allowlist`: only the `allow` hosts, through the agent's local proxy (the SDK sets HTTPS_PROXY/ALL_PROXY); `egress-any`: any public address, a separately approved full-trust grant. Never loopback or link-local, never listening. |
 | `sandbox.net.allow` | list of str | `[]` | [beta] `host[:port]` entries (a leading `*.` matches subdomains); never IP addresses or CIDRs. Required with egress-allowlist; port defaults to 443. |
-| `sandbox.tools` | list of ToolGrant | `[]` | [beta] Host tools (registry ids) runners may read and execute. |
-| `sandbox.tools[].id` | str | required | [beta] Logical tool id, e.g. `renderer4`. |
+| `sandbox.tools` | list of ToolGrant | `[]` | [beta] Host tools runners, services and probes may read and execute: fleet tool ids with version constraints, resolved per node to one detected installation each (OARBANK_TOOLS_FILE). |
+| `sandbox.tools[].id` | str | required | [beta] The fleet's tool definition id: `jdk` and `python` are built in; an admin defines others (`tools.define`). |
+| `sandbox.tools[].version` | str (optional) |  | [beta] Versions the module accepts, comma-separated clauses all of which hold: `=`, `!=`, `>`, `>=`, `<`, `<=`, `~>` (Nomad's version operators), e.g. `">=17, <22"`. Leave it out for any version. Needs requires.core >= 2.9. |
+| `sandbox.tools[].arch` | `"any"` \| `"native"` \| `"arm64"` \| `"amd64"` | `"any"` | [beta] `any`: any architecture, the node's own preferred; `native`: only the node's own (no x86_64 JDK under Rosetta on Apple silicon); `arm64` or `amd64`: exactly that one. Anything but `any` needs requires.core >= 2.9. |
 | `sandbox.tools[].trust` | `"read"` \| `"code-exec"` | `"read"` | [beta] `code-exec`: the tool runs arbitrary code (a JVM, an interpreter, a shell); the approval UI flags it. On Windows any readable binary is executable. |
 | `sandbox.devices` | SandboxDevices | `"gpu='none'"` |  |
 | `sandbox.devices.gpu` | str | `"none"` | [beta] Open set: `none` or `compute` (GPU compute through the platform's APIs, no display server; weakens isolation, so it is flagged at approval). |

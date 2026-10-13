@@ -5,10 +5,12 @@
       "properties": {
         "detail": {
           "default": "",
+          "description": "[stable] Why, in full: the agent and the coordinator keep it as it is and show it whole. A runner that shortens a long one keeps its end, where the cause of a failed import or command usually is.",
           "title": "Detail",
           "type": "string"
         },
         "name": {
+          "description": "[stable] The check's name. A check named after a capability (a probe's name, or a capability a service provides) proves that capability for this module: when it fails, the node lacks the capability for the module's stages whatever the probe or service says, and only stages that require it stop running there.",
           "title": "Name",
           "type": "string"
         },
@@ -68,7 +70,7 @@
       "type": "array"
     },
     "health": {
-      "description": "[stable] undetected = cannot run here, don't offer, don't alert.",
+      "description": "[stable] The module as a whole: only a healthy module is certified (goldens), and so runs the stages that need certification. unhealthy alerts; undetected (cannot do the module's work here) does not. Either way the agent still offers the module, and stages that need no certification (bootstrap stages, and stages that compare nothing and need no capability or pool) run there unless a failed check proves a capability they require.",
       "enum": [
         "healthy",
         "unhealthy",

@@ -270,7 +270,7 @@ def node_policy(module: str, bundle, work, data, python: str | None = None, sand
                 folders: dict | None = None) -> Policy:
     """A node-side process (runner, doctor, service, probe): its bundle and interpreter read-only, the job's work dir
     and the module's data dir read-write, plus the approved grants of `sandbox` (a manifest SandboxSection).
-    `tool_paths`: the host's paths for the approved tool ids (the operator's tool registry resolves them per OS).
+    `tool_paths`: the canonical paths of the tool installations the node resolved for the approved tool requests.
     `folders`: {id: {path, access}} for a runner's granted folders (only runners get them)."""
     granted = folders if kind == "runner" else {}
     ro = [str(bundle), *interpreter_roots(python), *(tool_paths or [])]

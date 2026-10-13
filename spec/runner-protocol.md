@@ -40,11 +40,11 @@ they are discarded with it: [platforms.md](platforms.md#environment-per-os), "Wh
 | `OARBANK_PROTOCOL` | stable | The runner protocol major the agent chose. |
 | `OARBANK_POOL_<NAME>_TOKENS` | stable | For each pool the node offers: its token count (upper-case name). |
 | `OARBANK_DISABLED_SERVICES` | beta | Comma-separated names of this module's services the owner disabled on the node. |
-| `OARBANK_SETTINGS_FILE` | stable | A UTF-8 JSON file with the module's settings for this node. It is a file because environment size limits differ per OS. |
+| `OARBANK_SETTINGS_FILE` | stable | A UTF-8 JSON object with the module's node-scoped settings for this node: each key the settings schema declares with `"x-oarbank": {"scope": "node"}`, the owner's value for this node (resolved over fleet, node group and node) or else its default; a key with neither is absent ([manifest.md](manifest.md#settings)). A job of a campaign that overrides a key declared `"x-oarbank": {"campaign": true}` gets the campaign's value for it. It is a file because environment size limits differ per OS. |
 | `OARBANK_SECRETS_FILE` | beta | Set only when the job's stage lists secrets (`stages[].secrets`, core 2.5): a UTF-8 JSON file `{"<name>": "<value>"}` with those secrets' values for this node, owner-only, inside the work directory and deleted with it. `oarbank_sdk.secrets.get(name)` reads it. Never log a value or write it into the result or artifacts. |
 | `OARBANK_BROKER` | beta | The job's container broker endpoint, `unix:/path` or `npipe://./pipe/<name>` ([sandbox.md](sandbox.md#containers-the-agents-broker)). Set only for a module approved for containers. |
 | `OARBANK_SERVICE_<NAME>` | beta | The job's connector to its module's endpoint service `<name>` (upper-cased), `fd:<n>` or `handle:<n>`, for each endpoint service providing a pool its stage reserves ([service-protocol.md](service-protocol.md#endpoints)). Use `oarbank_sdk.service_endpoint`. |
-| `OARBANK_TOOLS_FILE` | stable | A UTF-8 JSON file `{"<tool id>": ["<canonical path>", ...]}` for the module's approved `[sandbox].tools` on this node: exactly the paths the sandbox grants (resolved; conventional symlinks such as `/opt/homebrew/opt/...` are not readable inside the sandbox). `oarbank_sdk.tools.path(id)` reads it. |
+| `OARBANK_TOOLS_FILE` | stable | A UTF-8 JSON file `{"<tool id>": [{"path": "<canonical path>", "version": "17.0.12", "arch": "aarch64"}]}` for the module's approved `[sandbox].tools` resolved on this node: the one detected installation per tool that satisfies the request ([sandbox.md](sandbox.md#host-tools)), exactly the paths the sandbox grants (canonical; conventional symlinks such as `/opt/homebrew/opt/...` are not readable inside the sandbox). `oarbank_sdk.tools.path(id)` and `tools.version(id)` read it. |
 | `OARBANK_FOLDERS_FILE` | beta | A UTF-8 JSON file `{"<folder id>": {"path": "<canonical path>", "access": "read" \| "write"}}` for the runner's granted `[sandbox].folders` on this node (an empty object when there are none): exactly the paths the sandbox grants. `oarbank_sdk.folders.path(id, access)` reads it. |
 | `HTTPS_PROXY`, `HTTP_PROXY`, `ALL_PROXY` | stable | Set for `egress-allowlist`: the agent's local proxy, the only network route ([sandbox.md](sandbox.md#sandbox-grants)). |
 | `OARBANK_CONTROL_EVENT` | stable | Windows: the handle, in decimal, of the auto-reset event the runner inherits and the agent sets after every change to `control.json` ([Control](#control)). |
@@ -258,9 +258,24 @@ selects nothing yet.
 
 `doctor --json` prints a `DoctorOutput` to stdout and exits 0, even when unhealthy. It reports:
 - `runner_protocol.supported`: the protocol majors the runner speaks;
-- `health`: `healthy`, `unhealthy` (should work here but something is broken; this alerts) or `undetected` (this node
-  cannot run it; no alert, never offered);
-- `capabilities`, `attrs` (include `platform`) and per-check details.
+- `health`, the verdict on the module as a whole: `healthy`, `unhealthy` (should work here but something is broken;
+  this alerts) or `undetected` (this node cannot do the module's work; no alert). Only a `healthy` module is certified
+  on the node (its goldens run), so only then do the stages that need certification run there;
+- `capabilities`, `attrs` (include `platform`) and `checks`, each `{name, ok, detail}`.
+
+A doctor that prints a `DoctorOutput` shows that the module's runner starts on the node, so the agent offers the module
+whatever its health, and the stages that need no certification (bootstrap stages, and stages that compare nothing and
+need no capability or pool: [manifest.md](manifest.md#stages-that-run-before-certification)) run there. Checks decide
+which: **a check named after a capability** (a probe's name, or a capability one of the module's services provides)
+proves that capability for the module, and when it fails the node lacks it for the module's stages, whatever the probe
+or service reports; a stage requiring it waits, any other stage keeps running. Name a check after the capability it
+proves (`java17` for the JDK a `java17` probe also finds), and give checks that no stage depends on other names.
+`runner_protocol.disproved_capabilities(checks)` is the reference. A doctor that crashes, hangs or prints no
+`DoctorOutput` gets the module offered nowhere on that node.
+
+`detail` says why, in full: the agent and the coordinator keep it as it is and show it whole (`oarbank node show`, the
+console's node page). If a runner shortens a long one, it keeps the end, where the cause of a failed import or command
+usually is.
 
 The agent runs doctor at install, after upgrades, when capabilities change, and on a slow timer. It must finish within
 60 s.

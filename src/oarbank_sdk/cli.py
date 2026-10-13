@@ -73,6 +73,14 @@ def cmd_check(path: str) -> int:
         for e in ui_errors:
             print(f"  {e}")
         return 1
+    from . import settings as S
+    try:
+        settings_warnings = S.load(Path(path).parent, man).warnings
+    except S.SettingsSchemaError as e:
+        print(f"{path}: INVALID (settings schema)")
+        for x in e.errors:
+            print(f"  {x}")
+        return 1
     from . import images
     key_errors = []
     for cs in man.sandbox.container_sets:
@@ -91,7 +99,7 @@ def cmd_check(path: str) -> int:
         for x in extra:
             print(f"  {x}")
         return 1
-    for w in m.lint(man):
+    for w in [*m.lint(man), *settings_warnings]:
         print(f"{path}: warning: {w}")
     if man.requires.experimental:
         print(f"{path}: ok (experimental opt-ins {man.requires.experimental} block the verified badge)")

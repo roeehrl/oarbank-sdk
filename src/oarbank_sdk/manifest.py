@@ -37,6 +37,8 @@ SDK13_KEYS_CORE = (2, 3)          # stage determinism and default, structured ti
 BOOTSTRAP_KEYS_CORE = (2, 4)      # bootstrap stages and the pinned dataset table (SDK 1.4)
 SDK15_KEYS_CORE = (2, 5)          # SDK 1.5: secrets, signed container image sets, the container GPU pool, service
                                   # endpoints and GPU use, folder grants, portable checkpoints, artifact_ref
+SDK16_KEYS_CORE = (2, 9)          # SDK 1.6: host tool version constraints and arch; the settings annotations that change
+                                  # what a core does (oarbank_sdk.settings.CORE_GATED: node scope, required, campaign)
 KNOWN_FEATURES = ("placement",)          # requires.features this SDK understands (must-understand)
 ENV_NAME = r"^[A-Z][A-Z0-9_]*$"
 # Variables the agent or the host sets itself (spec/runner-protocol.md, spec/platforms.md "Environment per OS"); a
@@ -295,11 +297,30 @@ class SandboxNet(Contract):
 
 
 class ToolGrant(Contract):
-    """A host tool from the operator's tool registry (logical id mapped to per-OS paths by the operator). [beta]"""
-    id: Annotated[str, Field(pattern=r"^[a-z][a-z0-9_.-]{0,63}$")] = Field(description="[beta] Logical tool id, e.g. `renderer4`.")
+    """A host tool the module's node-side processes may read and execute: a tool the fleet defines (`jdk`, `python`, or
+    one an admin defines), detected and version-checked on each node, never a path (spec/sandbox.md, "Host tools").
+    The agent grants the one installation that satisfies `version` and `arch` on each node. [beta]"""
+    id: Annotated[str, Field(pattern=r"^[a-z][a-z0-9_.-]{0,63}$")] = Field(description=(
+        "[beta] The fleet's tool definition id: `jdk` and `python` are built in; an admin defines others "
+        "(`tools.define`)."))
+    version: str | None = Field(None, description=(
+        "[beta] Versions the module accepts, comma-separated clauses all of which hold: `=`, `!=`, `>`, `>=`, `<`, "
+        "`<=`, `~>` (Nomad's version operators), e.g. `\">=17, <22\"`. Leave it out for any version. Needs "
+        "requires.core >= 2.9."))
+    arch: Literal["any", "native", "arm64", "amd64"] = Field("any", description=(
+        "[beta] `any`: any architecture, the node's own preferred; `native`: only the node's own (no x86_64 JDK under "
+        "Rosetta on Apple silicon); `arm64` or `amd64`: exactly that one. Anything but `any` needs requires.core >= 2.9."))
     trust: Literal["read", "code-exec"] = Field("read", description=(
         "[beta] `code-exec`: the tool runs arbitrary code (a JVM, an interpreter, a shell); the approval UI flags it. On "
         "Windows any readable binary is executable."))
+
+    @field_validator("version")
+    @classmethod
+    def _version(cls, v):
+        if v is None:
+            return v
+        from . import toolversion
+        return toolversion.describe(v)
 
 
 FOLDER_ID = r"^[a-z][a-z0-9_.-]{0,63}$"
@@ -326,7 +347,9 @@ class SandboxSection(Contract):
     that version can run. The coordinator side never gets these grants. [beta]"""
     contract: Literal[1] = Field(1, description="[beta] Sandbox contract version.")
     net: SandboxNet = Field(default_factory=SandboxNet)
-    tools: list[ToolGrant] = Field(default_factory=list, description="[beta] Host tools (registry ids) runners may read and execute.")
+    tools: list[ToolGrant] = Field(default_factory=list, description=(
+        "[beta] Host tools runners, services and probes may read and execute: fleet tool ids with version constraints, "
+        "resolved per node to one detected installation each (OARBANK_TOOLS_FILE)."))
     devices: SandboxDevices = Field(default_factory=SandboxDevices)
     containers: list[ContainerImage] = Field(default_factory=list, description=(
         "[beta] Images the agent's container broker may run for the module's jobs (a stage that uses them reserves the "
@@ -340,6 +363,15 @@ class SandboxSection(Contract):
     folders: list[FolderGrant] = Field(default_factory=list, description=(
         "[beta] Folders on the node (registry ids the operator maps to a path per node) the runner may read, or write into "
         "as an outbox. Needs requires.core >= 2.5."))
+
+    @field_validator("tools")
+    @classmethod
+    def _unique_tools(cls, v):
+        ids = [t.id for t in v]
+        dup = sorted({i for i in ids if ids.count(i) > 1})
+        if dup:
+            raise ValueError(f"sandbox.tools lists {dup} more than once")
+        return v
 
     @field_validator("folders")
     @classmethod
@@ -548,13 +580,15 @@ class Stage(Contract):
     after: Name | None = Field(None, description="[stable] Stage whose output this stage consumes (its artifacts become inputs).")
     determinism: Determinism | None = Field(None, description=(
         "[beta] This stage's determinism (absent: results.determinism). `none`: its results depend on when it ran (an "
-        "ingestion job pulling a moving feed), so the host never replicates, compares, caches or golden-tests them. Only a "
-        "standalone stage sets it (a chain compares as results.determinism). Needs requires.core >= 2.3."))
+        "ingestion job pulling a moving feed), so the host never replicates, compares, caches or golden-tests them; when "
+        "the stage also needs no capability and no pool, its jobs run before the module is certified on a node, wherever "
+        "its runner starts. Only a standalone stage sets it (a chain compares as results.determinism). Needs "
+        "requires.core >= 2.3."))
     default: bool = Field(False, description=(
         "[beta] The default stage: what a job runs when it names no stage (the single-stage form). Only a standalone stage "
         "sets it; exactly one does when several stages are standalone. Needs requires.core >= 2.3."))
     bootstrap: bool = Field(False, description=(
-        "[beta] A bootstrap stage: its jobs run on nodes whose module doctor is healthy before the goldens pass, with only "
+        "[beta] A bootstrap stage: its jobs run on nodes where the module's runner starts, before the goldens pass, with only "
         "the module's egress allowlist (no tools, GPU, containers, module data or settings), and the host registers their "
         "output only when it is exactly datasets of [[datasets.pinned]]. A standalone stage, not the default one, with "
         "determinism none and no pools. Needs requires.core >= 2.4."))
@@ -644,7 +678,7 @@ class Secret(Contract):
 
 
 class Settings(Contract):
-    schema_: str | None = Field(None, alias="schema", description="[stable] JSON Schema (bundle path) for the module's settings; the core stores but never interprets them.")
+    schema_: str | None = Field(None, alias="schema", description="[stable] JSON Schema (bundle path) whose properties are the module's settings: each one's type, default and constraints, title and description, and an `x-oarbank` annotation (scope fleet or node, required, unit, advanced, campaign). The core validates every value against it and hands node-scoped values to the module's runners and services (spec/manifest.md, \"Settings\").")
 
 
 FieldType = Literal["number", "integer", "string", "boolean"]
@@ -854,8 +888,12 @@ class Manifest(Contract):
             ("runner capability checkpoint", "checkpoint" in self.runner.capabilities),
             ("ui.views.columns[].type artifact_ref", any(c.type == "artifact_ref" for v in self.ui.views.values() for c in v.columns)),
         ]
+        sdk16 = [
+            ("sandbox.tools[].version", any(t.version for t in self.sandbox.tools)),
+            ("sandbox.tools[].arch", any(t.arch != "any" for t in self.sandbox.tools)),
+        ]
         return (out + [(k, SDK13_KEYS_CORE) for k, on in sdk13 if on] + [(k, BOOTSTRAP_KEYS_CORE) for k, on in sdk14 if on]
-                + [(k, SDK15_KEYS_CORE) for k, on in sdk15 if on])
+                + [(k, SDK15_KEYS_CORE) for k, on in sdk15 if on] + [(k, SDK16_KEYS_CORE) for k, on in sdk16 if on])
 
     # ------------------------------------------------------------------------ stages
 
@@ -886,6 +924,24 @@ class Manifest(Contract):
     def compares(self, stage: str | None) -> bool:
         """Whether the host compares this stage's results (replicas, disputes, the result cache, goldens)."""
         return self.determinism_of(stage) != "none"
+
+    def certification_exempt(self, stage: str | None) -> bool:
+        """Whether jobs of this stage run on a node before the module is certified there (spec/manifest.md, "Stages that
+        run before certification"; None: the default stage): a bootstrap stage, or a stage that compares nothing
+        (effective determinism `none`) and needs no node capability and no pool. Such jobs run on any node where the
+        module's runner starts (its doctor ran), unless a failed doctor check proves a capability the stage requires."""
+        st = self.stage(stage or self.default_stage() or "")
+        if st is None:
+            return False
+        if st.bootstrap:
+            return True
+        r = st.requires
+        return not self.compares(st.name) and not (r.capabilities or r.pools or r.needs_pools)
+
+    def capability_names(self) -> set[str]:
+        """Every node capability the module names: its probes and what its services provide (rule 2: a stage requires
+        only these). A doctor check of the same name proves the capability (runner_protocol.DoctorCheck)."""
+        return {c for svc in self.services for c in svc.provides.capabilities} | {p.name for p in self.probes}
 
     def secrets_of(self, stage: str | None) -> list[str]:
         """The secrets a stage's runner receives (None: the default stage)."""
