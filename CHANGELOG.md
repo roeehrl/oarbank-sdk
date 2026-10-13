@@ -4,6 +4,23 @@ What changed in each oarbank-sdk release, for module authors. The core's changel
 [roeehrl/oarbank](https://github.com/roeehrl/oarbank/blob/main/CHANGELOG.md). Contract rules:
 [spec/versioning.md](spec/versioning.md).
 
+## Unreleased
+
+### Changed
+
+- **A job that can never succeed is not retried** ([spec/runner-protocol.md](spec/runner-protocol.md#exit-codes)).
+  The spec now says how `failure.json`'s `fault` and `retryable` combine. `fault: "job"` (or exit 2), or
+  `retryable: false`, ends the job `failed` at once: it is never retried on other nodes and never quarantined.
+  `fault: "job"` with `retryable: true` spends one of the stage's attempts. `retryable: true` with no fault is
+  transient. From core 2.10.4 the coordinator acts on this. Before, a job fault spent the stage's retry and was then
+  quarantined. A golden job that ends this way fails the module's certification on that node at once.
+
+### New
+
+- **Why a job failed** ([spec/module-protocol.md](spec/module-protocol.md#why-a-job-failed)). From core 2.10.4, failed
+  and quarantined jobs in `campaign.tick` (`CampaignJob.failure`) and `host.jobs.query` carry `failure`:
+  `{reason, code, detail, fault, retryable, final, ...}`, the runner's reason code and detail included.
+
 ## 1.7.0 (2026-10-12)
 
 For Oarbank core 2.10.3. Everything is additive within manifest 1 and module protocol 1; workload protocol 1 is new.

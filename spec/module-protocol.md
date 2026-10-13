@@ -67,6 +67,21 @@ advertises it with `Module(..., features=(mp.CAP_TICK_RESULTS,))`). Then:
   One tick carries at most 8 MiB of results (`mp.TICK_RESULTS_BUDGET`), newest done jobs first; a done job left out
   has `result_omitted: true`. Keep what you have consumed in your store, and let results you no longer need age out.
 
+### Why a job failed
+
+[beta] In `campaign.tick` and `host.jobs.query`, a failed or quarantined job carries `failure` (core 2.10.4). An older
+core sends only the state. `failure` is `{reason, code, detail, fault, retryable, final, attempt_id, node_id, at}`:
+
+- `reason` is the attempt's end reason (`exit_nonzero`, `bad_input`, `oom`, ...).
+- `code` is the runner's own `failure.json` reason, such as `<module-short>/<code>`.
+- `detail` is its detail, at most 512 characters here. The job's views show it whole.
+- `fault` and `retryable` are what the runner declared.
+- `final` is true when the runner declared that the job can never succeed (`fault: "job"`, or `retryable: false`).
+  Such a job ends `failed` at once and is never retried ([runner-protocol.md](runner-protocol.md#exit-codes)).
+
+A score job whose call failed carries the call's failure. Use `failure` to react in the module, for example by not
+enqueueing the same configuration again or by marking the trial as rejected. `jobs.retry` clears it.
+
 ### Workload reports
 
 A workload with `reports = true` ([manifest.md](manifest.md#workloads)) appends `report` events to its events file
@@ -104,7 +119,7 @@ A module can make requests back to the host while it is handling a verb, if the 
 | `host.files.list {prefix, limit}` | `files:read:self` | This module's files under a path prefix, sorted: `path`, `digest`, `size`, `updated_at`. |
 | `host.files.stat {path}` | `files:read:self` | One file's entry, or `exists: false`. |
 | `host.files.read {path, offset, length}` | `files:read:self` | Up to 1 MiB of a file as `content_b64`, with the file's `size`, `digest` and `eof`. `Host.files_read` reads a whole file. |
-| `host.jobs.query {campaign_id, states?, limit}` | `jobs:read:self` | This module's jobs in one of its campaigns: `job_id`, `job_key`, `state`, `kind`, `stage`, `dataset_id`, `labels`, `group`, `target_node`, and for done jobs the canonical result's `value`, `digest`, `fields`, `node_id` and `platform`. |
+| `host.jobs.query {campaign_id, states?, limit}` | `jobs:read:self` | This module's jobs in one of its campaigns: `job_id`, `job_key`, `state`, `kind`, `stage`, `dataset_id`, `labels`, `group`, `target_node`, and for done jobs the canonical result's `value`, `digest`, `fields`, `node_id` and `platform`. [beta] For failed or quarantined jobs (core 2.10.4), `failure`: why the job ended, as in `campaign.tick` (see "Why a job failed"). |
 
 ## Effects
 

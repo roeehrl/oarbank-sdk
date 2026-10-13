@@ -73,7 +73,7 @@ names is a PortablePath, `/`-separated ([platforms.md](platforms.md#portable-pat
 | `control.json` | agent | The control document, always present ([Control](#control)). |
 | `.grants/` | agent | The files the environment names (tools, settings, and for a stage that lists secrets `secrets.json`, mode 0600). Not output. |
 | `result.json` | runner | The result envelope, written atomically (a temporary file, then rename) before exiting 0. |
-| `failure.json` | runner | `{reason, detail, fault?, retryable?}`, written atomically before a non-zero exit. `reason` is one of the agent's end reasons (`bad_input`, `mode_mismatch`, `oom`, `doctor`, `no_metrics`), which the coordinator maps to its reason codes, or the module's own `<module-short>/<code>`, which ends the attempt as `exit_nonzero` with the code in its detail. |
+| `failure.json` | runner | `{reason, detail, fault?, retryable?}`, written atomically before a non-zero exit (`fault` and `retryable`: [Exit codes](#exit-codes)). `reason` is one of the agent's end reasons (`bad_input`, `mode_mismatch`, `oom`, `doctor`, `no_metrics`), which the coordinator maps to its reason codes, or the module's own `<module-short>/<code>`, which ends the attempt as `exit_nonzero` with the code in its detail. |
 | `events.ndjson` | runner | One UTF-8 event per line (LF; CR tolerated): log, progress, metric, checkpoint or phase. The agent reads complete lines only. |
 | `phase` | runner | Optional: one line naming the current phase, replaced atomically. |
 
@@ -106,6 +106,26 @@ pinned datasets fails with `pin_mismatch`, a job fault that never counts against
 exits 2 everywhere. Without the file, any non-zero exit is "other". `failure.fault` (`job`, `host`, `transient`)
 overrides the code, and so does `retryable`. The agent records separately whether it terminated the job itself or the
 job crashed (a POSIX signal, or a Windows exception code).
+
+`fault` says who is at fault; `retryable` says whether another attempt can help. Together (core 2.10.4):
+
+| `fault` | `retryable` | The job | The node |
+|---|---|---|---|
+| `transient`, or none | `true` | Released and retried; nothing is spent. | Not charged. |
+| `transient` | unset | Released and retried; nothing is spent. | Not charged. |
+| `job` (or exit 2) | unset or `false` | **Ends `failed` at once**: never retried elsewhere, never quarantined. | Not charged. |
+| `job` | `true` | Spends one of its stage's `retry.max_attempts`; quarantined once they are spent. | Not charged. |
+| `host` (or exit 3) | unset or `true` | Sent to another node; its retries are untouched. | Re-doctored. |
+| `host` | `false` | **Ends `failed` at once.** | Re-doctored. |
+| none | `false` | **Ends `failed` at once.** | Not charged. |
+| none | unset | Spends a retry; quarantined once they are spent. | The breaker rules. |
+
+So write `fault: "job"` (or exit 2) only for a failure that is the same on every node, such as a configuration error,
+an input the module rejects, or a parameter combination the tool refuses. A failure that might pass on a retry is
+`fault: "job"` with `retryable: true`, or no `failure.json` at all. The coordinator keeps the failure's `reason`
+and `detail` on the job. The job's views show them, and so do a module's `campaign.tick` and `host.jobs.query` rows,
+as `failure` ([module-protocol.md](module-protocol.md)). A **golden** job that ends `failed` this way fails the
+module's certification on that node at once. A module cannot skip its goldens with it.
 
 ## Control
 

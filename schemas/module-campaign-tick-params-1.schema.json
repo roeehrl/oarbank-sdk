@@ -39,6 +39,20 @@
           "default": null,
           "title": "Done At"
         },
+        "failure": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "[beta] For a failed or quarantined job (core 2.10.4): why it ended, {reason, code, detail, fault, retryable, final, attempt_id, node_id, at}. reason is the attempt's end reason; code the runner's failure.json reason (the module's own `<module-short>/<code>`); detail its detail (at most 512 characters here); final true when the runner declared the job can never succeed and it ended failed without retries.",
+          "title": "Failure"
+        },
         "fields": {
           "additionalProperties": true,
           "title": "Fields",
