@@ -139,7 +139,7 @@ app's **Open web app** keeps using localhost.
   oarbank settings set console_listen localhost,tailscale
   ```
 
-  Then open `http://100.64.0.1:7400` (this machine's Tailscale address) from another device of your tailnet. `all`
+  Then open `http://<this machine's Tailscale address>:7400` from another device of your tailnet. `all`
   listens on every interface, so anyone who can reach the machine reaches the sign-in page; saving it asks you to type
   `console_listen`. Prefer `tailscale`.
 - **Console over https (Tailscale)** (`console_https`): passkeys need a host name in a secure context, so they never
