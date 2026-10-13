@@ -3,7 +3,7 @@ title: Delegated processes
 description: Let host protection pause and lower a background program of your own, started outside Oarbank, for the programs you protect, by naming it with a code signature or a trusted exact path in a delegate rule.
 type: how-to
 platforms: [macos, linux, windows]
-core: '2.10.2'
+core: '2.10.3'
 sidebar:
   order: 10
 ---
@@ -11,7 +11,7 @@ sidebar:
 Host protection only ever acts on processes the node's agent started itself. Some of the background load on a machine
 is yours, though: a program you run that is fine to slow down whenever a protected program needs the machine. From
 2.10 you can **delegate** such a program to host protection. It is then treated like fleet work: paused and lowered
-for your protected programs, never stopped. This page covers Oarbank 2.10.2.
+for your protected programs, never stopped. This page covers Oarbank 2.10.3.
 
 Delegation is the owner's choice only. A module can never declare it or widen it.
 

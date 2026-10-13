@@ -3,13 +3,13 @@ title: Versions and compatibility
 description: Find the Oarbank, agent and module SDK versions you have installed, the latest release, which SDK features need which core, and where the docs for an older version are.
 type: reference
 platforms: [macos, linux, windows]
-core: '2.10.2'
+core: '2.10.3'
 sidebar:
   order: 19
 ---
 
 Oarbank has two version lines. The **core** (the coordinator and the node agent, in
-[roeehrl/oarbank](https://github.com/roeehrl/oarbank)) is at 2.10.2. The **module SDK** (`oarbank-sdk`, in
+[roeehrl/oarbank](https://github.com/roeehrl/oarbank)) is at 2.10.3. The **module SDK** (`oarbank-sdk`, in
 [roeehrl/oarbank-sdk](https://github.com/roeehrl/oarbank-sdk)) is at 1.7.0. These docs describe those releases.
 
 ## Find the installed versions
@@ -43,8 +43,8 @@ The first line of [llms.txt](/oarbank/llms.txt) names the release these docs des
 
 | Core | Date | Module SDK |
 |---|---|---|
-| 2.10.2 | 2026-10-13 | 1.7.0 |
-| 2.9.0 (shipped in 2.10.2) | 2026-10-13 | 1.6.0 |
+| 2.10.3 | 2026-10-13 | 1.7.0 |
+| 2.9.0 (shipped in 2.10.3) | 2026-10-13 | 1.6.0 |
 | 2.8.0 | 2026-10-10 | 1.5.0 |
 | 2.7.0 | 2026-10-09 | 1.5.0 |
 | 2.6.0 | 2026-10-08 | 1.5.0 |

@@ -3,7 +3,7 @@ title: Settings
 description: How Oarbank settings work for owners from 2.9 on, with fleet, group and node scopes, node groups and labels, locks, bulk changes, canary then promote, campaign overrides, settings as code, reports and managed policy that only tightens.
 type: how-to
 platforms: [macos, linux, windows]
-core: '2.10.2'
+core: '2.10.3'
 sidebar:
   order: 5
 ---
@@ -12,7 +12,7 @@ Every owner choice in Oarbank, from how much memory a node keeps for its user to
 a **setting**. There is one list of settings, one store of the values you set, and one rule that says, for every node,
 which value is in effect and where it comes from. The console and the `oarbank settings` command show the same thing.
 
-This page covers Oarbank 2.10.2. In 2.8 and earlier, policy and caps were stored per node (`oarbank node policy`,
+This page covers Oarbank 2.10.3. In 2.8 and earlier, policy and caps were stored per node (`oarbank node policy`,
 `oarbank node limits`); 2.9 converts them once, on upgrade, and those commands are gone
 ([Upgrading](/oarbank/operate/upgrading#settings-after-the-upgrade)).
 
