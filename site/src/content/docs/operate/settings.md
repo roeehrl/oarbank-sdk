@@ -3,7 +3,7 @@ title: Settings
 description: How Oarbank settings work for owners from 2.9 on, with fleet, group and node scopes, node groups and labels, locks, bulk changes, canary then promote, campaign overrides, settings as code, reports and managed policy that only tightens.
 type: how-to
 platforms: [macos, linux, windows]
-core: '2.9.0'
+core: '2.10.3'
 sidebar:
   order: 5
 ---
@@ -12,7 +12,7 @@ Every owner choice in Oarbank, from how much memory a node keeps for its user to
 a **setting**. There is one list of settings, one store of the values you set, and one rule that says, for every node,
 which value is in effect and where it comes from. The console and the `oarbank settings` command show the same thing.
 
-This page covers Oarbank 2.9.0. In 2.8 and earlier, policy and caps were stored per node (`oarbank node policy`,
+This page covers Oarbank 2.10.3. In 2.8 and earlier, policy and caps were stored per node (`oarbank node policy`,
 `oarbank node limits`); 2.9 converts them once, on upgrade, and those commands are gone
 ([Upgrading](/oarbank/operate/upgrading#settings-after-the-upgrade)).
 
@@ -68,9 +68,10 @@ oarbank settings schema                              # every key: type, unit, sc
 |---|---|
 | Memory | `os_reserve_gb` (memory kept for the system; computed from RAM), `user_reserve_gb` (kept for the person using it), `job_mem_gb` (memory per job slot), `mem_in_use_bound` (fit jobs into the memory free now) |
 | When someone is using it | `user_present_slots`, `user_idle_s`, `screen_sharing_present`, `run_on_battery` |
-| Jobs | `threads_per_job`, `max_slots`; advanced: `nice` (not applied by agents yet), `hard_limits` |
-| Caps (off by default) | `cpu_cores`, `mem_gb`, `jobs`, `schedule`, `enforce` (`soft` or `hard`); advanced: `vm_mem_gb`, `vm_cpus`, `disk_gb`, `staging_mbps` |
-| Protection | `protection.mode`, `protection.rules`, `protection.node` ([Host protection](/oarbank/operate/host-protection)) |
+| Jobs | `threads_per_job`, `max_slots`, `workloads` (assigned [workloads](/oarbank/operate/workloads) may run; on by default); advanced: `nice` (not applied by agents yet), `hard_limits` |
+| Caps (off by default) | `cpu_cores`, `mem_gb`, `jobs`, `schedule`, `enforce` (`soft` or `hard`); advanced: `vm_mem_gb`, `vm_cpus`, `disk_gb`, `staging_mbps` (the rate of dataset staging and result and checkpoint uploads, enforced from 2.10) |
+| Protection | `protection.mode`, `protection.rules`, `protection.node` ([Host protection](/oarbank/operate/host-protection)), `delegated_processes` (off by default: [Delegated processes](/oarbank/operate/delegated-processes)) |
+| Network | `inbound_listeners` (assigned listeners may open; on by default); advanced: `listener_port_range` (the internal ports listeners bind, default `41000-41999`). Fleet only: `listener_probe_endpoint` (an `https://` probe endpoint you run elsewhere), `listener_stun_server` (`host:port`; none by default) ([Make a node reachable](/oarbank/operate/make-a-node-reachable)) |
 | Host tools | `tool.<id>.path` ([Host tools](/oarbank/operate/host-tools)) |
 | Fleet only | `ntfy.url`, `ntfy.click_base` (notifications), `console_hosts` (console host names), `replica_rate` (0 to 1) |
 | Every module | `enabled`, `services.disabled`, `pipeline`, `replica_rate`, set with `--module <module>` ([Module settings](#module-settings)) |
@@ -249,7 +250,7 @@ battery, while the owner can still tighten caps from the console.
 
 | Key | Type | Stricter |
 |---|---|---|
-| `run_on_battery` | boolean | off |
+| `run_on_battery`, `inbound_listeners`, `workloads`, `delegated_processes` | boolean | off |
 | `screen_sharing_present`, `mem_in_use_bound`, `hard_limits` | boolean | on |
 | `user_present_slots`, `max_slots`, `jobs`, `vm_cpus` | integer | lower |
 | `cpu_cores`, `mem_gb`, `vm_mem_gb`, `disk_gb`, `staging_mbps` | number | lower |

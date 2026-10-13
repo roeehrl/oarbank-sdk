@@ -501,6 +501,29 @@ class MoveCancelledResult(Contract):
     message: str = Field("", max_length=500)
 
 
+# ---------------------------------------------------------------------------- workload reports
+
+class WorkloadReportEvent(Contract):
+    """One `report` event a workload wrote to its events file (spec/workload-protocol.md, "Events"). [beta]"""
+    seq: int = Field(ge=0, description="[beta] Rising per workload on its node; a repeat (same seq) is a retry and is already handled.")
+    t: float = Field(description="[beta] When the workload wrote it (the node's Unix time).")
+    data: dict[str, Any] = Field(default_factory=dict, description="[beta] The event's `data`, as the workload wrote it (at most 4 KiB as JSON).")
+
+
+class WorkloadReportParams(Contract):
+    """What one of the module's workloads observed, as the agent shipped it (capability `workload.report`). [beta]"""
+    workload: str = Field(description="[beta] The workload's name.")
+    node: str = Field(description="[beta] The node it runs on.")
+    seat_id: str | None = Field(None, description="[beta] Its seat (None: a workload without an identity).")
+    fence: int | None = Field(None, description="[beta] The seat's fence when the events were written.")
+    events: list[WorkloadReportEvent] = Field(max_length=200)
+
+
+class WorkloadReportResult(Contract):
+    effects: list[Effect] = Field(default_factory=list, description="[beta] Only kinds declared in coordinator.workload_effects.")
+    message: str = Field("", max_length=500)
+
+
 # Verb registry: method -> (params model, result model, required?, capability name if optional)
 VERBS: dict[str, tuple[type, type, bool, str | None]] = {
     "params.check": (ParamsCheckParams, ParamsCheckResult, True, None),
@@ -521,6 +544,7 @@ VERBS: dict[str, tuple[type, type, bool, str | None]] = {
     "move.preflight": (MovePreflightParams, MovePreflightResult, False, "move.preflight"),
     "move.postflight": (MovePostflightParams, MovePostflightResult, False, "move.postflight"),
     "move.cancelled": (MoveCancelledParams, MoveCancelledResult, False, "move.cancelled"),
+    "workload.report": (WorkloadReportParams, WorkloadReportResult, False, "workload.report"),
 }
 
 # ---------------------------------------------------------------------------- host callbacks (module -> host)

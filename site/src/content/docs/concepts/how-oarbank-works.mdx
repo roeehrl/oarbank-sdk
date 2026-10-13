@@ -1,6 +1,6 @@
 ---
 title: How Oarbank works
-description: The parts of an Oarbank fleet and how they fit together, from the coordinator, nodes and join codes to modules, campaigns, certification, sandboxing, host protection, signing and coordinator moves.
+description: The parts of an Oarbank fleet and how they fit together, from the coordinator, nodes and join codes to modules, workloads, campaigns, certification, sandboxing, host protection, signing and coordinator moves.
 type: concept
 sidebar:
   order: 1
@@ -59,6 +59,12 @@ the [module SDK](/oarbank/build/tutorial), and a module talks to the core only t
   process, never inside the core. It changes nothing directly: it returns effects, such as "create this campaign" or
   "enqueue these jobs", which the core checks and applies;
 - a **runner** that each node starts once per job. A runner can be written in any language.
+
+A module may also bring long-lived processes: **services** that stay up on a node and serve its jobs, and
+**workloads**, long-running processes that are the work itself and run only on the nodes you assign them to
+([Workloads](/oarbank/operate/workloads)). A service or workload may accept connections from the internet through an
+**inbound listener** the node's agent opens for it, again only where you assign it
+([Make a node reachable](/oarbank/operate/make-a-node-reachable)).
 
 A module ships as a **bundle** (`.mfb`): one immutable file per version, identified by its content digest. Installing
 a bundle enables nothing. You approve what its sandbox may reach, enable it, and can try a new version on a few
@@ -142,7 +148,12 @@ On every OS:
 - **Caps** limit what the fleet may use on a node, such as its memory (`oarbank settings set mem_gb 16 --node <node>`).
   They are all off by default.
 - **Only fleet processes are touched.** The agent pauses, slows or stops only processes it started itself. Your own
-  programs are never signalled.
+  programs are never signalled, unless you delegate one to it: then it may pause and lower that program, never stop it
+  ([Delegated processes](/oarbank/operate/delegated-processes)).
+- **Measured, not assumed.** A paired on/off measurement shows what fleet work costs a program you protect, and a
+  passing run lets cooperative GPU work share the GPU up to the measured level
+  ([Prove co-tenancy is safe](/oarbank/operate/prove-co-tenancy)). Nodes that share an internet line can form a
+  [site](/oarbank/operate/sites), so a large upload on one holds fleet transfers on all of them.
 
 On macOS, the agent also applies the owner's rules: it can hold or yield fleet work while a named app or process is
 busy or while someone is using the computer, and it backs off for heat and battery.

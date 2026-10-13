@@ -1,0 +1,120 @@
+{
+ "ui_contract": "1.0",
+ "title": "Work units",
+ "body": [
+  {
+   "type": "text",
+   "text": "Each unit the `worker` workload finishes on a node is a report; the module keeps one record per report in its `units` collection, with the daemon's own reference and the amount in the smallest unit."
+  },
+  {
+   "type": "columns",
+   "children": [
+    {
+     "type": "stat",
+     "label": "units recorded",
+     "source": {
+      "query": "store",
+      "params": {
+       "collection": "units"
+      },
+      "agg": {
+       "amount": "count"
+      }
+     },
+     "field": "amount",
+     "format": ",d"
+    },
+    {
+     "type": "stat",
+     "label": "total amount",
+     "source": {
+      "query": "store",
+      "params": {
+       "collection": "units"
+      },
+      "agg": {
+       "amount": "sum"
+      }
+     },
+     "field": "amount",
+     "format": ",d"
+    }
+   ]
+  },
+  {
+   "type": "section",
+   "title": "Per node",
+   "children": [
+    {
+     "type": "table",
+     "source": {
+      "query": "store",
+      "params": {
+       "collection": "units"
+      },
+      "group_by": "node",
+      "agg": {
+       "amount": "sum"
+      }
+     },
+     "columns": [
+      {
+       "key": "node",
+       "type": "node_ref"
+      },
+      {
+       "key": "amount",
+       "label": "total amount",
+       "type": "integer",
+       "format": ",d"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "type": "section",
+   "title": "Latest units",
+   "children": [
+    {
+     "type": "table",
+     "source": {
+      "query": "store",
+      "params": {
+       "collection": "units"
+      },
+      "fields": [
+       "node",
+       "unit",
+       "amount",
+       "at"
+      ],
+      "order_by": "at",
+      "limit": 50
+     },
+     "columns": [
+      {
+       "key": "node",
+       "type": "node_ref"
+      },
+      {
+       "key": "unit",
+       "label": "unit",
+       "type": "code"
+      },
+      {
+       "key": "amount",
+       "type": "integer",
+       "format": ",d"
+      },
+      {
+       "key": "at",
+       "label": "when",
+       "type": "relative_time"
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

@@ -304,3 +304,6 @@ def detect() -> dict:
         except (OSError, AttributeError, ValueError) as e:      # a library without the entry point, a broken driver
             evidence[api] = f"probe failed: {e}"
     return {"host": sorted(host), "containers": [], "evidence": evidence}
+
+
+from .duty import Duty  # noqa: E402,F401  the governor that holds a runner's `gpu_duty` (oarbank_sdk.duty)

@@ -3,9 +3,9 @@ title: Troubleshooting
 description: Find out why a job waits, a node takes no work or setup stalls, where each computer keeps its logs, and the fixes for the problems people meet most on macOS, Linux and Windows.
 type: troubleshooting
 platforms: [macos, linux, windows]
-core: '2.9.0'
+core: '2.10.3'
 sidebar:
-  order: 14
+  order: 20
 ---
 
 Start by asking Oarbank. It records why it does what it does, so the answer is usually one command away. The commands
@@ -136,6 +136,8 @@ each missing piece with its fix, and `oarbank-agent containers install` installs
 | `AGENT_TOO_OLD` | Update the node's agent: `oarbank agent list`, then `canary` and `promote` |
 | `OARBANK_PAUSED`, `CAMPAIGN_PAUSED` | `oarbank resume --all`, or `oarbank campaign resume <id>` |
 | `RETRIES_EXHAUSTED` | Read the attempts in `oarbank job show <id>`, fix the cause, then `oarbank job retry <id>` |
+| `SITE_UPLINK_BUSY`, `SITE_UPLINK_BUDGET` | A network-heavy job waits for its site: a protected program there uploads, or the site's budget is full ([Sites](/oarbank/operate/sites)) |
+| `GPU_BLOCKED` | A GPU job waits beside a protected GPU program. From 2.10 a rule that protects `progress_rate` holds GPU work back too; to run GPU work beside it, measure a duty ([Prove co-tenancy is safe](/oarbank/operate/prove-co-tenancy)) |
 
 **A job was requeued with `AGENT_STOPPED`.** The node's agent was stopped or restarted (an upgrade, a reboot, its
 service manager). It stopped the job first, checkpointing where the module supports it; the job runs again and nothing
@@ -158,6 +160,26 @@ that blocks and its fix: an unsigned release, a required setting, a host tool, n
 excludes your coordinator's version is refused: install a coordinator that meets it (see
 [Versions and compatibility](/oarbank/operate/versions)). Module authors run `oarbank-sdk check` and
 `oarbank-sdk conform` before bundling.
+
+## Workloads, listeners and GPU co-tenancy
+
+**A workload does not run.** `oarbank workload list --module <module>` shows its state and why on each node; the
+`WORKLOAD_…` codes are in [Reason codes](/oarbank/reference/reason-codes#workloads). A withdrawn workload (alert
+`workload_withdrawn`) needs its cause fixed and `oarbank workload restart <module>/<workload> --node <node>`
+([Workloads](/oarbank/operate/workloads)).
+
+**A listener is not reachable** (alert `listener_unreachable`). `oarbank listener show <node> <module>/<listener>`, or
+the node page's **Network** card, names the result and its fix: a router without automatic mapping, two routers, a
+provider's shared address, a firewall. Not checked yet means no node on another network could dial back
+([Make a node reachable](/oarbank/operate/make-a-node-reachable)).
+
+**GPU work waits under `gpu_jobs = "certified"`.** `oarbank protection duty <node>` says why: not certified for a rule
+(`GPU_NOT_CERTIFIED`: run a sweep), the budget at 0 after a take-back, or a unit held for exceeding its duty or because
+its GPU time cannot be read ([Prove co-tenancy is safe](/oarbank/operate/prove-co-tenancy)).
+
+**Fleet work stays held under a rule with a source.** `PROTECTION_SOURCE_NEEDS_HELPER`: the source is in a home folder
+and nobody is logged in to read it. `PROTECTION_SOURCE_UNREADABLE`: the agent cannot read the file. Either way
+protection assumes the worst until it reads again.
 
 ## Asking for help
 

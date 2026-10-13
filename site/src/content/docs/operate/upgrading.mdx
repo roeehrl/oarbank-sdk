@@ -1,14 +1,108 @@
 ---
-title: Upgrading from 2.8 to 2.9
-description: Upgrade an Oarbank fleet from 2.8 to 2.9 on macOS, Linux and Windows, including the one-time move of a per-user coordinator to a system service, what to check afterwards, what happens if it fails, and the commands and module requests 2.9 removed.
+title: Upgrading
+description: Upgrade an Oarbank fleet to 2.10 on macOS, Linux and Windows, from 2.9 (nodes need the 2.10 agent for listeners, workloads, sites and the GPU duty governor) or from 2.8 (the one-time move of a per-user coordinator to a system service, removed commands and module requests).
 type: how-to
 platforms: [macos, linux, windows]
-core: '2.9.0'
+core: '2.10.3'
 sidebar:
-  order: 12
+  order: 18
 ---
 
 import { Aside, TabItem, Tabs } from '@astrojs/starlight/components';
+
+Upgrade the **coordinator first**, then the nodes. Running jobs keep running through the upgrade, and nodes reconnect by
+themselves. The downloads are on the [2.10.3 release page](https://github.com/roeehrl/oarbank/releases/tag/v2.10.3);
+check each file against its `SHA256SUMS-…` file there ([Get started](/oarbank/get-started#download)).
+
+- **From 2.9:** read [From 2.9 to 2.10](#from-29-to-210). Nothing moves and no setting changes meaning.
+- **From 2.8:** install 2.10.3 directly. Its packages make the same one-time move of the coordinator as 2.9.0 did, so
+  follow [From 2.8 to 2.9](#from-28-to-29) with the 2.10.3 files, then read the 2.10 section for what is new.
+
+## From 2.9 to 2.10
+
+Oarbank 2.10 adds module [workloads](/oarbank/operate/workloads), [inbound listeners](/oarbank/operate/make-a-node-reachable)
+with router port mapping, [sites](/oarbank/operate/sites) for nodes that share an internet line,
+[delegated processes](/oarbank/operate/delegated-processes), and measured
+[co-tenancy with a GPU duty governor](/oarbank/operate/prove-co-tenancy). Every one of them is off or idle until you use
+it: no workload runs until you assign it, no listener opens until you assign it to a node, no site exists until you
+create one, delegation is off by default, and `gpu_jobs = "certified"` is opt-in per node.
+
+### Upgrade the coordinator to 2.10
+
+Run the 2.10.3 installer over the 2.9 one, as for any update
+([Updating and removing](/oarbank/operate/update-and-remove#update-the-coordinator-by-hand)):
+
+- **macOS:** double-click `oarbank-coordinator-2.10.3-macos-arm64.pkg`. It writes the system services again and
+  restarts them on the new build.
+- **Linux:** `sudo apt install ./oarbank-coordinator-2.10.3-linux-amd64.deb` (Fedora, RHEL:
+  `sudo dnf install ./oarbank-coordinator-2.10.3-linux-amd64.rpm`).
+- **Windows:** run `oarbank-coordinator-2.10.3-windows-x64.msi` (or `-arm64`).
+
+Check with `oarbank coordinator status` and `oarbank verify`. The console gains a **Sites** page, a **Network** card and
+a **Workloads** card on each node page, a **Workloads** tab on each module that declares workloads, and a
+**Co-tenancy** section on each node's **Protection** page.
+
+### Upgrade the nodes to 2.10
+
+Install the 2.10.3 node package on each node once, over the old one. This is the last time: the package brings the
+node's update runner and pins the owner keys the node trusts for it, and from 2.10 the coordinator updates whole
+packages itself ([Update the fleet](/oarbank/operate/update-and-remove#update-the-fleet)).
+
+To get the 2.10 agent onto nodes before you can reach them, upload, sign, try and promote it as before
+([Update only a node's agent](/oarbank/operate/update-and-remove#update-only-a-nodes-agent)). The rest of the package,
+and fleet updates, still wait for the package:
+
+```sh
+oarbank agent upload oarbank-agent-2.10.3-linux-amd64
+oarbank agent sign <build>
+oarbank agent canary <build> --node <node>
+oarbank agent promote <build>
+```
+
+The new features are the agent's work, so a node acts on them only once it runs the 2.10 agent:
+
+| Feature | On a node still running a 2.9 agent |
+|---|---|
+| Inbound listeners | The node page's **Network** card says the agent does not support them, and assigning one is refused until the node runs a 2.10 agent |
+| Workloads, and modules that need core 2.10 | Not run there: their work waits with `AGENT_TOO_OLD` |
+| Sites | The node takes no transfer leases and does not pause its network-heavy jobs with the site; the coordinator still applies the site's hold and budget when it grants work there |
+| `gpu_jobs = "certified"`, the duty governor, co-tenancy runs | Not available: the node keeps the 2.9 GPU rules |
+| Delegated processes, event-driven sources, `immediate` rules | Ignored |
+
+Install the 2.10 node package as well when you want the uninstaller to release router mappings and stop workloads
+(`oarbank-launcher remove` does it from 2.10), and on Macs whose Application Firewall is on: the package's postinstall
+lists the agent as allowed, so a listener's first connection raises no prompt.
+
+### What behaves differently after the upgrade
+
+- **A GPU-using rule that protects `progress_rate` now holds GPU work back** the way a `gpu_share` rule does, except
+  under `gpu_jobs = "always"`. Before, fleet GPU work could run beside such a program under the default
+  `when_no_gpu_protected`. If GPU jobs that used to run beside it now wait, that is why: measure a duty and use
+  `gpu_jobs = "certified"` ([Prove co-tenancy is safe](/oarbank/operate/prove-co-tenancy)).
+- **A node's `staging_mbps` cap is now enforced** on dataset staging, result and checkpoint uploads. A cap you set
+  earlier and forgot now slows those transfers.
+- **`~` in a protection source** now means the home of the person logged in at the machine, read by their session
+  helper on a system install. Before, it meant the service account's home, which held fleet work back for good.
+- New settings, all with defaults that change nothing: `workloads` (on: assigned workloads may run),
+  `delegated_processes` (off), `inbound_listeners` (on: assigned listeners may open), `listener_port_range`,
+  `listener_probe_endpoint` and `listener_stun_server` ([Settings](/oarbank/operate/settings#the-keys)). A machine's
+  managed policy may turn `workloads`, `delegated_processes` and `inbound_listeners` off.
+- New reason codes and alerts: [Reason codes](/oarbank/reference/reason-codes#new-in-210).
+
+### Module authors (SDK 1.7)
+
+The module SDK for this release is 1.7.0. A manifest that declares inbound listeners (`[sandbox].net.inbound`,
+`services[].listeners`) or workloads (`[[workloads]]`, `workload.report`) needs `requires.core >= 2.10`; network-heavy
+stages and duty specs need no floor ([Versions and compatibility](/oarbank/operate/versions#which-sdk-features-need-which-core)).
+The how-tos: [Accept connections from the internet](/oarbank/build/inbound-listeners),
+[Run a long-running workload](/oarbank/build/workloads) and [Share a GPU with a protected program](/oarbank/build/gpu-duty).
+
+## From 2.8 to 2.9
+
+<Aside type="note">
+  This section describes the 2.9.0 files. From 2.8, use the 2.10.3 files with the same names: the 2.10 packages make
+  the same move.
+</Aside>
 
 Oarbank 2.9 changes how the coordinator runs on macOS and Linux (a system service instead of its owner's per-user
 services), replaces per-node policy and caps with one [settings](/oarbank/operate/settings) model, and replaces the
@@ -19,7 +113,7 @@ Upgrade the **coordinator first**, then the nodes. The downloads are on the
 [2.9.0 release page](https://github.com/roeehrl/oarbank/releases/tag/v2.9.0); check each file against its
 `SHA256SUMS-…` file there ([Get started](/oarbank/get-started#download)).
 
-## Before you start
+### Before you start
 
 - Note how the coordinator runs now: `oarbank coordinator status`, and the address nodes reach it on. The upgrade keeps
   the same address, port and identity.
@@ -29,7 +123,7 @@ Upgrade the **coordinator first**, then the nodes. The downloads are on the
   the package move the coordinator's keys out of your login Keychain by itself.
 - Your owner signing keys are not touched: they stay in your home.
 
-## Upgrade the coordinator
+### Upgrade the coordinator
 
 <Tabs syncKey="os">
   <TabItem label="macOS" icon="apple">
@@ -76,10 +170,10 @@ Upgrade the **coordinator first**, then the nodes. The downloads are on the
 </Tabs>
 
 A coordinator installed from an archive upgrades with the new archive's helper, as before
-([Updating and removing](/oarbank/operate/update-and-remove#update-the-coordinator)); on macOS and Linux it installs
+([Updating and removing](/oarbank/operate/update-and-remove#update-the-coordinator-by-hand)); on macOS and Linux it installs
 the system services too.
 
-## Check the result
+### Check the result
 
 ```sh
 oarbank coordinator status             # form  system service — runs from boot, as _oarbankd (oarbankd on Linux)
@@ -96,7 +190,7 @@ oarbank fleet                          # every node back online
 - Open a new terminal and run `oarbank --help`: from 2.9 the command is on the PATH
   ([The coordinator service](/oarbank/operate/coordinator#the-oarbank-command-on-the-path)).
 
-## If the move fails
+### If the move fails
 
 Nothing of the old home is changed until the very last step. If any step after stopping the old services fails, the
 move removes the new system services, sets the new home aside as `coordinator.failed-<time>` for diagnosis, and starts
@@ -107,7 +201,7 @@ If it rolled back, the coordinator keeps working in its 2.8 form on 2.9's code. 
 [roeehrl/oarbank](https://github.com/roeehrl/oarbank/issues) with the error from the record (it holds no secrets),
 your OS version and the output of `oarbank coordinator migrate --status`.
 
-## After a successful move
+### After a successful move
 
 - The old home stays, renamed `coordinator.migrated-<time>` and marked so that no coordinator starts on it:
   `~/Library/Application Support/Oarbank/coordinator.migrated-<time>` on macOS,
@@ -117,7 +211,7 @@ your OS version and the output of `oarbank coordinator migrate --status`.
 - Other owners need to be added to the owners' group ([Who may use the CLI](/oarbank/operate/coordinator#who-may-use-the-cli)).
 - Removing the coordinator now works differently ([Updating and removing](/oarbank/operate/update-and-remove#remove-the-coordinator)).
 
-## Settings after the upgrade
+### Settings after the upgrade
 
 When the 2.9 coordinator first opens its database, it converts the old per-node policy and caps into
 [settings](/oarbank/operate/settings), once:
@@ -135,7 +229,7 @@ When the 2.9 coordinator first opens its database, it converts the old per-node 
 Then look at what you have: `oarbank settings get --node <node>` for a node, `oarbank settings shadowed` for values that
 change nothing.
 
-### Removed commands and operations
+#### Removed commands and operations
 
 | 2.8 | 2.9 |
 |---|---|
@@ -148,7 +242,7 @@ change nothing.
 
 Scripts that call the removed operations through `oarbank op` need updating; `oarbank ops` lists what exists.
 
-## Modules that used tool registry ids
+### Modules that used tool registry ids
 
 Before 2.9 a module could ask for an operator-defined registry id such as `java17`. On upgrade, each registry entry
 becomes a [host tool definition](/oarbank/operate/host-tools) of the same id with its paths as search paths (an id
@@ -160,7 +254,7 @@ The module's author publishes a version that asks for the built-in tool with a v
 ([Ask for host tools](/oarbank/build/host-tools)). Install it, approve it once (its grants changed), enable it and sign
 the releases.
 
-## Nodes
+### Nodes
 
 Nodes update their agent from the coordinator; nobody needs to log in to them. Upload the 2.9.0 agent binary for each
 platform your nodes run, then sign, try and promote it:
@@ -172,7 +266,7 @@ oarbank agent canary <build> --node <node>
 oarbank agent promote <build>
 ```
 
-[Updating and removing](/oarbank/operate/update-and-remove#update-the-nodes) has the details. Update every node: a 2.9
+[Updating and removing](/oarbank/operate/update-and-remove#update-only-a-nodes-agent) has the details. Update every node: a 2.9
 agent is what detects host tools (an older one reports none, so modules that ask for tools wait with `TOOL_NOT_FOUND`),
 reports which settings revision it applied, enforces managed settings, offers modules whose doctor is not healthy for
 the stages that need no certification, and brings up the container runtime on Macs.
@@ -199,7 +293,7 @@ rewrites the agent's launchd job or systemd unit with the new launcher's setting
 keeping its program, account and environment, and restarts it. That is how a node gets 2.9's 60-second stop time
 ([below](#nodes-stop-their-jobs-cleanly)). A Windows MSI upgrade recreates the service. Nothing needs to rejoin.
 
-### Nodes stop their jobs cleanly
+#### Nodes stop their jobs cleanly
 
 From 2.9, when a node's agent is stopped or restarted (an upgrade, a reboot, `launchctl`, `systemctl`, the Windows
 service manager), it asks every job to stop as a release does (checkpointing first), ends what is left after at most
@@ -213,9 +307,9 @@ processes behind: a watchdog, or the next agent before it takes work, ends them.
   [Settings](/oarbank/operate/settings#managed-on-this-machine)).
 </Aside>
 
-## Module authors
+### Module authors
 
-The module SDK for this release is 1.6.0. A manifest that uses a 2.9 feature (a host tool `version` or an `arch` other
+The module SDK of 2.9 was 1.6.0. A manifest that uses a 2.9 feature (a host tool `version` or an `arch` other
 than `any`, or a settings schema with `x-oarbank` `scope = "node"`, `required` or `campaign`) needs
 `requires.core >= 2.9`; see [Versions and compatibility](/oarbank/operate/versions#which-sdk-features-need-which-core),
 [Ask for host tools](/oarbank/build/host-tools) and [Declare module settings](/oarbank/build/module-settings).
