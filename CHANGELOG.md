@@ -6,7 +6,7 @@ What changed in each oarbank-sdk release, for module authors. The core's changel
 
 ## 1.7.0 (2026-10-12)
 
-For Oarbank core 2.10.1. Everything is additive within manifest 1 and module protocol 1; workload protocol 1 is new.
+For Oarbank core 2.10.2. Everything is additive within manifest 1 and module protocol 1; workload protocol 1 is new.
 
 ### New
 
