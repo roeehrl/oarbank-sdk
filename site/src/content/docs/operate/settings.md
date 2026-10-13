@@ -68,7 +68,7 @@ oarbank settings schema                              # every key: type, unit, sc
 |---|---|
 | Memory | `os_reserve_gb` (memory kept for the system; computed from RAM), `user_reserve_gb` (kept for the person using it), `job_mem_gb` (memory per job slot), `mem_in_use_bound` (fit jobs into the memory free now) |
 | When someone is using it | `user_present_slots`, `user_idle_s`, `screen_sharing_present`, `run_on_battery` |
-| Jobs | `threads_per_job`, `max_slots`, `workloads` (assigned [workloads](/oarbank/operate/workloads) may run; on by default); advanced: `nice` (not applied by agents yet), `hard_limits` |
+| Jobs | `threads_per_job`, `max_slots` (CPU slots for jobs: the node's CPU budget in cores, see below), `workloads` (assigned [workloads](/oarbank/operate/workloads) may run; on by default); advanced: `nice` (not applied by agents yet), `hard_limits` |
 | Caps (off by default) | `cpu_cores`, `mem_gb`, `jobs`, `schedule`, `enforce` (`soft` or `hard`); advanced: `vm_mem_gb`, `vm_cpus`, `disk_gb`, `staging_mbps` (the rate of dataset staging and result and checkpoint uploads, enforced from 2.10) |
 | Protection | `protection.mode`, `protection.rules`, `protection.node` ([Host protection](/oarbank/operate/host-protection)), `delegated_processes` (off by default: [Delegated processes](/oarbank/operate/delegated-processes)) |
 | Network | `inbound_listeners` (assigned listeners may open; on by default); advanced: `listener_port_range` (the internal ports listeners bind, default `41000-41999`). Fleet only: `listener_probe_endpoint` (an `https://` probe endpoint you run elsewhere), `listener_stun_server` (`host:port`; none by default) ([Make a node reachable](/oarbank/operate/make-a-node-reachable)) |
@@ -81,6 +81,12 @@ this Mac (14 when idle) · 9.2 GB free for jobs (apps and the system use 46 GB)"
 efficiency cores; hardware threads never count. Jobs get only memory the machine has free now, less a margin that
 keeps the memory guard from stepping in, and never more than the memory kept for the system and for the person using
 it allows. The settings behind that line are on the node's Settings tab.
+
+`max_slots` is a CPU budget, not a job count. Every running job takes its stage's `resources.cpu` from the node's
+slots, so with `max_slots 1` a stage that declares `cpu = 2` never runs on that node. To run one job at a time, set
+`jobs 1` (Concurrent jobs) and leave `max_slots` alone. When `max_slots` is below the cpu of a stage of a module
+enabled on the node, Oarbank after 2.10.3 says so in the module's readiness, the job's Explain and the `oarbank
+settings set` preview.
 
 The ntfy token is not a setting: it is a write-only secret, set with `oarbank settings set-secret ntfy_token` (it
 asks twice, hidden) and removed with `clear-secret ntfy_token`.
