@@ -3,7 +3,7 @@ title: Workloads
 description: Assign a module's long-running workload to nodes, give a per-node identity its own secrets and seat, read its state on the module's Workloads tab and the node page, and see how host protection throttles, pauses and holds it.
 type: how-to
 platforms: [macos, linux, windows]
-core: '2.10.0'
+core: '2.10.1'
 sidebar:
   order: 12
 ---
@@ -11,7 +11,7 @@ sidebar:
 Most module work is jobs: short units the coordinator hands out, retries and compares. A **workload** is different: one
 process that runs for days and is the work itself, for example a node of a peer-to-peer network or a server that answers
 the public. It never produces a result and is never moved to another node on its own. You decide where it runs. This
-page covers Oarbank 2.10.0. Module authors: [Run a long-running workload](/oarbank/build/workloads).
+page covers Oarbank 2.10.1. Module authors: [Run a long-running workload](/oarbank/build/workloads).
 
 ## What a workload is
 

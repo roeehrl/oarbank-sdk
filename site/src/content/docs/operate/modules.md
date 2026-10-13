@@ -3,13 +3,13 @@ title: Running modules
 description: Install, approve, enable and sign a module's releases, follow its readiness checklist to running work, and understand which stages run before a node is certified and why a failed doctor check stops only some jobs.
 type: how-to
 platforms: [macos, linux, windows]
-core: '2.10.0'
+core: '2.10.1'
 sidebar:
   order: 6
 ---
 
 Oarbank runs no work of its own: every job type is a **module**, delivered as a bundle (`.mfb`). This page takes a
-module from its bundle to running jobs, as of Oarbank 2.10.0. The commands work from the console's **Modules** page too.
+module from its bundle to running jobs, as of Oarbank 2.10.1. The commands work from the console's **Modules** page too.
 
 ## From bundle to running work
 
@@ -70,7 +70,7 @@ Until a release is signed, Oarbank names it everywhere you look:
 
 The coordinator builds a platform's release once per set of modules, so nodes connecting while a candidate waits change
 nothing. Signing, the owner key set and developer mode are explained in
-[release-signing.md](https://github.com/roeehrl/oarbank/blob/v2.10.0/docs/release-signing.md) in the core's repository.
+[release-signing.md](https://github.com/roeehrl/oarbank/blob/v2.10.1/docs/release-signing.md) in the core's repository.
 
 ## The readiness checklist
 

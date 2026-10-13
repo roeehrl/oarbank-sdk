@@ -3,7 +3,7 @@ title: Run language-model batches with llmserve
 description: Build and install llmserve, the reference module for GPU work beside a protected program, give a node a backend and a model you choose, queue prompts, and let it share the GPU only up to a certified duty.
 type: how-to
 platforms: [macos, linux, windows]
-core: '2.10.0'
+core: '2.10.1'
 sidebar:
   order: 14
 ---
@@ -12,7 +12,7 @@ sidebar:
 llama.cpp (Metal, CUDA, Vulkan or the CPU) elsewhere. It is the reference module for GPU work that runs beside a
 program you protect: it holds the GPU duty the node's agent gives it, so under `gpu_jobs = "certified"` it uses only the
 share of the GPU a co-tenancy measurement showed harmless. It ships with the module SDK, bundles no model and needs no
-network. This page covers Oarbank 2.10.0 and module SDK 1.7.0.
+network. This page covers Oarbank 2.10.1 and module SDK 1.7.0.
 
 ## 1. Build and install the bundle
 
