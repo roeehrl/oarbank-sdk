@@ -3,7 +3,7 @@ title: Settings
 description: How Oarbank settings work for owners from 2.9 on, with fleet, group and node scopes, node groups and labels, locks, bulk changes, canary then promote, campaign overrides, settings as code, reports and managed policy that only tightens.
 type: how-to
 platforms: [macos, linux, windows]
-core: '2.10.3'
+core: '2.10.4'
 sidebar:
   order: 5
 ---
@@ -12,7 +12,7 @@ Every owner choice in Oarbank, from how much memory a node keeps for its user to
 a **setting**. There is one list of settings, one store of the values you set, and one rule that says, for every node,
 which value is in effect and where it comes from. The console and the `oarbank settings` command show the same thing.
 
-This page covers Oarbank 2.10.3. In 2.8 and earlier, policy and caps were stored per node (`oarbank node policy`,
+This page covers Oarbank 2.10.4. In 2.8 and earlier, policy and caps were stored per node (`oarbank node policy`,
 `oarbank node limits`); 2.9 converts them once, on upgrade, and those commands are gone
 ([Upgrading](/oarbank/operate/upgrading#settings-after-the-upgrade)).
 
@@ -85,7 +85,7 @@ it allows. The settings behind that line are on the node's Settings tab.
 `max_slots` is a CPU budget, not a job count. Every running job takes its stage's `resources.cpu` from the node's
 slots, so with `max_slots 1` a stage that declares `cpu = 2` never runs on that node. To run one job at a time, set
 `jobs 1` (Concurrent jobs) and leave `max_slots` alone. When `max_slots` is below the cpu of a stage of a module
-enabled on the node, Oarbank after 2.10.3 says so in the module's readiness, the job's Explain and the `oarbank
+enabled on the node, Oarbank 2.10.4 and later say so in the module's readiness, the job's Explain and the `oarbank
 settings set` preview.
 
 The ntfy token is not a setting: it is a write-only secret, set with `oarbank settings set-secret ntfy_token` (it
