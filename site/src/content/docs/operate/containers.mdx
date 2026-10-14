@@ -23,6 +23,47 @@ oarbank node show build-07       # containers: colima ready · or missing, with 
 The node page shows the same, and the module's readiness checklist names the nodes a stage cannot run on because
 they have no container runtime. A node that lacks something is simply not offered container jobs; nothing waits on it.
 
+## Choose when a node runs its container VM
+
+From Oarbank 2.11 the `containers` setting decides, per node, group or fleet (Settings → **Containers**):
+
+| Value | The runtime | Use it for |
+|---|---|---|
+| `always` (default) | starts when a release needs containers and stays up, as in 2.9 and 2.10 | nodes that run container work all day |
+| `on_demand` (recommended) | stays stopped until container work waits for this node; stops again after `containers_idle_stop_s` (600 s) without any | most nodes: a stopped VM holds no memory |
+| `off` | never starts; the node reports `disabled` and takes no container work | small machines that also run your memory-heavy programs |
+
+```sh
+oarbank settings set containers on_demand                    # the whole fleet
+oarbank settings set containers off --node mini-03           # never on this Mac
+oarbank settings set containers_idle_stop_s 300 --node mini-01
+```
+
+With `on_demand`, a stopped node still counts as able to run container work. When such work waits and the nodes
+whose runtime is already up have no room for it, the coordinator tells **one** stopped node to start (not every one),
+and the work runs there once its VM is ready (about a minute; the node shows how long its last start took). A job
+waiting meanwhile explains "The node's container runtime is stopped". If a module's container stage is short (a 50 s
+scoring step, say), one or two container nodes are enough: set the rest to `on_demand` or `off`.
+
+With `off`, the node's container jobs explain `CONTAINERS_DISABLED` with the fix, and the node is certified for the
+module's stages that need no containers only (as any node without a container runtime). Turning `off` on or off again
+certifies the node's modules again. On Linux, whose container engine is the host's and not a VM, `on_demand` behaves
+like `always`.
+
+### The VM's size
+
+`vm_mem_gb` and `vm_cpus` (Settings → Caps, advanced) size the VM, within half the machine's memory and its
+processors; without them it is sized from the machine's memory as below. When you change them, the agent restarts the
+VM at the new size as soon as no container job runs on it. The node's container line shows both sizes until then, for
+example `containers = always · running · VM 4 GB, 6 CPUs (running at 8 GB, 6 CPUs: restarts at the new size when
+idle)`. The VM's memory decides how many container jobs the node runs at once (one per 2.5 GB above 1.5 GB), so
+`vm_mem_gb 2` keeps container work off a node whose runtime stays up.
+
+<Aside type="note">
+  Oarbank 2.10.4 and earlier ignored `vm_mem_gb` and `vm_cpus` for the container VM: every Mac got the size below
+  whatever was set. 2.11 applies them.
+</Aside>
+
 ## macOS
 
 From 2.9 a Mac node reports its container runtime and brings it up itself. You install the tools once; the agent does
@@ -49,8 +90,9 @@ run, and is reported as such. Homebrew asks you to trust the third-party tap for
 2. **A release arrives with a module approved for containers:** the agent checks the prerequisites. If something is
    missing it reports `missing`, each piece with its fix, and starts nothing. Otherwise it creates and starts its own
    Colima profile, `oarbank`, in the background (`starting`): a Virtualization.framework VM with Rosetta for amd64
-   images, sized from the Mac's memory (8 GB on Macs with up to 32 GB, 12 GB up to 96 GB, 32 GB above, and never more
-   than half the memory), mounting only the agent's work and module-data directories. The first start downloads the VM
+   images, sized by `vm_mem_gb` and `vm_cpus` when you set them, otherwise from the Mac's memory (8 GB on Macs with up
+   to 32 GB, 12 GB up to 96 GB, 32 GB above), never more than half the memory, mounting only the agent's work and
+   module-data directories. With `containers` = `on_demand` this happens only when container work waits for the node. The first start downloads the VM
    image and takes a few minutes.
 3. **Ready:** the node reports `ready` with the platforms it runs (`linux/arm64`, `linux/amd64`) and starts offering
    the `containers` pool. If the start fails, it reports `failed` with the end of Colima's log, and tries again with
