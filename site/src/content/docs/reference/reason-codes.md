@@ -77,6 +77,14 @@ what host protection did to a workload ([Workloads](/oarbank/operate/workloads#h
 | `DELEGATE_PAUSE`, `DELEGATE_RESUME`, `DELEGATE_LOWER`, `DELEGATE_RESTORE` | Protection paused, resumed, lowered or restored [delegated processes](/oarbank/operate/delegated-processes) | Nothing |
 | `DELEGATE_PAUSE_LIMIT` | Delegated processes reached the longest pause: resumed and lowered instead, never stopped | Nothing |
 
+### Module data (2.11)
+
+| Code | Meaning | What you do |
+|---|---|---|
+| `MODULE_DATA_SCHEDULED` | A module left the node (turned off there, no longer in its release, the node retired, purged): what it left is deleted at the time shown | Nothing, or turn it back on to keep it; `oarbank module purge <module> --node N` deletes it now |
+| `MODULE_CLEANUP_FAILED` | The module's cleanup stage failed on the node; its data was deleted anyway | Report it to the module's author, or release what the module held outside the node yourself |
+| `DISK_CACHE_OVER_CAP` | The node's dataset cache is over its `disk_gb` cap, and what is left is in use by its jobs or wanted by pending work | Raise `disk_gb`, or let the jobs finish |
+
 ### New alerts
 
 `listener_unreachable` (P3), `listener_saturated` (P4) and `workload_withdrawn` (P3) are new; their runbooks are in
@@ -188,6 +196,9 @@ the values the agent and the coordinator write on an attempt that ended with the
 | `NO_MAPPING_PROTOCOL` | Listener {listener}: the router accepts no automatic port mapping: {text} | P3 | – | `listeners.configure` | – |
 | `MAPPED_UNREACHABLE` | Listener {listener}: mapped, but connections from outside do not arrive: {text} | P3 | – | `listeners.probe` | – |
 | `FIREWALL_BLOCKED` | Listener {listener}: this machine's firewall blocks incoming connections: {text} | P3 | – | – | – |
+| `MODULE_DATA_SCHEDULED` | What module {module} left on this node ({size}) is deleted {when} ({why}) | P1 | – | `modules.purge`, `settings.apply` | – |
+| `MODULE_CLEANUP_FAILED` | Module {module}'s cleanup stage failed on this node, and its data was deleted anyway: {detail} | P3 | – | – | – |
+| `DISK_CACHE_OVER_CAP` | The node's dataset cache holds {used}, over its {cap} cap (disk_gb): what is left is in use by its jobs or wanted by pending work | P3 | – | `settings.apply` | – |
 
 ### protection
 

@@ -121,7 +121,13 @@ URL (`--to https://<host>:7443`) and run the installer there with the printed pa
 
 To take a node out of the fleet but keep the software, run `sudo oarbank-node leave` on it (on Windows, from an
 elevated prompt): the node forgets the coordinator, and its key, certificate, caches and logs go. It can join a fleet
-again with a new code. Retire it on the coordinator's Fleet page too. To remove the software as well:
+again with a new code. Retire it on the coordinator's Fleet page too.
+
+From 2.11 a retired node's agent is told so the next time it calls the coordinator. It stops its jobs, services,
+workloads and listeners, deletes what its modules left on it after a day (sooner when `module_retention_days` is
+shorter), and then waits; `oarbank-node status` shows `E_RETIRED`. Before 2.11 it asked to join again as a new machine.
+
+To remove the software as well:
 
 | | |
 |---|---|
@@ -133,6 +139,18 @@ Removing the node service first stops the node's [workloads](/oarbank/operate/wo
 mappings its agent made for [inbound listeners](/oarbank/operate/make-a-node-reachable) (`oarbank-agent stop-workloads`,
 `oarbank-agent portmap release-all`). A mapping on a router that cannot be reached at that moment stays until its lease
 runs out (at most two hours). Retiring a node that is offline warns that its router mappings may persist until then.
+
+The node's home holds everything its modules put there: their data directories, the dataset cache and the releases,
+and the container images of a system install on a Mac (its Colima VMs) or on Linux with Podman. So `--purge`,
+`apt purge` and `oarbank-node leave` delete all of it. Two places are outside the home:
+
+- **Docker Engine on Linux**, and Podman for a personal install, keep images in their own store.
+  `oarbank-uninstall --purge` and `oarbank-node leave` first remove the images the node's modules pulled
+  (`oarbank-agent remove-images`). `apt purge` does not: run `sudo oarbank-node leave` before it.
+- **A personal install on a Mac** keeps its container VMs in `~/.colima`. After the uninstall,
+  `colima delete --profile oarbank --force` (and `--profile oarbank-gpu` on Apple silicon) deletes them with their images.
+
+Windows removes the agent's WSL containers session, with its images, with the node service.
 
 ## Remove the coordinator
 

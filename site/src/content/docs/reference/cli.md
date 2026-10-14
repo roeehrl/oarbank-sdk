@@ -60,7 +60,7 @@ Commands that change the fleet share these flags:
 | Command | What it does |
 |---|---|
 | `oarbank fleet` | Every node: state, online, jobs and slots, protection, modules, GPU APIs, caps; pending enrollments; campaigns |
-| `oarbank node show <node>` | One node: doctor, GPU APIs with evidence, containers, services, folders, host tools, sandbox, the settings it sets itself, agent version |
+| `oarbank node show <node>` | One node: doctor, GPU APIs with evidence, containers, services, what each module keeps there and when what is leaving goes, folders, host tools, sandbox, the settings it sets itself, agent version |
 | `oarbank job show <id>` | One job: attempts, checkpoint, results, and why it is where it is |
 | `oarbank explain job <id>` | Why a job is pending, as the scheduler's own reason codes ([Reason codes](/oarbank/reference/reason-codes)) |
 | `oarbank explain node <id>` | Why a node takes no work |
@@ -170,6 +170,7 @@ From 2.10 ([Make a node reachable](/oarbank/operate/make-a-node-reachable)). A l
 | `oarbank module install <bundle>` | Install a module bundle (`--dry-run` first) |
 | `oarbank module list` / `show <name>` / `verify <name>` / `check <name> [--deep]` | Inspect installed modules |
 | `oarbank module approve\|enable\|canary\|promote\|rollback\|disable\|pin\|unpin\|uninstall <name>[@<version>]` | The module lifecycle: canary on chosen nodes (`--node`) or a group's members (`--group`), promote, roll back |
+| `oarbank module purge <name> --node <node> \| --all [--yes]` | Delete what a module left on a node, or on every node where it is turned off, at the node's next heartbeat; refused where it is enabled (2.11, [When a module leaves a node](/oarbank/operate/modules#when-a-module-leaves-a-node)) |
 | `oarbank mod <module> <verb> [target] -p key=value` | Run one of a module's own operations |
 | `oarbank cli <module> [args…]` | Run a module's own command line on the coordinator, sandboxed |
 | `oarbank dataset upload <folder>` / `download <id> [dir]` / `list` / `show <id>` / `register <file.json>` | Datasets |

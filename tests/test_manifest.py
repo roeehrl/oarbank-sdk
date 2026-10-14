@@ -321,6 +321,42 @@ def test_bootstrap_jobs_get_the_network_and_nothing_else():
     assert (b.net, b.tools, b.devices.gpu, b.containers, b.exec_writable) == (sb.net, [], "none", [], False)
 
 
+def cleaned(d, **stage):
+    """toy with a `release` cleanup stage beside its one job stage `run`."""
+    d["requires"]["core"] = ">=2.11,<3"
+    d["stages"].append({"name": "release", "cleanup": True, "timeout_s": 120, **stage})
+    return d
+
+
+def test_a_cleanup_stage_is_no_job_stage_and_needs_core_2_11():
+    """spec/manifest.md, rule 25: the agent runs the cleanup stage before it deletes what the module left on a node; no
+    job runs it, so it adds no default, merge or comparison requirement to a single-stage module."""
+    man = m.Manifest.model_validate(cleaned(copy.deepcopy(doc("toy"))))
+    assert man.cleanup_stage().name == "release" and man.cleanup_stage().timeout_s == 120
+    assert [s.name for s in man.job_stages()] == ["run"] and man.standalone_stages() == ["run"]
+    assert man.default_stage() == "run" and not man.compares("release") and man.compares("run")
+    assert man.core_keys_used()[-1] == ("stages[].cleanup", (2, 11))
+    assert m.Manifest.model_validate(copy.deepcopy(doc("toy"))).cleanup_stage() is None
+    from oarbank_sdk import platform as pf
+    plats = cleaned(copy.deepcopy(doc("toy")), requires={"platforms": ["linux-amd64"]})
+    assert "darwin-arm64" in pf.feasible(m.Manifest.model_validate(plats), mix="same-platform")   # it places no job
+    bad(lambda d: cleaned(d)["requires"].update(core=">=2.10,<3"), r"stages\[\]\.cleanup need requires.core >= 2.11",
+        name="toy")
+    bad(lambda d: cleaned(d)["stages"].append({"name": "again", "cleanup": True}), "a module has at most one", name="toy")
+    bad(lambda d: cleaned(d, determinism="exact"), "compares nothing", name="toy")
+    bad(lambda d: cleaned(d, default=True), "never the default stage", name="toy")
+    bad(lambda d: cleaned(d, secrets=["token"]).update(secrets=[{"name": "token"}]), "receives no secrets", name="toy")
+    bad(lambda d: cleaned(d, requires={"needs_pools": ["containers"]}).update(
+        sandbox={"containers": [{"image": "docker.io/x/y@sha256:" + SHA}]}), "reserves and needs no pools", name="toy")
+    bad(lambda d: cleaned(d, after="run"), "a cleanup stage is standalone", name="toy")
+    bad(lambda d: bootstrapped(cleaned(d), cleanup=True) and d["stages"].pop(1), "not a bootstrap stage too", name="toy")
+
+    def only(d):
+        cleaned(d)
+        d["stages"] = d["stages"][1:]
+    bad(only, "needs a stage besides its cleanup stage|no stage compares", name="toy")
+
+
 def served(d, **svc):
     """toy whose `run` stage reserves the `model` pool of an on-demand endpoint service."""
     d["requires"].update(core=">=2.5,<3", service_protocol=[1])

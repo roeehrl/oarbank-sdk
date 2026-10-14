@@ -41,6 +41,7 @@ SDK16_KEYS_CORE = (2, 9)          # SDK 1.6: host tool version constraints and a
                                   # what a core does (oarbank_sdk.settings.CORE_GATED: node scope, required, campaign)
 INBOUND_KEYS_CORE = (2, 10)       # inbound listeners: sandbox.net.inbound and services[].listeners
 WORKLOAD_KEYS_CORE = (2, 10)      # workloads (supervised long-running daemons, seat leases) and workload reports
+CLEANUP_KEYS_CORE = (2, 11)       # cleanup stages: run on a node before the core deletes what the module left there
 KNOWN_FEATURES = ("placement",)          # requires.features this SDK understands (must-understand)
 ENV_NAME = r"^[A-Z][A-Z0-9_]*$"
 # Variables the agent or the host sets itself (spec/runner-protocol.md, spec/platforms.md "Environment per OS"); a
@@ -473,6 +474,13 @@ class SandboxSection(Contract):
         settings."""
         return SandboxSection(contract=self.contract, net=self.net.model_copy(update={"inbound": []}))
 
+    def for_cleanup(self) -> "SandboxSection":
+        """The grants a cleanup run gets (spec/sandbox.md, "Cleanup runs"): the network as approved and the execution of
+        written files as approved, and nothing else: no host tools, GPU, containers, folders or listeners. The host
+        keeps the module data directory and settings."""
+        return SandboxSection(contract=self.contract, net=self.net.model_copy(update={"inbound": []}),
+                              exec_writable=self.exec_writable)
+
 
 class BundleSection(Contract):
     """How the bundle is built (spec/bundles.md). [stable]"""
@@ -680,6 +688,12 @@ class Stage(Contract):
         "the module's egress allowlist (no tools, GPU, containers, module data or settings), and the host registers their "
         "output only when it is exactly datasets of [[datasets.pinned]]. A standalone stage, not the default one, with "
         "determinism none and no pools. Needs requires.core >= 2.4."))
+    cleanup: bool = Field(False, description=(
+        "[beta] A cleanup stage: the agent runs it on a node, best effort and within its timeout_s (at most 600 s), before "
+        "it deletes what the module left there (its data directory, cached datasets and container images), so the "
+        "module can release state outside the node. No job names it. A standalone stage, not the default one, never "
+        "bootstrap, comparing nothing, with no capabilities, pools, secrets or checkpoint; at most one per module. Needs "
+        "requires.core >= 2.11."))
     secrets: list[Name] = Field(default_factory=list, description=(
         "[beta] Declared [[secrets]] this stage's runner receives in OARBANK_SECRETS_FILE (no other stage, service, probe or "
         "doctor does). A job waits until each has a value for its node. Never on a bootstrap stage. Needs requires.core >= 2.5."))
@@ -1077,9 +1091,11 @@ class Manifest(Contract):
             ("sandbox.net.inbound", bool(self.sandbox.net.inbound)),
             ("services[].listeners", any(s.listeners for s in self.services)),
         ]
+        cleanup = [("stages[].cleanup", any(s.cleanup for s in self.stages))]
         return (out + [(k, SDK13_KEYS_CORE) for k, on in sdk13 if on] + [(k, BOOTSTRAP_KEYS_CORE) for k, on in sdk14 if on]
                 + [(k, SDK15_KEYS_CORE) for k, on in sdk15 if on] + [(k, SDK16_KEYS_CORE) for k, on in sdk16 if on]
-                + [(k, INBOUND_KEYS_CORE) for k, on in inbound if on] + [(k, WORKLOAD_KEYS_CORE) for k, on in workloads if on])
+                + [(k, INBOUND_KEYS_CORE) for k, on in inbound if on] + [(k, WORKLOAD_KEYS_CORE) for k, on in workloads if on]
+                + [(k, CLEANUP_KEYS_CORE) for k, on in cleanup if on])
 
     # ------------------------------------------------------------------------ stages
 
@@ -1091,9 +1107,19 @@ class Manifest(Contract):
         return {s.name for s in self.stages if s.after} | {s.after for s in self.stages if s.after}
 
     def standalone_stages(self) -> list[str]:
-        """Stages that run a job in one go: neither `after` another nor depended on (declaration order)."""
+        """Stages that run a job in one go: neither `after` another nor depended on (declaration order). A cleanup stage
+        is not one: no job ever runs it."""
         chain = self.chain_stages()
-        return [s.name for s in self.stages if s.name not in chain]
+        return [s.name for s in self.stages if s.name not in chain and not s.cleanup]
+
+    def job_stages(self) -> list["Stage"]:
+        """The stages jobs run: every stage but the cleanup stage."""
+        return [s for s in self.stages if not s.cleanup]
+
+    def cleanup_stage(self) -> "Stage | None":
+        """The stage the agent runs on a node before it deletes what the module left there (spec/manifest.md, "Cleanup
+        stage"), or None."""
+        return next((s for s in self.stages if s.cleanup), None)
 
     def default_stage(self) -> str | None:
         """The single-stage form: the stage a job runs when it names none (and the pipeline is not split): the stage that
@@ -1108,8 +1134,10 @@ class Manifest(Contract):
         return (st.determinism if st else None) or self.results.determinism
 
     def compares(self, stage: str | None) -> bool:
-        """Whether the host compares this stage's results (replicas, disputes, the result cache, goldens)."""
-        return self.determinism_of(stage) != "none"
+        """Whether the host compares this stage's results (replicas, disputes, the result cache, goldens). A cleanup
+        stage has no results the host sees."""
+        st = self.stage(stage) if stage else None
+        return not (st and st.cleanup) and self.determinism_of(stage) != "none"
 
     def certification_exempt(self, stage: str | None) -> bool:
         """Whether jobs of this stage run on a node before the module is certified there (spec/manifest.md, "Stages that
@@ -1259,11 +1287,12 @@ class Manifest(Contract):
             raise ValueError("no stage compares (every stage's determinism is none): goldens need one, and every module "
                              "is certified on golden evidence")
         self._bootstrap_rules(chain)
+        self._cleanup_rules(chain)
         self._trust_rules()
         self._checkpoint_rules()
         self._gpu_api_rules()
         self._workload_rules()
-        if len(self.stages) > 1 and "result.merge" not in self.coordinator.capabilities:
+        if len(self.job_stages()) > 1 and "result.merge" not in self.coordinator.capabilities:
             raise ValueError("a multi-stage module must implement result.merge (coordinator.capabilities)")
         if self.goldens and self.goldens.compare == "verb" and "golden.compare" not in self.coordinator.capabilities:
             raise ValueError("goldens.compare='verb' requires the golden.compare capability")
@@ -1429,6 +1458,34 @@ class Manifest(Contract):
             if p.contents() in seen:
                 raise ValueError(f"{where} holds the same files as {seen[p.contents()]!r}: an artifact names its pin by its files")
             seen[p.contents()] = p.dataset_id
+
+    def _cleanup_rules(self, chain: set):
+        """The cleanup stage (spec/manifest.md, rule 25)."""
+        clean = [s for s in self.stages if s.cleanup]
+        if len(clean) > 1:
+            raise ValueError(f"stages {[s.name for s in clean]} are all cleanup stages; a module has at most one")
+        for s in clean:
+            where = f"stage {s.name!r}: a cleanup stage"
+            if s.name in chain:
+                raise ValueError(f"{where} is standalone (neither `after` another nor depended on)")
+            if s.default:
+                raise ValueError(f"{where} is never the default stage (no job runs it)")
+            if s.bootstrap:
+                raise ValueError(f"{where} is not a bootstrap stage too")
+            if s.determinism not in (None, "none"):
+                raise ValueError(f"{where} compares nothing: its determinism is none or unset")
+            r = s.requires
+            if r.capabilities or r.pools or r.needs_pools:
+                raise ValueError(f"{where} requires no capabilities and reserves and needs no pools (it runs whatever the "
+                                 "node provides, with no container broker, GPU or module services)")
+            if s.secrets:
+                raise ValueError(f"{where} receives no secrets")
+            if s.checkpoint:
+                raise ValueError(f"{where} never checkpoints")
+            if s.placement:
+                raise ValueError(f"{where} has no placement (it runs on the node it cleans)")
+        if clean and not self.job_stages():
+            raise ValueError("a module needs a stage besides its cleanup stage")
 
     def _trust_rules(self):
         """Secrets (spec/manifest.md, rule 16), and container image sets and the container GPU pool (rule 17)."""
