@@ -393,6 +393,11 @@ class CampaignJob(Contract):
         "declaring the capability accepted it. One tick carries at most TICK_RESULTS_BUDGET bytes of results, newest "
         "done first."))
     result_omitted: bool = Field(False, description="[beta] A done job's result left out to keep the tick within its budget.")
+    failure: dict[str, Any] | None = Field(None, description=(
+        "[beta] For a failed or quarantined job (core 2.10.4): why it ended, {reason, code, detail, fault, retryable, "
+        "final, attempt_id, node_id, at}. reason is the attempt's end reason; code the runner's failure.json reason "
+        "(the module's own `<module-short>/<code>`); detail its detail (at most 512 characters here); final true when "
+        "the runner declared the job can never succeed and it ended failed without retries."))
 
 
 class CampaignTickParams(Contract):
@@ -627,8 +632,9 @@ class JobsQueryParams(Contract):
 
 class JobsQueryResult(Contract):
     jobs: list[dict[str, Any]] = Field(default_factory=list, description="[beta] {job_id, job_key, state, kind, stage, dataset_id, "
-                                       "labels, group, target_node, value, digest, fields, node_id, platform}; result fields "
-                                       "(platform: the canonical result's node platform) only for done jobs.")
+                                       "labels, group, target_node, value, digest, fields, node_id, platform, failure?}; result "
+                                       "fields (platform: the canonical result's node platform) only for done jobs; failure "
+                                       "(CampaignJob.failure, core 2.10.4) only for failed or quarantined jobs.")
 
 
 FILE_PATH = r"^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*$"   # relative; `.` and `..` segments are refused by check_file_path

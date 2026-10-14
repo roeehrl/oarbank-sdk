@@ -136,8 +136,14 @@ class Failure(Contract):
         "the module's own `<module-short>/<code>`, which ends the attempt as `exit_nonzero` with the code kept in its "
         "detail."))
     detail: str = Field("", description="[stable] Human-readable detail (truncated to 4 KiB by the agent).")
-    retryable: bool | None = Field(None, description="[beta] Overrides the exit-code attribution when set (true = transient).")
-    fault: Literal["job", "host", "transient"] | None = Field(None, description="[stable] Who is at fault; overrides the exit code (job: never succeeds; host: the node lacks something; transient: retry).")
+    retryable: bool | None = Field(None, description=(
+        "[beta] Whether another attempt can help; overrides the exit-code attribution when set. true with no fault (or "
+        "fault transient): transient, retried at no cost; true with fault job: spends one of the stage's attempts. "
+        "false: the job ends failed at once, whoever is at fault (spec/runner-protocol.md, \"Exit codes\")."))
+    fault: Literal["job", "host", "transient"] | None = Field(None, description=(
+        "[stable] Who is at fault; overrides the exit code. job: the job never succeeds, so it ends failed at once, "
+        "never retried elsewhere (unless retryable is true); host: the node lacks something (re-doctored, the job runs "
+        "elsewhere); transient: retry."))
 
 
 # <workdir>/phase: a single line naming the current phase (e.g. `call`, `scoring`, `finishing`), replaced
