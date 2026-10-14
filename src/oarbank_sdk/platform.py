@@ -153,10 +153,11 @@ def feasible_classes(platforms, stage_platforms=(), job_platforms=(), mix: str |
 
 
 def feasible(manifest, stages=None, *, platforms=(), mix: str | None = None) -> list[str]:
-    """`feasible_classes` for a manifest: `stages` names the stages the unit runs (default: every stage), `platforms`
-    are the job's or dataset's platforms, and `mix` defaults to the manifest's [placement].mix (`any` when absent)."""
+    """`feasible_classes` for a manifest: `stages` names the stages the unit runs (default: every stage a job runs, so
+    not the cleanup stage), `platforms` are the job's or dataset's platforms, and `mix` defaults to the manifest's
+    [placement].mix (`any` when absent)."""
     by_name = {s.name: s for s in manifest.stages}
-    names = list(stages) if stages else list(by_name)
+    names = list(stages) if stages else [s.name for s in manifest.stages if not s.cleanup]
     unknown = [n for n in names if n not in by_name]
     if unknown:
         raise ValueError(f"unknown stages {unknown}")

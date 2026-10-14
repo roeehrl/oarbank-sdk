@@ -112,7 +112,11 @@ the `modules.install` operation (tier T2: you review the plan first). Install:
 | `modules.rollback <name>` | T1 | Abandons a canary, or flips current back to previous. In-flight jobs finish or are cancelled, never silently re-bound. |
 | `modules.disable <name>` | T1 | The kill switch. No dispatch fleet-wide from the next claim; live attempts are revoked in the next heartbeat and their jobs requeued. |
 | `modules.pin <name>@<version> --node N` | T1 | One node runs one version, until the pin is cleared. |
-| `modules.uninstall <name>@<version>` | T2 | Refused while the version is current, previous, canary or pinned. |
+| `modules.uninstall <name>@<version>` | T2 | Refused while the version is current, previous, canary or pinned. It removes the version from the coordinator only. |
+| `modules.purge <name> --node N` or `--all` | T2 | Deletes what the module left on the node (or on every node where it is turned off) at once, after its cleanup stage ([manifest.md](manifest.md#cleanup-stage)). Refused on a node where the module is enabled. |
+
+A node deletes what a module left there by itself: a module turned off on a node after the owner's retention period
+(`module_retention_days`, 7 days by default), and a module no longer in the node's release after at most a day.
 
 Certification is keyed by each module's digest on each node. A new version re-certifies that module on
 the nodes that get it and nothing else. When release signing is on, a node's release is the signed lock of

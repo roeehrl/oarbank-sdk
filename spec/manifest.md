@@ -63,7 +63,7 @@ is an argv array, never a shell string.
 | `[coordinator]` | The module-protocol process: `exec`, `runtime`, optional-verb `capabilities`, `concurrency`, per-verb `timeouts_s`, host-callback `permissions`, the effects `campaign.tick` may request, `env`, and per-platform `variants`. |
 | `[coordinator.move]` | The module's part in a coordinator move: `rules` (a files prefix or a store collection, with class `carry`, `rebuild` or `drop`) and the `effects` the move verbs may request ([module-protocol.md](module-protocol.md#coordinator-moves)). |
 | `[runner]` | The runner-protocol executable: `exec`, `runtime`, `capabilities`, `stop_grace_s`, `checkpoint_grace_s`, `gpu`, `bandwidth_class`, `env`, and per-platform `variants`. |
-| `[[stages]]` | At least one. Each has `name`, optional `after`, and `requires` (node capabilities, reserved `pools`, `needs_pools` that must merely exist, and `resources` cpu/mem_gb/network), plus `timeout_s` and `retry`, per-platform `variants`, a `placement` constraint with its `after` stage, and, for a standalone stage, `default` (the stage a job runs when it names none) and its own `determinism` (`none` for work whose results depend on when it ran, such as ingesting a moving feed: the host never replicates, compares, caches or golden-tests it, and with no capability or pool required it runs before certification: [Stages that run before certification](#stages-that-run-before-certification)). A stage's `checkpoint` (`max_mb`, `min_interval_s`) keeps portable checkpoints ([Portable checkpoints](#portable-checkpoints)). |
+| `[[stages]]` | At least one. Each has `name`, optional `after`, and `requires` (node capabilities, reserved `pools`, `needs_pools` that must merely exist, and `resources` cpu/mem_gb/network), plus `timeout_s` and `retry`, per-platform `variants`, a `placement` constraint with its `after` stage, and, for a standalone stage, `default` (the stage a job runs when it names none) and its own `determinism` (`none` for work whose results depend on when it ran, such as ingesting a moving feed: the host never replicates, compares, caches or golden-tests it, and with no capability or pool required it runs before certification: [Stages that run before certification](#stages-that-run-before-certification)). A stage's `checkpoint` (`max_mb`, `min_interval_s`) keeps portable checkpoints ([Portable checkpoints](#portable-checkpoints)). One stage may be the `cleanup` stage, which no job runs ([Cleanup stage](#cleanup-stage)). |
 | `[[services]]` | Node helpers the agent manages through the [service protocol](service-protocol.md): lifecycle, timeouts, restart policy, which pools and capabilities they `provide`, the memory, yield and pause flags, GPU use (`gpu`), `endpoint` for a service jobs reach through the agent (a warm model server), and the inbound `listeners` it serves. |
 | `[sandbox]` | What the module's node-side processes need beyond their own directories, each an operator approves per version: the network (`net.mode`, `net.allow`), inbound listeners the agent opens for it (`net.inbound`), host tools, the GPU, container images and image sets, folders ([sandbox.md](sandbox.md)). |
 | `[[probes]]` | Read-only capability checks (`fingerprint` only), each run every `period_s`. |
@@ -86,7 +86,7 @@ The models enforce these, beyond the per-field types:
 2. Every pool a stage requires (`pools` or `needs_pools`) is provided by a declared service. Every required capability is provided by a service or a probe.
 3. If services or probes are declared, `requires.service_protocol` lists at least one major.
 4. `results.value.field` is a declared result field.
-5. A module with more than one stage implements `result.merge` (listed in `coordinator.capabilities`). The `campaign.tick.results` capability requires `campaign.tick`.
+5. A module with more than one stage that jobs run (the cleanup stage does not count) implements `result.merge` (listed in `coordinator.capabilities`). The `campaign.tick.results` capability requires `campaign.tick`.
 6. `goldens.compare = "verb"` requires the `golden.compare` capability.
 7. With `runtime.kind = "uv"`, both `lock` and `python` are set.
 8. A move rule names exactly one of `files` or `store`. A `rebuild` rule requires the `move.postflight` capability, and `coordinator.move.effects` requires at least one move verb.
@@ -109,6 +109,7 @@ The models enforce these, beyond the per-field types:
       the schema is a bundle file.
     - **2.10:** `sandbox.net.inbound`, `services[].listeners`, `[[workloads]]`, `requires.workload_protocol`, the
       coordinator capability `workload.report` and `coordinator.workload_effects`.
+    - **2.11:** `stages[].cleanup`.
 
     Every entry of `requires.features` is one this SDK knows.
 13. Every bundle path a node exec names (argv[0], or the script a `python` exec runs) reaches each platform that runs it under `bundle.platform_files`. `datasets.platform_bound` kinds are declared kinds.
@@ -155,6 +156,11 @@ The models enforce these, beyond the per-field types:
     - lint: a workload under `sandbox.net.mode = "egress-any"` while the module's platforms include Linux (Linux nodes
       cannot enforce that mode, so the core places such workloads on macOS and Windows nodes only), and workloads that
       receive secrets under `egress-any`.
+25. `stages[].cleanup` is set on at most one stage: a standalone stage that is not the default stage and not a
+    bootstrap stage, whose determinism is `none` or unset, which requires no capability, reserves and needs no pools,
+    lists no secrets and sets no `checkpoint` or `placement`. A module has at least one other stage. The cleanup stage
+    is not counted as standalone (rule 14) or as a stage for `result.merge` (rule 5), and it never compares
+    ([Cleanup stage](#cleanup-stage)).
 
 A module may offer both forms of an evaluation. For example, render declares a single `eval` stage and a `render → score` chain; the operator's pipeline setting picks the form for jobs that name no stage. A module may also declare standalone utility stages (an ingestion `sync`, a `fetch` that provisions tools) and enqueue jobs that name them; it then marks its evaluation stage `default = true`.
 
@@ -217,6 +223,32 @@ files = [{ path = "gatk-package-4.5.0.0-local.jar", sha256 = "<64 hex>", size = 
 - The pins are part of the manifest, so the bundle digest an operator installs and approves covers them.
 - A job runs a bootstrap stage only when it names it (`jobs.enqueue` `stage`); its results never count toward
   certification.
+
+## Cleanup stage
+
+When a module leaves a node (the owner turned it off there, it is no longer in the node's release, or the node was
+retired), the agent deletes what the module put there: its data directory, the datasets it cached and the container
+images it pulled ([sandbox.md](sandbox.md#cleanup-runs)). The module's processes can only write there, so the core
+needs no help from the module. A module that also holds state outside the node (a registration with an outside
+service, a lease, a remote resource) declares a **cleanup stage** to release it:
+
+```toml
+[[stages]]
+name = "release"
+cleanup = true              # the agent runs it before it deletes the module's data on a node
+timeout_s = 120             # at most 600 s
+requires = { resources = { cpu = 0.5, mem_gb = 0.5 } }
+```
+
+- The agent runs it on the node, once, just before the deletion, with the cleanup grants
+  ([sandbox.md](sandbox.md#cleanup-runs)) and the spec the runner protocol describes
+  ([runner-protocol.md](runner-protocol.md#cleanup-runs)). No job ever runs it: `jobs.enqueue` refuses a job that
+  names it.
+- It is best effort. A run that fails, crashes or outlasts its timeout is logged and reported to the owner, and the
+  deletion goes ahead anyway.
+- It runs only on the platforms the stage's `requires.platforms` admits (every declared platform when empty), and
+  only while the node still has the module's bundle.
+- Most modules need none: the core already deletes everything on the node.
 
 ## Settings
 
