@@ -3,7 +3,7 @@ title: Adding machines
 description: Join computers to an Oarbank fleet on macOS, Linux and Windows, by hand, over SSH, with a one-line installer or through MDM, Intune and Ansible, and what each join error means.
 type: how-to
 platforms: [macos, linux, windows]
-core: '2.10.3'
+core: '2.10.4'
 sidebar:
   order: 3
 ---
@@ -56,7 +56,7 @@ the way is caught rather than trusted. Expiring or revoking a code never removes
     **Over SSH:**
 
     ```sh
-    sudo installer -pkg oarbank-agent-2.10.3-macos-arm64.pkg -target /
+    sudo installer -pkg oarbank-agent-2.10.4-macos-arm64.pkg -target /
     sudo oarbank-node join                                      # prompts for the code, hidden
     printf '%s' 'OB2-…' | sudo oarbank-node join --code-stdin   # from a script
     ```
@@ -68,7 +68,7 @@ the way is caught rather than trusted. Expiring or revoking a code never removes
     **Over SSH or in a terminal:**
 
     ```sh
-    sudo OARBANK_JOIN_CODE='OB2-…' apt install ./oarbank-agent_2.10.3_amd64.deb
+    sudo OARBANK_JOIN_CODE='OB2-…' apt install ./oarbank-agent_2.10.4_amd64.deb
     ```
 
     or install first and join afterwards (`sudo oarbank-node join` prompts for the code). The package passes
@@ -87,8 +87,8 @@ the way is caught rather than trusted. Expiring or revoking a code never removes
     **Silently**, from an elevated prompt:
 
     ```powershell
-    msiexec /i oarbank-agent-2.10.3-windows-x64.msi /qn JOINCODEFILE=C:\path\join-code.txt
-    msiexec /i oarbank-agent-2.10.3-windows-x64.msi /qn JOINCODE=OB2-…
+    msiexec /i oarbank-agent-2.10.4-windows-x64.msi /qn JOINCODEFILE=C:\path\join-code.txt
+    msiexec /i oarbank-agent-2.10.4-windows-x64.msi /qn JOINCODE=OB2-…
     ```
 
     Other properties: `NAME=`, `COORDINATOR=` (join by address), `CONTAINERS=1`, `NOLAUNCH=1` (do not open Oarbank Node
@@ -165,7 +165,7 @@ prints what the machine's policy sets; a join code shows as `(set)`, never its v
 
     ```yaml
     - name: Install the Oarbank node
-      ansible.builtin.apt: { deb: /tmp/oarbank-agent_2.10.3_amd64.deb }
+      ansible.builtin.apt: { deb: /tmp/oarbank-agent_2.10.4_amd64.deb }
     - name: Join the fleet
       ansible.builtin.shell: printf '%s' "{{ oarbank_join_code }}" | oarbank-node join --code-stdin --no-input --wait 600
       args: { creates: /var/lib/oarbank/status/joined }
@@ -174,11 +174,11 @@ prints what the machine's policy sets; a join code shows as `(set)`, never its v
   </TabItem>
   <TabItem label="Windows" icon="seti:windows">
     Set the keys as values under `HKLM\SOFTWARE\Policies\Codonic\Oarbank\Agent` with Group Policy (the release's
-    `oarbank-agent-2.10.3-windows-admx.zip` holds the administrative template, under **Codonic › Oarbank › Node**, with
+    `oarbank-agent-2.10.4-windows-admx.zip` holds the administrative template, under **Codonic › Oarbank › Node**, with
     the tighten-only settings under **Node settings (tighten-only)**; deploy the 2.9 template for `ShowStatusIcon` and
     `Settings`) or
     Intune. To deploy with Intune, add the MSI as a **Win32 app** with the install command
-    `msiexec /i oarbank-agent-2.10.3-windows-x64.msi /qn JOINCODE=OB2-…`, install behavior **System**, and the detection
+    `msiexec /i oarbank-agent-2.10.4-windows-x64.msi /qn JOINCODE=OB2-…`, install behavior **System**, and the detection
     rule "file `%ProgramData%\Oarbank\status\joined` exists". The node writes that file once it has joined, so Intune
     reports the app as installed only then.
   </TabItem>

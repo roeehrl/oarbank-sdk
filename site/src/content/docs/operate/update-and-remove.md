@@ -3,15 +3,15 @@ title: Updating and removing
 description: Update the whole fleet from the coordinator with one rollout, or a coordinator or node by hand, move the coordinator to another computer, and remove a node or the coordinator on macOS, Linux and Windows without losing your owner keys by accident.
 type: how-to
 platforms: [macos, linux, windows]
-core: '2.10.3'
+core: '2.10.4'
 sidebar:
   order: 17
 ---
 
-This page covers Oarbank 2.10.3. Coming from an older release, read [Upgrading](/oarbank/operate/upgrading) first:
+This page covers Oarbank 2.10.4. Coming from an older release, read [Upgrading](/oarbank/operate/upgrading) first:
 from 2.8 the macOS and Linux coordinator moves to a system service once, and from 2.9 nodes need the 2.10 agent for the
 new features. The full install guide, including building the packages, is
-[docs/install.md](https://github.com/roeehrl/oarbank/blob/v2.10.3/docs/install.md) in the core's repository.
+[docs/install.md](https://github.com/roeehrl/oarbank/blob/v2.10.4/docs/install.md) in the core's repository.
 
 ## Update the fleet
 
@@ -22,12 +22,12 @@ and itself, ring by ring, rolling back by itself what does not come up healthy. 
    `oarbank-fleet-<version>.json` and the packages your nodes and coordinator need, in one directory.
 
    ```sh
-   oarbank update fetch 2.10.4          # from the release source (the project's GitHub releases by default)
-   oarbank update import ./oarbank-2.10.4/
-   oarbank update sign 2.10.4           # signing mode: with your owner key, on the machine that holds it
+   oarbank update fetch 2.10.5          # from the release source (the project's GitHub releases by default)
+   oarbank update import ./oarbank-2.10.5/
+   oarbank update sign 2.10.5           # signing mode: with your owner key, on the machine that holds it
    ```
 
-2. **Start it.** **Update fleet** on the Updates page, or `oarbank update start 2.10.4`, shows the plan first: the
+2. **Start it.** **Update fleet** on the Updates page, or `oarbank update start 2.10.5`, shows the plan first: the
    coordinator, then the `canary`, `early` and `broad` rings with the nodes in each, their update windows, and the
    nodes skipped and why (held, pinned, offline, no updater). Confirm it and the rollout runs by itself:
    - the coordinator updates first. It snapshots its database, tries the new build's migrations on a copy, then installs
@@ -54,11 +54,11 @@ agent only (below).
 ## Update the coordinator by hand
 
 Download the new installer from the [releases](https://github.com/roeehrl/oarbank/releases) and check it. Each
-package set has its own checksum file beside it, for example `SHA256SUMS-coordinator-packages-2.10.3-linux-amd64` for
-the Linux `.deb` and `.rpm`, or `SHA256SUMS-coordinator-msi-2.10.3-windows-x64` for the Windows MSI:
+package set has its own checksum file beside it, for example `SHA256SUMS-coordinator-packages-2.10.4-linux-amd64` for
+the Linux `.deb` and `.rpm`, or `SHA256SUMS-coordinator-msi-2.10.4-windows-x64` for the Windows MSI:
 
 ```sh
-sha256sum --ignore-missing -c SHA256SUMS-coordinator-packages-2.10.3-linux-amd64   # macOS: shasum -a 256 --ignore-missing -c …
+sha256sum --ignore-missing -c SHA256SUMS-coordinator-packages-2.10.4-linux-amd64   # macOS: shasum -a 256 --ignore-missing -c …
 ```
 
 Then run the installer as you did the first time.
@@ -83,19 +83,19 @@ shows how to look at the services and their logs.
 For nodes without an update runner (a personal install, a development build) the coordinator can still replace the
 agent binary alone; nobody needs to log in to them.
 
-Upload the release's agent binary for each platform your nodes run (`oarbank-agent-2.10.3-darwin-arm64`,
+Upload the release's agent binary for each platform your nodes run (`oarbank-agent-2.10.4-darwin-arm64`,
 `-darwin-amd64`, `-linux-amd64`, `-linux-arm64`, `-windows-x64.exe`, `-windows-arm64.exe`; each has a
 `SHA256SUMS-agent-…` file), then sign, try and promote it:
 
 ```sh
-oarbank agent upload oarbank-agent-2.10.3-linux-amd64
+oarbank agent upload oarbank-agent-2.10.4-linux-amd64
 oarbank agent list                               # the uploaded builds, with their sha256
 oarbank agent sign <build>
 oarbank agent canary <build> --node <node>       # try it on one node first
 oarbank agent promote <build>
 ```
 
-`<build>` is the version (`2.10.3`) when only one uploaded build has it; with one build per platform, use the first 8 or
+`<build>` is the version (`2.10.4`) when only one uploaded build has it; with one build per platform, use the first 8 or
 more characters of its sha256 from `oarbank agent list`. `oarbank agent list` also shows which version each node
 runs. The launcher keeps the previous version and rolls back a build
 that does not confirm itself within 10 minutes. Installing a newer node package also works: it replaces the launcher and
