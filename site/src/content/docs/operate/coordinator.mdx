@@ -125,6 +125,39 @@ and never holds account credentials or keys.
 The node's own app, **Oarbank Node**, follows the same model, with a managed policy key that hides it:
 [Adding machines](/oarbank/operate/adding-machines#oarbank-node-in-the-menu-bar-or-tray).
 
+## Open the console from another device
+
+The web console and its module frames listen on `http://127.0.0.1:7400` (frames on `7402`) only, until you choose
+more in **Settings → Access** (or with the CLI). The choice is a setting, so a system-service install needs no
+edited service file: the console picks up a change within seconds, on macOS, Linux and Windows alike, and the desktop
+app's **Open web app** keeps using localhost.
+
+- **Console listen addresses** (`console_listen`): `localhost` is always included. Add `tailscale` to listen on this
+  machine's Tailscale addresses (followed when they change), or an IP address of this machine:
+
+  ```sh
+  oarbank settings set console_listen localhost,tailscale
+  ```
+
+  Then open `http://<this machine's Tailscale address>:7400` from another device of your tailnet. `all`
+  listens on every interface, so anyone who can reach the machine reaches the sign-in page; saving it asks you to type
+  `console_listen`. Prefer `tailscale`.
+- **Console over https (Tailscale)** (`console_https`): passkeys need a host name in a secure context, so they never
+  work at an IP address. Set it to `tailscale` and the console is served at `https://<this machine's MagicDNS name>/`
+  through `tailscale serve` (tailnet only, never Funnel); module frames use port 8443. Turn on MagicDNS and HTTPS
+  certificates in your tailnet first. On Linux the console's account may not change Tailscale's configuration: the
+  Settings page then shows two commands to run once as root (or make that account Tailscale's operator).
+
+  ```sh
+  oarbank settings set console_https tailscale
+  ```
+
+- **Console host names** (`console_hosts`): another name in front of the console, such as your own reverse proxy.
+
+Every address asks for a sign-in. `oarbank console login` prints a one-time link for each address the console
+listens on; open the one your browser can reach. The **Listening now** card under Settings → Access shows where the
+console listens, and why an address is not bound yet.
+
 ## Setting up
 
 The package installs the software only (on macOS and Linux it also creates the service account, the owners' group and
