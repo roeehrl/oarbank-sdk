@@ -4,7 +4,10 @@ What changed in each oarbank-sdk release, for module authors. The core's changel
 [roeehrl/oarbank](https://github.com/roeehrl/oarbank/blob/main/CHANGELOG.md). Contract rules:
 [spec/versioning.md](spec/versioning.md).
 
-## Unreleased
+## 1.8.0 (2026-10-15)
+
+For Oarbank core 2.11.0. Everything is additive within manifest 1 and module protocol 1. The cleanup stage needs
+`requires.core >= 2.11`; the failure fields and the `fault`/`retryable` rule apply from core 2.10.4.
 
 ### Changed
 
