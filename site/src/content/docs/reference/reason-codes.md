@@ -15,6 +15,37 @@ Severity runs from P1 (information) to P5 (needs a person now). A **remedy** is 
 `oarbank op <operation> <target>` (preview it with `--dry-run`), or its matching command in
 [the command-line reference](/oarbank/reference/cli). Module codes look like `<module-short>/<code>`.
 
+## New in 2.11
+
+What the codes added in 2.11 mean for you, and what to do. The full messages are in the tables below, except for
+`E_RETIRED` (a node's status) and `adopt_refused` (the error an approval answers with), which are not reason codes.
+
+### Containers
+
+| Code | Meaning | What you do |
+|---|---|---|
+| `CONTAINERS_STOPPED` | `containers = on_demand` and the node's container runtime is stopped: it starts when container work waits for it and the running runtimes are busy | Nothing: the work runs there once the VM is ready ([Containers on nodes](/oarbank/operate/containers)) |
+| `CONTAINERS_DISABLED` | `containers = off` on the node: its container stages run elsewhere | Set `containers` to `on_demand` or `always` on the node to run them there |
+
+### Module data
+
+| Code | Meaning | What you do |
+|---|---|---|
+| `MODULE_DATA_SCHEDULED` | A module left the node (turned off there, no longer in its release, the node retired, purged): what it left is deleted at the time shown | Nothing, or turn it back on to keep it; `oarbank module purge <module> --node N` deletes it now |
+| `MODULE_CLEANUP_FAILED` | The module's cleanup stage failed on the node; its data was deleted anyway | Report it to the module's author, or release what the module held outside the node yourself |
+| `DISK_CACHE_OVER_CAP` | The node's dataset cache is over its `disk_gb` cap, and what is left is in use by its jobs or wanted by pending work | Raise `disk_gb`, or let the jobs finish |
+
+### Session helpers and retired nodes
+
+| Code | Meaning | What you do |
+|---|---|---|
+| `PROTECTION_SESSION_HELPER_OUTDATED` | A person's session helper runs another version than the installed agent; the agent asks it to exit so the installed one starts | Nothing, usually; if it stays, install the node package again, which replaces old helpers |
+| `E_RETIRED` | Shown by `oarbank-node status` on a node the owner retired: its agent stopped its work and waits | `oarbank-node leave`, then join again to make it a node ([Remove a node](/oarbank/operate/update-and-remove#remove-a-node)) |
+| `adopt_refused` | `oarbank node approve … --adopt-settings-from` was refused: the old node is retired, still online, not a node this machine looks like, or the request already proves a node's key | Approve the machine without carrying settings over, or wait until the old node is offline ([Adding machines](/oarbank/operate/adding-machines)) |
+
+`release_awaiting_owner` no longer opens for a platform no enabled module runs on: its release is empty and needs no
+signature.
+
 ## New in 2.10
 
 What the codes added in 2.10 mean for you, and what to do. The full messages are in the tables below.
@@ -77,14 +108,6 @@ what host protection did to a workload ([Workloads](/oarbank/operate/workloads#h
 | `DELEGATE_PAUSE`, `DELEGATE_RESUME`, `DELEGATE_LOWER`, `DELEGATE_RESTORE` | Protection paused, resumed, lowered or restored [delegated processes](/oarbank/operate/delegated-processes) | Nothing |
 | `DELEGATE_PAUSE_LIMIT` | Delegated processes reached the longest pause: resumed and lowered instead, never stopped | Nothing |
 
-### Module data (2.11)
-
-| Code | Meaning | What you do |
-|---|---|---|
-| `MODULE_DATA_SCHEDULED` | A module left the node (turned off there, no longer in its release, the node retired, purged): what it left is deleted at the time shown | Nothing, or turn it back on to keep it; `oarbank module purge <module> --node N` deletes it now |
-| `MODULE_CLEANUP_FAILED` | The module's cleanup stage failed on the node; its data was deleted anyway | Report it to the module's author, or release what the module held outside the node yourself |
-| `DISK_CACHE_OVER_CAP` | The node's dataset cache is over its `disk_gb` cap, and what is left is in use by its jobs or wanted by pending work | Raise `disk_gb`, or let the jobs finish |
-
 ### New alerts
 
 `listener_unreachable` (P3), `listener_saturated` (P4) and `workload_withdrawn` (P3) are new; their runbooks are in
@@ -103,6 +126,7 @@ A rule with a pending period notifies only if its condition outlives it; a flap 
 | `breaker` | P3 | 15 min | 3 in 60 min | Repeated job failures on one node: open the node's failures and attempt logs; the node re-doctors on its own. If it keeps tripping, quarantine it. |
 | `certifying_stuck` | P3 | 0 min | – | Golden jobs have not finished: is the node asleep or yielding? Check its goldens on the node page; `nodes.recertify` retries. |
 | `coordinator_platform_unsupported` | P4 | 0 min | – | The coordinator moved to a platform this module's coordinator side does not run on (requires.coordinator_platforms), so the module was disabled. Install a version that supports this platform and enable it, or move the coordinator back. |
+| `coordinator_update_rolled_back` | P4 | 0 min | – | The coordinator's own update failed its probation and was restored from its snapshot: data written during the probation is gone. Read the coordinator card on the Updates page and coordinator-result.json in the coordinator's updates directory; the rollout is halted. |
 | `dispute` | P4 | 0 min | – | Replicas disagree and no third node can break the tie: the job is quarantined. Retry it once another node is certified. |
 | `doctor_failed` | P3 | 5 min | – | A module's doctor check fails on the node: see the failing checks on the node page, fix the dependency, then run the doctor. |
 | `golden_failed` | P4 | 0 min | – | Golden jobs keep failing: compare the golden results with the expected values; a module or tool change may need a new version. |
@@ -118,9 +142,13 @@ A rule with a pending period notifies only if its condition outlives it; a flap 
 | `protection_flapping` | P3 | 0 min | – | A protection rule escalates and relaxes too often: widen its thresholds or timing in the node's protection editor. |
 | `protection_probe_harm` | P3 | 0 min | – | Fleet work measurably slowed a protected process: consider strict_yield on that node or a tighter rule. |
 | `quarantined` | P4 | 0 min | – | The node gave wrong answers (dispute lost or nondeterminism): its results were invalidated. Investigate before clearing the quarantine. |
-| `release_awaiting_owner` | P3 | 5 min | – | A release waits for the owner's signature, so its nodes get nothing new (an enrolled node gets no first release and runs no module). On the machine that holds the owner key run the command the alert names: `oarbank release sign <release> --promote` for a platform's release, `oarbank release sign <release>` for a canary or pinned node's own. `oarbank release list` shows every waiting release. The alert clears once the release is signed and current, or a newer build replaces it. |
+| `release_awaiting_owner` | P3 | 5 min | – | A release holding module code waits for the owner's signature, so its nodes get no new module code (an enrolled node gets no first release). A platform no enabled module runs on never raises it: its release is empty and needs no signature. On the machine that holds the owner key run the command the alert names: `oarbank release sign <release> --promote` for a platform's release, `oarbank release sign <release>` for a canary or pinned node's own. `oarbank release list` shows every waiting release. The alert clears once the release is signed and current, or a newer build replaces it. |
 | `revoked` | P4 | 0 min | – | A golden mismatch revoked the module on the node: its results are not trusted until it re-certifies. Check the node's tools. |
+| `rollout_halted` | P4 | 0 min | – | A rollout stopped granting updates: its ring's failure budget was exceeded, the fleet was unhealthy at a ring's start, the coordinator's own update failed, or an operator halted it. Read the reason on the Updates page (`oarbank update status`), look at the failed nodes' errors and runner logs, then resume it or roll it back. |
+| `rollout_rolled_back` | P4 | 0 min | – | A rollout is being rolled back: the nodes it moved reinstall the release they ran. Watch the rollback on the Updates page; a node without the previous release imported is skipped and needs its old package by hand. Find why the release failed before starting it again. |
 | `secret_unreadable` | P3 | 0 min | – | A module secret is stored but this coordinator cannot decrypt it (a backup restored or a home copied to another machine, whose secrets key stayed behind): set it again with `oarbank secret set`. Jobs needing it wait with SECRETS_NOT_SET. |
+| `update_available` | P4 | 0 min | – | A signed fleet release is ready and update_auto is notify: open the Updates page, review the plan (Update fleet) and start it, or `oarbank update plan <version>` then `oarbank update start <version>`. It clears once a rollout of it starts or a newer release replaces it. |
+| `update_node_stuck` | P3 | 0 min | – | A node has been draining, installing or confirming an update for over 45 minutes and still holds a rollout slot. Check the node: a job that will not finish (drain), the update runner's log in <system data>/update/logs, or an agent that never confirmed. Skip it (`oarbank update skip <node>`) to free the slot. |
 | `workload_withdrawn` | P3 | 0 min | – | A workload failed again and again on the node and was withdrawn: read its last error and log tail (the module's Workloads tab, `oarbank workload logs`), fix the cause (a secret, a setting, the module), then `oarbank workload restart` it. The alert clears once it runs again. |
 
 ## Reason codes
@@ -141,6 +169,8 @@ the values the agent and the coordinator write on an attempt that ended with the
 | `BACKOFF` | Retrying after {seconds} s (backoff) | P1 | – | – | – |
 | `POOL_EXHAUSTED` | No free {pool} token ({free} free, {need} needed) | P1 | – | – | – |
 | `POOL_ABSENT` | The node offers no {pool} pool | P1 | – | – | – |
+| `CONTAINERS_DISABLED` | Containers are off on this node (containers = off): its container stages run elsewhere; set containers to on_demand or always there to run them | P1 | – | `settings.apply` | – |
+| `CONTAINERS_STOPPED` | The node's container runtime is stopped (containers = on_demand): it starts when container work waits for it and the fleet's running runtimes are busy, in about {seconds} s | P1 | – | – | – |
 | `INSUFFICIENT_CPU` | Needs {need} cores, {free} allocatable | P1 | – | – | – |
 | `INSUFFICIENT_MEM` | Needs {need} GB, {free} GB allocatable | P1 | – | – | – |
 | `USER_CAP_BINDING` | Owner cap {cap} is binding | P1 | – | `settings.apply` | – |
@@ -163,7 +193,7 @@ the values the agent and the coordinator write on an attempt that ended with the
 | `FOLDER_UNAVAILABLE` | Module {module} needs folders this node does not provide (unmapped, another access, refused by the node, or awaiting the owner's signature) | P1 | – | `settings.folders.update` | – |
 | `SANDBOX_BACKEND_MISSING` | The agent on this node cannot sandbox module processes | P1 | – | – | – |
 | `CAPABILITY_NOT_ENFORCED` | The node's sandbox cannot enforce {capability}, which module {module} needs | P1 | – | – | – |
-| `AGENT_TOO_OLD` | Module {module} needs agent {need}; the node runs {have} | P1 | – | `agent.promote` | – |
+| `AGENT_TOO_OLD` | Module {module} needs agent {need}; the node runs {have} | P1 | – | `updates.start`, `agent.promote` | – |
 | `PINNED_ELSEWHERE` | Pinned to node {node} | P1 | – | – | – |
 | `POOL_JOBS_ONLY` | The node is yielding and takes only short pool jobs | P1 | – | – | – |
 | `GPU_BLOCKED` | A GPU job: the node admits no more GPU jobs now (owner setting or a protected process is using the GPU) | P1 | – | – | – |
@@ -253,7 +283,10 @@ the values the agent and the coordinator write on an attempt that ended with the
 | `S16_GUARD` | Refused to act on process {pid}: it is not in the spawn registry ({why}) | P3 | – | – | – |
 | `PROTECTION_FRONT_UNKNOWN` | The front app cannot be read here ({why}); frontmost rules count it as in front | P4 | – | – | – |
 | `PROTECTION_PRESENCE_UNKNOWN` | Whether someone is at the machine cannot be read ({why}); it counts as someone present | P4 | – | – | – |
-| `PROTECTION_UNREADABLE` | Rule {rule} matched {n} processes whose path or arguments could not be read (counted as matches) | P5 | – | – | – |
+| `PROTECTION_SESSION_HELPER_UNAVAILABLE` | Session helper unavailable ({why}): other accounts' processes are evaluated without session helper (fail-safe) (rules: {rules}) | P3 | – | – | – |
+| `PROTECTION_SESSION_HELPER_OUTDATED` | Session helper running another version than the installed agent {expected}: {helpers} | P4 | – | – | – |
+| `PROTECTION_UNREADABLE` | Rule {rule} matched {n} processes whose path, arguments or identity could not be read (counted as matches) | P5 | – | – | – |
+| `PROTECTION_WITHOUT_HELPER` | Rule {rule}: {n} processes evaluated without session helper (fail-safe): what only their helper reads counts as matching, unknown use as active | P4 | – | – | – |
 | `PROTECTION_NO_LOWERING` | This node cannot lower fleet jobs (no delegated cgroup with the cpu controller): pausable jobs are paused instead | P3 | – | – | – |
 | `PROTECTION_NO_IPC_COUNTERS` | Rule {rule} protects ipc_ratio, but this node's processes have no instruction or cycle counters (a virtual machine): the metric is unknown and the fleet's CPU budget does not grow | P4 | – | – | – |
 | `PROTECTION_SOURCE_ERROR` | The process table cannot be read: {error} | P3 | – | – | – |
@@ -329,6 +362,7 @@ the values the agent and the coordinator write on an attempt that ended with the
 | `PLACEMENT_REBOUND` | Its unit of work moved to another platform class | P1 | no / no | – | `placement_rebound` |
 | `JOB_CANCELLED` | The job was cancelled | P1 | no / no | – | `job_cancelled` |
 | `JOB_QUARANTINED` | The job was quarantined | P1 | no / no | – | `job_quarantined` |
+| `JOB_FAILED` | The job failed: its runner declared it can never succeed (not retried) | P1 | no / no | – | `job_failed` |
 | `ATTEMPT_CLOSED` | The attempt was already closed | P1 | no / no | – | `attempt_closed` |
 | `JOB_DONE` | The job was already done | P1 | no / no | – | `job_done` |
 

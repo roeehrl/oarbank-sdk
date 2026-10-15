@@ -84,7 +84,7 @@ Some 1.7 features need no floor because older cores ignore them harmlessly; they
 | A `cooperative_throttle` runner that holds `gpu_duty` with the SDK's duty governor, and `duty_specs` in `conformance.json` | 1.7 | No `gpu_duty` is ever written, so the runner runs flat out ([Share a GPU with a protected program](/oarbank/build/gpu-duty)) |
 
 A module with a workload or a listener also needs nodes that run the 2.10 agent: an older agent runs neither
-([Upgrading](/oarbank/operate/upgrading#upgrade-the-nodes-to-210)).
+([Upgrading](/oarbank/operate/upgrading#upgrade-the-nodes-from-29)).
 
 The `oarbank-sdk` package follows SemVer. Its major equals the highest module protocol major it speaks, and the latest
 two majors receive fixes.

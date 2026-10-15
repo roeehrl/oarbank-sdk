@@ -1,6 +1,6 @@
 ---
 title: Upgrading
-description: Upgrade an Oarbank fleet to 2.10 on macOS, Linux and Windows, from 2.9 (nodes need the 2.10 agent for listeners, workloads, sites and the GPU duty governor) or from 2.8 (the one-time move of a per-user coordinator to a system service, removed commands and module requests).
+description: Upgrade an Oarbank fleet to 2.11 on macOS, Linux and Windows, from 2.10 (a fleet update; container VM modes and sizes, approval options, module data deletion, update trust on fresh nodes), from 2.9 (nodes need the 2.10 agent for listeners, workloads, sites and the GPU duty governor) or from 2.8 (the one-time move of a per-user coordinator to a system service, removed commands and module requests).
 type: how-to
 platforms: [macos, linux, windows]
 core: '2.11.0'
@@ -14,9 +14,74 @@ Upgrade the **coordinator first**, then the nodes. Running jobs keep running thr
 themselves. The downloads are on the [2.11.0 release page](https://github.com/roeehrl/oarbank/releases/tag/v2.11.0);
 check each file against its `SHA256SUMS-…` file there ([Get started](/oarbank/get-started#download)).
 
-- **From 2.9:** read [From 2.9 to 2.10](#from-29-to-210). Nothing moves and no setting changes meaning.
+- **From 2.10:** read [From 2.10 to 2.11](#from-210-to-211). The coordinator updates the fleet itself.
+- **From 2.9:** install 2.11.0 as [From 2.9 to 2.10](#from-29-to-210) says, then read the 2.11 section for what is new.
+  Nothing moves and no setting changes meaning.
 - **From 2.8:** install 2.11.0 directly. Its packages make the same one-time move of the coordinator as 2.9.0 did, so
-  follow [From 2.8 to 2.9](#from-28-to-29) with the 2.11.0 files, then read the 2.10 section for what is new.
+  follow [From 2.8 to 2.9](#from-28-to-29) with the 2.11.0 files, then read the 2.10 and 2.11 sections for what is new.
+
+## From 2.10 to 2.11
+
+Oarbank 2.11 says when a node runs its container VM and sizes it as set, approves a machine with what it starts as,
+and deletes what a module left on a node once it leaves. Nothing moves, and the new settings' defaults keep 2.10's
+behaviour, except where the list below says otherwise.
+
+### Before you start
+
+Nodes that joined with 2.10.3 or 2.10.4 after their package was installed may have no update trust pinned:
+`oarbank update plan 2.11.0` says "no update trust is pinned" for them, and the fleet update does not install their
+package until it is pinned. Run the command the plan shows once on each, or install the 2.11.0 node package on it by
+hand:
+
+| Platform | Command |
+|---|---|
+| macOS | `sudo /Library/Oarbank/bin/oarbank-launcher update-trust --from-agent` |
+| Linux | `sudo oarbank-launcher update-trust --from-agent` |
+| Windows (elevated prompt) | `oarbank-node update-trust --from-agent` |
+
+From 2.11 a node that joins pins its update trust itself.
+
+### Update
+
+Update the fleet from the coordinator, as for any release: fetch (or import) 2.11.0, sign it in signing mode, and start
+the rollout ([Update the fleet](/oarbank/operate/update-and-remove#update-the-fleet)). The coordinator updates itself
+first, then the nodes' packages. To update by hand instead, install the 2.11.0 coordinator package over the 2.10 one
+([Update the coordinator by hand](/oarbank/operate/update-and-remove#update-the-coordinator-by-hand)), then each node's.
+
+### What behaves differently after the upgrade
+
+- **Container VMs:** the new `containers` setting (node, group or fleet) decides when a node runs its container
+  runtime. `always`, the default, keeps 2.10's behaviour. `on_demand` is recommended where container work is
+  occasional: the VM stays stopped until container work waits for the node. `off` suits small machines that also run
+  your memory-heavy programs ([Containers on nodes](/oarbank/operate/containers)). Agents older than 2.11 ignore the
+  setting, but the coordinator still keeps container work off a node set to `off`.
+- **`vm_mem_gb` and `vm_cpus` now size the container VM.** 2.10 ignored them. A value set earlier now takes effect:
+  the agent restarts an idle VM at that size, within half the machine's memory and its processors, and the node's
+  `containers` pool follows the size.
+- **Approving machines:** an approval can say what the new node starts as (paused, modules off, its own settings,
+  labels and groups), and `new_node_state` and `new_node_modules` set it for every new node
+  ([Adding machines](/oarbank/operate/adding-machines)). Their defaults (`active`, `all`) change nothing.
+- **Module data is deleted when a module leaves a node.** A module turned off on a node loses what it left there after
+  `module_retention_days` (7 by default); one no longer in the node's release, or on a retired node, after at most a
+  day. Turning it back on in time keeps everything. Raise `module_retention_days` before the upgrade if you turn
+  modules off on nodes and want their data kept longer
+  ([When a module leaves a node](/oarbank/operate/modules#when-a-module-leaves-a-node)). A node whose agent is older
+  than 2.11 deletes nothing and refuses `module_retention_days` until it is updated.
+- **The dataset cache is collected.** A node's cache from before 2.11 has no record of which module used each dataset:
+  a dataset no job uses within the retention (7 days by default) is deleted, and staged again when a job needs it.
+  `disk_gb` now caps the cache.
+- **A retired node's agent stops.** It stops its jobs, services, workloads and listeners, deletes what its modules left
+  after a day, and waits with `E_RETIRED` ([Remove a node](/oarbank/operate/update-and-remove#remove-a-node)).
+- New reason codes: [Reason codes](/oarbank/reference/reason-codes#new-in-211).
+
+### Module authors (SDK 1.8)
+
+The module SDK for this release is 1.8.0. A module that holds state outside the node (a registration with an outside
+service, a lease, a remote resource) can declare a cleanup stage, `[[stages]] cleanup = true`, which the node runs once
+before it deletes the module's data there ([When a module leaves a node](/oarbank/operate/modules#when-a-module-leaves-a-node)).
+A manifest that sets `stages[].cleanup` needs `requires.core >= 2.11`
+([Versions and compatibility](/oarbank/operate/versions#which-sdk-features-need-which-core),
+[Cleanup stage](/oarbank/spec/manifest#cleanup-stage)).
 
 ## From 2.9 to 2.10
 
@@ -27,7 +92,7 @@ with router port mapping, [sites](/oarbank/operate/sites) for nodes that share a
 it: no workload runs until you assign it, no listener opens until you assign it to a node, no site exists until you
 create one, delegation is off by default, and `gpu_jobs = "certified"` is opt-in per node.
 
-### Upgrade the coordinator to 2.10
+### Upgrade the coordinator from 2.9
 
 Run the 2.11.0 installer over the 2.9 one, as for any update
 ([Updating and removing](/oarbank/operate/update-and-remove#update-the-coordinator-by-hand)):
@@ -42,13 +107,13 @@ Check with `oarbank coordinator status` and `oarbank verify`. The console gains 
 a **Workloads** card on each node page, a **Workloads** tab on each module that declares workloads, and a
 **Co-tenancy** section on each node's **Protection** page.
 
-### Upgrade the nodes to 2.10
+### Upgrade the nodes from 2.9
 
 Install the 2.11.0 node package on each node once, over the old one. This is the last time: the package brings the
 node's update runner and pins the owner keys the node trusts for it, and from 2.10 the coordinator updates whole
 packages itself ([Update the fleet](/oarbank/operate/update-and-remove#update-the-fleet)).
 
-To get the 2.10 agent onto nodes before you can reach them, upload, sign, try and promote it as before
+To get a 2.10 or later agent onto nodes before you can reach them, upload, sign, try and promote it as before
 ([Update only a node's agent](/oarbank/operate/update-and-remove#update-only-a-nodes-agent)). The rest of the package,
 and fleet updates, still wait for the package:
 
@@ -96,15 +161,6 @@ SDK 1.7 came with 2.10. A manifest that declares inbound listeners (`[sandbox].n
 stages and duty specs need no floor ([Versions and compatibility](/oarbank/operate/versions#which-sdk-features-need-which-core)).
 The how-tos: [Accept connections from the internet](/oarbank/build/inbound-listeners),
 [Run a long-running workload](/oarbank/build/workloads) and [Share a GPU with a protected program](/oarbank/build/gpu-duty).
-
-### Module authors (SDK 1.8)
-
-The module SDK for this release is 1.8.0. A module that holds state outside the node (a registration with an outside
-service, a lease, a remote resource) can declare a cleanup stage, `[[stages]] cleanup = true`, which the node runs once
-before it deletes the module's data there ([When a module leaves a node](/oarbank/operate/modules#when-a-module-leaves-a-node)).
-A manifest that sets `stages[].cleanup` needs `requires.core >= 2.11`
-([Versions and compatibility](/oarbank/operate/versions#which-sdk-features-need-which-core),
-[Cleanup stage](/oarbank/spec/manifest#cleanup-stage)).
 
 ## From 2.8 to 2.9
 
