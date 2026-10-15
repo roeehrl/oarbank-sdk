@@ -1,6 +1,6 @@
 ---
 title: Running modules
-description: Install, approve, enable and sign a module's releases, follow its readiness checklist to running work, and understand which stages run before a node is certified and why a failed doctor check stops only some jobs.
+description: Install, approve, enable and sign a module's releases, follow its readiness checklist to running work, understand which stages run before a node is certified and why a failed doctor check stops only some jobs, and know when a node deletes what a module left there.
 type: how-to
 platforms: [macos, linux, windows]
 core: '2.10.4'
@@ -142,6 +142,41 @@ oarbank module rollback reel                         # abandon the canary, or go
 Each of these changes the releases, so sign the new candidates as above. To stop a module everywhere at once,
 `oarbank module disable reel` (the kill switch); to stop it on some nodes only, turn its `enabled` setting off for a
 group or node ([Settings](/oarbank/operate/settings#module-settings)).
+
+## When a module leaves a node
+
+From 2.11 a node deletes what a module put there once the module leaves it. A module's processes can write only to its
+data directory, their work directories, the node's dataset cache and its container runtime, so the node needs no help
+from the module:
+
+| The module | Its data goes |
+|---|---|
+| is turned off on the node (its `enabled` setting off for the node or its group, or `oarbank module disable`) | after `module_retention_days` (7 days by default; `0` deletes at once) |
+| is no longer in the node's release (a new version dropped the node's platform), or the node was retired | after at most a day (sooner when `module_retention_days` is shorter) |
+| is purged: `oarbank module purge <module> --node <node>` or `--all` | at the node's next heartbeat |
+
+- **Turned off** stops everything of the module on the node at once: its jobs are released, and its services, workloads,
+  probes and doctor no longer run there. Turn it back on within the retention and it keeps everything.
+- **What goes:** its data directory, the cached datasets no other module on the node uses, and the container images it
+  pulled that no other module uses. An image whose container runtime is not running goes the next time it runs.
+- **Before that**, the node runs the module's cleanup stage, if it declares one, so the module can release state the
+  node cannot see, such as a registration with an outside service. It is best effort: a failure is reported and the
+  data goes anyway.
+- **A purge** is refused on a node where the module is enabled. `--all` purges it on every node where it is turned
+  off. It shows the plan first; `--yes` skips the question.
+
+`oarbank node show <node>` and the node page list what each module keeps on the node (its data directory, cached
+datasets and images) and, for a module that is leaving, when its data goes and why. `oarbank explain node <node>`
+names each scheduled deletion (`MODULE_DATA_SCHEDULED`), a cleanup stage that failed (`MODULE_CLEANUP_FAILED`) and a
+dataset cache over its cap (`DISK_CACHE_OVER_CAP`). Each deletion is in the node's events as `module_data_deleted`.
+
+```sh
+oarbank settings set module_retention_days 2 --group laptops    # keep a turned-off module's data two days there
+oarbank module purge reel --node build-07                       # delete it there now
+```
+
+The dataset cache also has a size cap, `disk_gb` ([Settings](/oarbank/operate/settings)). Above it, the node deletes
+the least recently used datasets that no job on it holds and no pending job waits for.
 
 ## macOS: modules with native Python packages
 

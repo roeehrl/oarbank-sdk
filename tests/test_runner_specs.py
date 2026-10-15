@@ -1,6 +1,7 @@
 """conform runs a module's non-golden runner specs (fixtures `runner_specs`) as it runs goldens: sandboxed, through the
 egress proxy, checked against their expected outcome (spec/conformance.md, "Fixtures")."""
 import http.server
+import json
 import shutil
 import socket
 import threading
@@ -172,3 +173,38 @@ def test_a_bootstrap_spec_runs_with_the_bootstrap_grants_and_must_produce_exactl
     rep = conform(d, {"runner_specs": [{"name": "fetch", "stage": "fetch", "payload": {"fetch": url}}]})
     status, detail = checks(rep, "runner spec fetch")["artifacts match the pinned datasets"]
     assert status == "fail" and detail.startswith("artifact 'tool': f.bin is sha256 ") and "pins " + "00" * 32 in detail
+
+
+# A cleanup task for the toy runner: exit 0 with no result when it got what the agent gives a cleanup run, else fail
+# saying what it got (and fail on purpose for `payload.fail`).
+CLEANUP = '''
+    if spec.get("stage") == "release":
+        seen = {"reason": spec["payload"].get("reason"), "job_key": spec["job_key"],
+                "attempt": os.environ.get("OARBANK_ATTEMPT_ID"), "data": Path(os.environ["OARBANK_MODULE_DATA"]).is_dir(),
+                "tools": json.loads(Path(os.environ["OARBANK_TOOLS_FILE"]).read_text(encoding="utf-8")),
+                "settings": bool(json.loads(Path(os.environ["OARBANK_SETTINGS_FILE"]).read_text(encoding="utf-8")))}
+        want = {"reason": "disabled", "job_key": "", "attempt": "0", "data": True, "tools": {}, "settings": True}
+        if spec["payload"].get("fail") or seen != want:
+            atomic_write(workdir / "failure.json", {"reason": "toy/still_registered", "detail": json.dumps(seen)})
+            return 1
+        return 0
+'''
+
+
+def test_a_cleanup_spec_runs_with_the_cleanup_grants_and_needs_no_result(tmp_path):
+    """spec/runner-protocol.md, "Cleanup runs": the kit runs the cleanup stage as the agent does (an empty job key, attempt
+    id 0, the module's data directory and its node settings, no tools) and checks only its exit code and failure.json."""
+    d = tmp_path / "toy"
+    shutil.copytree(TOY, d, ignore=shutil.ignore_patterns("__pycache__", "dist"))
+    r = (d / "toy_runner.py").read_text(encoding="utf-8")
+    (d / "toy_runner.py").write_text(r.replace('    n = spec.get("payload", {}).get("n")\n',
+                                               CLEANUP + '    n = spec.get("payload", {}).get("n")\n'), encoding="utf-8", newline="\n")
+    m = (d / "oarbank-module.toml").read_text(encoding="utf-8").replace('core = ">=2.9,<3"', 'core = ">=2.11,<3"')
+    m += '\n[[stages]]\nname = "release"\ncleanup = true\ntimeout_s = 60\n'
+    (d / "oarbank-module.toml").write_text(m, encoding="utf-8", newline="\n")
+    rep = conform(d, {"runner_specs": [
+        {"name": "release", "stage": "release", "payload": {"reason": "disabled"}},
+        {"name": "refused", "stage": "release", "payload": {"reason": "disabled", "fail": True},
+         "expect": {"exit": 1, "reason": "toy/still_registered"}}]})
+    assert checks(rep, "runner spec release") == {"exit 0": ("pass", "exit 0")}, rep.text()
+    assert {k: v[0] for k, v in checks(rep, "runner spec refused").items()} == {"exit 1": "pass", "failure reason": "pass"}

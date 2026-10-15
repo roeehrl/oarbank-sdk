@@ -172,3 +172,10 @@ places once (`seat = "fleet"`), from the module's **Workloads** tab or `oarbank 
 `identity = "per_node"` the owner sets each secret for each node. The tab shows each node's state, seat, lease, restarts,
 last error and log tail; a workload that fails `max_failures` times in a row is withdrawn until the owner restarts it.
 See [Workloads](https://docs.codonic.dev/oarbank/operate/workloads) in the operator guide.
+
+## When the module leaves a node
+
+When the owner turns the module off on a node, or the node leaves the fleet, the node deletes what the module left there
+(its data directory included) after a grace period. If your workload registered itself somewhere outside the node (a
+peer list, an outside service), declare a cleanup stage that removes the registration: the agent runs it once, before
+the deletion, with the module's data directory and network ([Cleanup stage](../spec/manifest.md#cleanup-stage)).

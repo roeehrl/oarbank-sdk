@@ -4,7 +4,10 @@ What changed in each oarbank-sdk release, for module authors. The core's changel
 [roeehrl/oarbank](https://github.com/roeehrl/oarbank/blob/main/CHANGELOG.md). Contract rules:
 [spec/versioning.md](spec/versioning.md).
 
-## Unreleased
+## 1.8.0 (2026-10-15)
+
+For Oarbank core 2.11.0. Everything is additive within manifest 1 and module protocol 1. The cleanup stage needs
+`requires.core >= 2.11`; the failure fields and the `fault`/`retryable` rule apply from core 2.10.4.
 
 ### Changed
 
@@ -17,6 +20,17 @@ What changed in each oarbank-sdk release, for module authors. The core's changel
 
 ### New
 
+- **A cleanup stage** ([spec/manifest.md](spec/manifest.md#cleanup-stage),
+  [spec/runner-protocol.md](spec/runner-protocol.md#cleanup-runs), [spec/sandbox.md](spec/sandbox.md#cleanup-runs)).
+  From core 2.11 a node deletes what a module left on it once the module leaves the node: its data directory, the
+  datasets it cached and the container images it pulled. A module that also holds state outside the node declares
+  `[[stages]] cleanup = true`; the agent runs that stage once, best effort and within its `timeout_s` (at most 600 s),
+  before it deletes the module's data there. Its spec names the stage and carries `payload.reason` (`disabled`,
+  `removed`, `retired` or `purge`); it gets the module's data directory, network and node settings, and no tools,
+  folders, GPU, containers or secrets (`SandboxSection.for_cleanup()`). A failure is reported to the owner and the
+  deletion goes ahead. No job runs the stage, so it adds no default, `result.merge` or comparison requirement to a
+  module (rule 25, `Manifest.cleanup_stage()`, `Manifest.job_stages()`). It needs `requires.core >= 2.11`.
+  `oarbank-sdk conform` runs a cleanup stage's runner specs as the agent runs them.
 - **Why a job failed** ([spec/module-protocol.md](spec/module-protocol.md#why-a-job-failed)). From core 2.10.4, failed
   and quarantined jobs in `campaign.tick` (`CampaignJob.failure`) and `host.jobs.query` carry `failure`:
   `{reason, code, detail, fault, retryable, final, ...}`, the runner's reason code and detail included.

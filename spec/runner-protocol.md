@@ -92,6 +92,23 @@ digests and sizes must be the pinned ones). The host checks that instead of call
 dataset, and stores nothing else of the result (`effective` and `provenance` are dropped). A result that is not exactly
 pinned datasets fails with `pin_mismatch`, a job fault that never counts against the node.
 
+### Cleanup runs
+
+The agent runs a module's cleanup stage ([manifest.md](manifest.md#cleanup-stage)) on a node before it deletes the
+module's data there, with the cleanup grants ([sandbox.md](sandbox.md#cleanup-runs)). The invocation, workdir,
+environment and control document are a job's, with these differences:
+
+- The spec envelope names the cleanup stage in `stage`, has no `datasets`, `mounts` or `inputs`, an empty `job_key`,
+  `schema` `<module-short>/spec@1`, and `payload` `{"reason": "disabled" | "removed" | "retired" | "purge"}`: the
+  module was turned off on the node, is no longer in its release, the node was retired, or the owner purged it.
+- `OARBANK_ATTEMPT_ID` is `0`, and `OARBANK_DISABLED_SERVICES` is not set.
+- The hard limit is the stage's `timeout_s` for the node's platform, at most 600 s. When it runs out, the agent kills
+  the process container.
+- Exit 0 means done; a result is not needed, and the agent ignores one. Any other exit, with or without `failure.json`,
+  is a failed cleanup: the agent logs the reason and detail and reports them to the owner, and deletes the module's data
+  anyway.
+- A cleanup run is never retried. It runs once per removal, so it must be safe to run when there is nothing to release.
+
 ## Exit codes
 
 | Code | Meaning | Attribution |

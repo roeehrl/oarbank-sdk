@@ -33,7 +33,8 @@ service GPU use, folder grants, portable checkpoints and the `artifact_ref` cell
 `requires.core >= 2.5`, the host tool `version` and `arch` and the settings annotations that change what a core
 does (a `node` key, a required key, a campaign override) of SDK 1.6 need `requires.core >= 2.9`, and inbound listeners
 (`sandbox.net.inbound`, `services[].listeners`) and workloads (`[[workloads]]`, `requires.workload_protocol`, the
-`workload.report` capability and `coordinator.workload_effects`) of SDK 1.7 need `requires.core >= 2.10`
+`workload.report` capability and `coordinator.workload_effects`) of SDK 1.7 need `requires.core >= 2.10`, and the
+cleanup stage (`stages[].cleanup`) of SDK 1.8 needs `requires.core >= 2.11`
 ([manifest.md](manifest.md#cross-field-rules), rule 12). For
 later features, `requires.features` is a must-understand list: a reader refuses a manifest that lists a feature it
 does not know. Module protocol additions are optional fields plus host capability names

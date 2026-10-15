@@ -594,8 +594,8 @@ class Grants:
     the tool installations (fixtures `tools`: {id: path} or {id: {path, version, arch}}, resolved as the agent does and
     checked against the request's version), the settings file (fixtures `settings`)
     and, for egress-allowlist, a real allowlist proxy (egress_proxy). A bootstrap stage's jobs get the bootstrap grants
-    instead (spec/sandbox.md, "Bootstrap jobs"): the same proxy, no tools, `{}` as settings, no module data directory.
-    Folders: a read folder is the fixtures' `folders` directory (relative to the module), granted read-only; a write
+    instead (spec/sandbox.md, "Bootstrap jobs"): the same proxy, no tools, `{}` as settings, no module data directory;
+    a cleanup stage's run gets the cleanup grants (spec/sandbox.md, "Cleanup runs"): no tools and no folders. Folders: a read folder is the fixtures' `folders` directory (relative to the module), granted read-only; a write
     folder is a fresh empty outbox."""
 
     def __init__(self, man, fx: dict, root: Path | None = None):
@@ -630,13 +630,17 @@ class Grants:
         (self.dir / "bootstrap").mkdir()
         for name in ("tools.json", "settings.json", "folders.json"):
             (self.dir / "bootstrap" / name).write_text("{}", encoding="utf-8")
+        (self.dir / "cleanup").mkdir()
+        for name in ("tools.json", "folders.json"):
+            (self.dir / "cleanup" / name).write_text("{}", encoding="utf-8")
+        shutil.copy(self.dir / "settings.json", self.dir / "cleanup" / "settings.json")
         self.proxy = None
         if man.sandbox.net.mode == "egress-allowlist":
             from .egress_proxy import AllowlistProxy
             self.proxy = AllowlistProxy(man.sandbox.net.allow).start()
 
-    def env(self, bootstrap: bool = False) -> dict:
-        files = self.dir / "bootstrap" if bootstrap else self.dir
+    def env(self, bootstrap: bool = False, cleanup: bool = False) -> dict:
+        files = self.dir / "bootstrap" if bootstrap else self.dir / "cleanup" if cleanup else self.dir
         e = {"OARBANK_TOOLS_FILE": str(files / "tools.json"), "OARBANK_SETTINGS_FILE": str(files / "settings.json"),
              "OARBANK_FOLDERS_FILE": str(files / "folders.json")}
         if self.proxy:
@@ -645,7 +649,7 @@ class Grants:
                       "NO_PROXY": ""})
         return e
 
-    def policy(self, man, root, ws, data, kind="runner", bootstrap: bool = False):
+    def policy(self, man, root, ws, data, kind="runner", bootstrap: bool = False, cleanup: bool = False):
         from . import sandbox as S
         # the grants directory (tools.json, settings.json) is readable like the agent's per-job files, and so is the SDK
         # the host provides to every module process (an agent's node runtime has it installed)
@@ -653,6 +657,9 @@ class Grants:
         if bootstrap:
             return S.node_policy(man.module.id, root, ws, None, sandbox=man.sandbox.for_bootstrap(), kind=kind,
                                  tool_paths=[str(self.dir / "bootstrap"), sdk], proxy_port=self.proxy.port if self.proxy else None)
+        if cleanup:
+            return S.node_policy(man.module.id, root, ws, data, sandbox=man.sandbox.for_cleanup(), kind=kind,
+                                 tool_paths=[str(self.dir / "cleanup"), sdk], proxy_port=self.proxy.port if self.proxy else None)
         return S.node_policy(man.module.id, root, ws, data, sandbox=man.sandbox, kind=kind,
                              tool_paths=[i["path"] for ps in self.tools.values() for i in ps] + [str(self.dir), sdk],
                              proxy_port=self.proxy.port if self.proxy else None, folders=self.folders)
@@ -799,7 +806,8 @@ def _read_json(path: Path) -> dict | None:
 
 
 def _run(root: Path, man, env_doc: dict, fx: dict, locale: str = "C", stop: bool = False, bootstrap: bool = False,
-         checkpoint: bool = False, resume: tuple | None = None, duty: "DutySpec | None" = None) -> Outcome:
+         checkpoint: bool = False, resume: tuple | None = None, duty: "DutySpec | None" = None,
+         cleanup: bool = False) -> Outcome:
     """One runner run. `stop`: a stop request once the runner wrote its first phase (`checkpoint`: checkpoint, then stop,
     within checkpoint_grace_s). `resume`: (a directory holding a checkpoint by name, the envelope's `resume`): the files
     go read-only under <W>/checkpoint/ and the envelope names it."""
@@ -822,9 +830,11 @@ def _run(root: Path, man, env_doc: dict, fx: dict, locale: str = "C", stop: bool
     g = GRANTS["g"]
     nudge = _Nudge()
     run = man.runner.for_platform(portable.host_platform())
-    env = {**job_env(man, ws, data, locale), **run.env, **g.env(bootstrap), **nudge.env()}
+    env = {**job_env(man, ws, data, locale), **run.env, **g.env(bootstrap, cleanup), **nudge.env()}
     if bootstrap:
         env.pop("OARBANK_MODULE_DATA")                   # a bootstrap job keeps nothing on the node
+    if cleanup:
+        env["OARBANK_ATTEMPT_ID"] = "0"                  # a cleanup run is no attempt
     every = fx.get(CANARIES) or {}
     mine = {n: every[n] for n in man.secrets_of(env_doc.get("stage")) if n in every}
     if mine:                                             # only the declaring stage's runner, as the agent delivers them
@@ -845,7 +855,7 @@ def _run(root: Path, man, env_doc: dict, fx: dict, locale: str = "C", stop: bool
         argv += ["--events", str(ws / "events.ndjson")]
     if SANDBOX["on"]:
         from . import sandbox as S
-        text, params = S.render(g.policy(man, root, ws, data, bootstrap=bootstrap))
+        text, params = S.render(g.policy(man, root, ws, data, bootstrap=bootstrap, cleanup=cleanup))
         argv = S.launch_argv(S.write_profile(text, data.parent / f"{data.name}.sb"), params, argv)
     seen = len(g.proxy.refused) if g.proxy else 0
     out, exited = {}, threading.Event()
@@ -1390,7 +1400,9 @@ def _check_runner_specs(root: Path, man, fx: dict, r: Report):
     """Every `runner_specs` entry runs as a golden does (sandboxed with the module's grants, the egress proxy for
     egress-allowlist) and is checked against `expect`: the exit code; for exit 0 a valid ResultEnvelope (artifact names
     are Names) with the expected artifact names; otherwise a valid failure.json with the expected reason. A bootstrap
-    stage's spec runs with the bootstrap grants, and its result must be exactly pinned datasets, as the host requires."""
+    stage's spec runs with the bootstrap grants, and its result must be exactly pinned datasets, as the host requires.
+    A cleanup stage's spec runs as the agent runs it (spec/runner-protocol.md, "Cleanup runs"): the cleanup grants, an
+    empty job key, and only its exit code (and failure.json) checked, since the agent reads no result."""
     for i, raw in enumerate(fx.get("runner_specs") or []):
         try:
             spec = RunnerSpec.model_validate(raw)
@@ -1418,13 +1430,16 @@ def _check_runner_specs(root: Path, man, fx: dict, r: Report):
             r.add("runner", label, None, f"not run here: {short}")
             continue
         sent = None if stage is None or stage.name == man.default_stage() else stage.name     # as the host sends it
+        clean = stage is not None and stage.cleanup
         env_doc = _spec_envelope(man, sent, spec.payload, spec.datasets, spec.mounts, 1,
-                                 job_key(man.module.id, man.module.compat, spec.payload, sent))
+                                 "" if clean else job_key(man.module.id, man.module.compat, spec.payload, sent))
         boot = stage is not None and stage.bootstrap
-        o = _run(root, man, env_doc, fx, bootstrap=boot)
+        o = _run(root, man, env_doc, fx, bootstrap=boot, cleanup=clean)
         _egress(r, label, o)
         _secret_leaks(r, label, man, o)
         r.add("runner", f"{label}: exit {spec.expect.exit}", o.code == spec.expect.exit, _why(o))
+        if o.code == 0 and clean:
+            continue                                     # the agent reads no result of a cleanup run
         if o.code == 0:
             try:
                 res = ResultEnvelope.model_validate(o.result)

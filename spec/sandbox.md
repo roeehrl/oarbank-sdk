@@ -252,6 +252,27 @@ before the module's goldens pass there, so it gets less than any other job of it
 the signed release, never from the grant. A node whose agent applies them reports `grants.bootstrap` as `enforced`;
 bootstrap jobs run only there (`CAPABILITY_NOT_ENFORCED` elsewhere).
 
+## Cleanup runs
+
+A module's node-side processes write only to its data directory, their work directories, the agent's dataset cache
+(through staging) and the agent's container runtime (through the broker). So when the module leaves a node, the
+agent can delete everything it put there without its help: the data directory, the cached datasets no other module on
+the node uses, and the container images it pulled that no other module uses. Before that it runs the module's cleanup
+stage, if it declares one ([manifest.md](manifest.md#cleanup-stage)), with these grants:
+
+| Area | A cleanup run |
+|---|---|
+| its bundle and runtime | read, execute |
+| work directory (and the private temporary directory inside it) | read, write |
+| data directory | read, write (`OARBANK_MODULE_DATA`): what the module kept there, until the agent deletes it |
+| network | the module's approved mode, through the agent's proxy for `egress-allowlist` |
+| host tools, folders, GPU, the container broker, module services | none (`OARBANK_TOOLS_FILE` and `OARBANK_FOLDERS_FILE` list none) |
+| executing files it wrote | as approved (`exec_writable`) |
+| module settings | its node settings, as the agent last had them (`{}` when it has none) |
+| secrets | none (a cleanup stage lists none; no `OARBANK_SECRETS_FILE`) |
+
+The agent takes the cleanup flag from the module's entry in the signed release, never from anything else.
+
 ## Containers: the agent's broker
 
 A runner never talks to Docker or Podman itself. The agent owns a container runtime that mounts only its own work and

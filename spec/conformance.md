@@ -118,3 +118,8 @@ the allowlist proxy, no tools, `{}` as settings, no module data directory. For e
 will: the payload is empty, and every artifact's files, hashed from the workdir, are exactly one pinned dataset's
 ("artifacts match the pinned datasets", naming the first file that differs). So a fetch is proven against the real
 origins, through the real allowlist, before the module ships.
+
+A runner spec for a **cleanup stage** runs as the agent runs it ([runner-protocol.md](runner-protocol.md#cleanup-runs)):
+the cleanup grants (no tools, no folders; the module data directory and its settings), an empty `job_key` and
+`OARBANK_ATTEMPT_ID=0`. Only the exit code and, for another exit than 0, `failure.json` are checked: the agent reads no
+result of a cleanup run. Give `payload` the `reason` the run should see.
