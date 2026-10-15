@@ -3,7 +3,7 @@ title: Host protection
 description: How Oarbank keeps fleet work from harming the people using a node, and how to set its mode and protected-process rules for the fleet, a group or one node, roll rules out through a canary group, and read what it did.
 type: how-to
 platforms: [macos, linux, windows]
-core: '2.10.4'
+core: '2.11.0'
 sidebar:
   order: 9
 ---
@@ -11,7 +11,7 @@ sidebar:
 Nodes are computers people use. Every few seconds, host protection decides how much fleet work a node may run without
 harming its owner's own work: it holds new jobs back, lowers or pauses fleet jobs, or evicts them, and it only ever
 touches processes the agent started itself, or processes you delegated to it. You set it; a module can never declare or
-loosen it. This page covers Oarbank 2.10.4.
+loosen it. This page covers Oarbank 2.11.0.
 
 ## Protection is three settings
 
