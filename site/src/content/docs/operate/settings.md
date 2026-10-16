@@ -69,7 +69,8 @@ oarbank settings schema                              # every key: type, unit, sc
 | Memory | `os_reserve_gb` (memory kept for the system; computed from RAM), `user_reserve_gb` (kept for the person using it), `job_mem_gb` (memory per job slot), `mem_in_use_bound` (fit jobs into the memory free now) |
 | When someone is using it | `user_present_slots`, `user_idle_s`, `screen_sharing_present`, `run_on_battery` |
 | Jobs | `threads_per_job`, `max_slots` (CPU slots for jobs: the node's CPU budget in cores, see below), `workloads` (assigned [workloads](/oarbank/operate/workloads) may run; on by default); advanced: `nice` (not applied by agents yet), `hard_limits` |
-| Caps (off by default) | `cpu_cores`, `mem_gb`, `jobs`, `schedule`, `enforce` (`soft` or `hard`); advanced: `vm_mem_gb`, `vm_cpus`, `disk_gb` (the node's dataset cache: above it, the least recently used datasets no job holds or waits for go; enforced from 2.11), `staging_mbps` (the rate of dataset staging and result and checkpoint uploads, enforced from 2.10) |
+| Caps (off by default) | `cpu_cores`, `mem_gb`, `jobs`, `schedule`, `enforce` (`soft` or `hard`); advanced: `vm_mem_gb`, `vm_cpus` (the container VM's size, applied from 2.11, and a module VM service's), `disk_gb` (the node's dataset cache: above it, the least recently used datasets no job holds or waits for go; enforced from 2.11), `staging_mbps` (the rate of dataset staging and result and checkpoint uploads, enforced from 2.10) |
+| Containers (2.11) | `containers` (`always`, the default; `on_demand`, recommended; `off`); advanced: `containers_idle_stop_s` (600) ([Containers on nodes](/oarbank/operate/containers#choose-when-a-node-runs-its-container-vm)) |
 | Module data | `module_retention_days` (from 2.11): how long a node keeps what a module left there after the module is turned off on it, 7 by default; `0` deletes it at once ([When a module leaves a node](/oarbank/operate/modules#when-a-module-leaves-a-node)) |
 | Protection | `protection.mode`, `protection.rules`, `protection.node` ([Host protection](/oarbank/operate/host-protection)), `delegated_processes` (off by default: [Delegated processes](/oarbank/operate/delegated-processes)) |
 | Network | `inbound_listeners` (assigned listeners may open; on by default); advanced: `listener_port_range` (the internal ports listeners bind, default `41000-41999`). Fleet only: `listener_probe_endpoint` (an `https://` probe endpoint you run elsewhere), `listener_stun_server` (`host:port`; none by default) ([Make a node reachable](/oarbank/operate/make-a-node-reachable)) |
@@ -263,6 +264,7 @@ battery, while the owner can still tighten caps from the console.
 | `cpu_cores`, `mem_gb`, `vm_mem_gb`, `disk_gb`, `staging_mbps` | number | lower |
 | `os_reserve_gb`, `user_reserve_gb`, `user_idle_s` | number | higher |
 | `enforce` | `soft` or `hard` | hard |
+| `containers` (2.11) | `always`, `on_demand` or `off` | off |
 
 Any other key (`job_mem_gb`, a schedule, protection) is refused and reported; protection has its own local file on the
 node ([Host protection](/oarbank/operate/host-protection#the-nodes-own-rules)).
