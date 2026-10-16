@@ -126,6 +126,61 @@ The node prints the coordinator's certificate authority fingerprint (the console
 by its code**; they must match), then an 8-letter code such as `WDJB-MJHT`. Enter it on the Fleet page under **Approve
 a machine by its code**, or run `oarbank node approve-code WDJB-MJHT`.
 
+## Approve a waiting machine
+
+A machine joined with a code for many machines, or by the coordinator's address, waits on the Fleet page until you
+approve it (`oarbank status` lists it with its enrollment id). **Approve…** makes it a node that is active with the
+fleet's settings. When a machine must start otherwise, choose it in the approval itself (from
+Oarbank 2.11): open **Approve with options…** on its card, or give the options on the command line.
+
+```sh
+oarbank node approve enr_3f2a9c --state paused                       # joins paused: no jobs at all
+oarbank node approve enr_3f2a9c --module-off minos-gatk --set max_slots=4 --labels lab --groups "Build machines"
+oarbank node approve-code WDJB-MJHT --state paused --module-off minos-gatk
+```
+
+| Option | Console | What the node starts with |
+|---|---|---|
+| `--state active\|paused\|draining` | It starts | Paused takes no jobs, certification golden jobs included, and runs no workloads until you resume it |
+| `--module-off <m>`, `--module-on <m>` | Modules on this node | Whether each module runs on this node (its own value of `enabled`) |
+| `--set key=value`, `--set <module>:key=value` | Its own settings, one `key=value` per line | Any setting a node may have, checked as `oarbank settings set --node` checks it |
+| `--labels a,b`, `--groups g1,g2` | Labels, Groups that list it | Labels and owner groups, so group values apply from the start |
+
+The options are written in the same step that creates the node and issues its certificate. The machine cannot fetch
+its certificate before that step completes, so it never runs with the fleet's defaults, not even for a moment. A
+machine that must run nothing can be approved paused, with its modules off, and certifies nothing until you resume it
+or turn a module on. **Review…** (and the command's preview) shows what the node will start as before anything
+changes. If an option is refused (an unknown setting, a value out of range, a lock, a group that does not exist), the
+approval is refused too, and the machine keeps waiting.
+
+To make this the default for every new machine, set what new nodes start as for the whole fleet. Join codes that
+approve automatically follow it too:
+
+```sh
+oarbank settings set new_node_state paused       # active (the default) or paused
+oarbank settings set new_node_modules none       # all (the default) or none: every installed module off on the node
+```
+
+An approval's own options take precedence over these settings. A machine that proves it is a node you already have
+(re-added to the tailnet, with its own key) keeps that node's settings.
+
+### The same machine, reinstalled
+
+A reinstalled machine has a new key, so it cannot prove it is the node it was. Its card says "new node looks like
+build-07 … approving makes a NEW node, and that node's settings do not apply to it". If you know it is the same
+machine, tick **This is the same machine: carry over its settings and retire the old record** in **Approve with
+options…**, or:
+
+```sh
+oarbank node approve enr_3f2a9c --adopt-settings-from build-07
+```
+
+The new node gets the old node's own settings (module switches, caps, protection, update hold and pin), its state,
+labels, groups, module version pins and site. The old record is retired, in one step that the audit log records. You
+type the old node's name to confirm. Nothing of the old node's credentials or secrets is carried over: set its
+secrets again. Oarbank never does this by itself. It refuses while the old node is still online, and for a machine
+that proves another node's key, which keeps that node or is rejected.
+
 ## Many machines: MDM, Intune, Ansible
 
 Deploy the package unchanged and hand the code out through managed policy. A node that has not joined reads the policy
