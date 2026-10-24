@@ -4,6 +4,16 @@ What changed in each oarbank-sdk release, for module authors. The core's changel
 [roeehrl/oarbank](https://github.com/roeehrl/oarbank/blob/main/CHANGELOG.md). Contract rules:
 [spec/versioning.md](spec/versioning.md).
 
+## Unreleased
+
+### Changed
+
+- **On Linux, the GPU grant also lets the sandbox read the GPU's sysfs**
+  ([spec/sandbox/backends/linux.md](spec/sandbox/backends/linux.md)). With `devices.gpu = compute`, a runner or doctor
+  can read `/sys/class/drm` and its GPU devices' sysfs directories, which Vulkan and OpenCL read to identify the GPU.
+  Without them a sandboxed doctor found no Vulkan device and no OpenCL platform where the host found both. The rest of
+  sysfs stays closed. Applies from the next core release.
+
 ## 1.8.0 (2026-10-15)
 
 For Oarbank core 2.11.0. Everything is additive within manifest 1 and module protocol 1. The cleanup stage needs
