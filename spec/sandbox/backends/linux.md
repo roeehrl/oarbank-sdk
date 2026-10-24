@@ -27,7 +27,7 @@ what they cannot enforce as `unavailable`, and work that needs it is not placed 
 | `net = egress-allowlist` | IPv4 and IPv6 streams only (seccomp); Landlock ABI 4 allows TCP connect to the agent's proxy port alone and no bind |
 | `net = egress-any` | unavailable: Landlock filters ports, not addresses, so loopback and link-local cannot be refused |
 | never listening | seccomp refuses `listen` |
-| `devices.gpu = compute` | read and write `/dev/dri`, `/dev/nvidia*`, `/dev/kfd` |
+| `devices.gpu = compute` | read and write `/dev/dri`, `/dev/nvidia*`, `/dev/kfd`; read (not execute) `/sys/class/drm` and, for each of those device nodes, its device's sysfs directory (the target of `/sys/dev/char/MAJ:MIN/device`, else of `/sys/dev/char/MAJ:MIN`), which Vulkan and OpenCL read to identify the GPU |
 | children | Landlock and seccomp are inherited across fork and exec; seccomp refuses `unshare`, `setns`, `mount`, namespace flags on `clone` (and `clone3`, which answers ENOSYS so libc falls back), `ptrace`, `bpf`, keyrings and kernel modules |
 
 ## Enforcement report
