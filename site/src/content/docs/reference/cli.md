@@ -3,13 +3,13 @@ title: Command-line reference
 description: Every Oarbank command an operator or module author runs, what each one does, where it is installed on macOS, Linux and Windows, and the flags that confirm or preview a change.
 type: reference
 platforms: [macos, linux, windows]
-core: '2.11.0'
+core: '2.11.1'
 sidebar:
   order: 1
 ---
 
 Oarbank has six commands. Every one prints its full usage with `--help`, and `oarbank <command> --help` shows a
-command's own arguments. This page lists them as of Oarbank 2.11.0 and module SDK 1.8.0.
+command's own arguments. This page lists them as of Oarbank 2.11.1 and module SDK 1.8.0.
 
 | Command | Runs on | What it is |
 |---|---|---|

@@ -3,7 +3,7 @@ title: Upgrading
 description: Upgrade an Oarbank fleet to 2.11 on macOS, Linux and Windows, from 2.10 (a fleet update; container VM modes and sizes, approval options, module data deletion, update trust on fresh nodes), from 2.9 (nodes need the 2.10 agent for listeners, workloads, sites and the GPU duty governor) or from 2.8 (the one-time move of a per-user coordinator to a system service, removed commands and module requests).
 type: how-to
 platforms: [macos, linux, windows]
-core: '2.11.0'
+core: '2.11.1'
 sidebar:
   order: 18
 ---
@@ -11,14 +11,14 @@ sidebar:
 import { Aside, TabItem, Tabs } from '@astrojs/starlight/components';
 
 Upgrade the **coordinator first**, then the nodes. Running jobs keep running through the upgrade, and nodes reconnect by
-themselves. The downloads are on the [2.11.0 release page](https://github.com/roeehrl/oarbank/releases/tag/v2.11.0);
+themselves. The downloads are on the [2.11.1 release page](https://github.com/roeehrl/oarbank/releases/tag/v2.11.1);
 check each file against its `SHA256SUMS-…` file there ([Get started](/oarbank/get-started#download)).
 
 - **From 2.10:** read [From 2.10 to 2.11](#from-210-to-211). The coordinator updates the fleet itself.
-- **From 2.9:** install 2.11.0 as [From 2.9 to 2.10](#from-29-to-210) says, then read the 2.11 section for what is new.
+- **From 2.9:** install 2.11.1 as [From 2.9 to 2.10](#from-29-to-210) says, then read the 2.11 section for what is new.
   Nothing moves and no setting changes meaning.
-- **From 2.8:** install 2.11.0 directly. Its packages make the same one-time move of the coordinator as 2.9.0 did, so
-  follow [From 2.8 to 2.9](#from-28-to-29) with the 2.11.0 files, then read the 2.10 and 2.11 sections for what is new.
+- **From 2.8:** install 2.11.1 directly. Its packages make the same one-time move of the coordinator as 2.9.0 did, so
+  follow [From 2.8 to 2.9](#from-28-to-29) with the 2.11.1 files, then read the 2.10 and 2.11 sections for what is new.
 
 ## From 2.10 to 2.11
 
@@ -29,8 +29,8 @@ behaviour, except where the list below says otherwise.
 ### Before you start
 
 Nodes that joined with 2.10.3 or 2.10.4 after their package was installed may have no update trust pinned:
-`oarbank update plan 2.11.0` says "no update trust is pinned" for them, and the fleet update does not install their
-package until it is pinned. Run the command the plan shows once on each, or install the 2.11.0 node package on it by
+`oarbank update plan 2.11.1` says "no update trust is pinned" for them, and the fleet update does not install their
+package until it is pinned. Run the command the plan shows once on each, or install the 2.11.1 node package on it by
 hand:
 
 | Platform | Command |
@@ -43,9 +43,9 @@ From 2.11 a node that joins pins its update trust itself.
 
 ### Update
 
-Update the fleet from the coordinator, as for any release: fetch (or import) 2.11.0, sign it in signing mode, and start
+Update the fleet from the coordinator, as for any release: fetch (or import) 2.11.1, sign it in signing mode, and start
 the rollout ([Update the fleet](/oarbank/operate/update-and-remove#update-the-fleet)). The coordinator updates itself
-first, then the nodes' packages. To update by hand instead, install the 2.11.0 coordinator package over the 2.10 one
+first, then the nodes' packages. To update by hand instead, install the 2.11.1 coordinator package over the 2.10 one
 ([Update the coordinator by hand](/oarbank/operate/update-and-remove#update-the-coordinator-by-hand)), then each node's.
 
 ### What behaves differently after the upgrade
@@ -94,14 +94,14 @@ create one, delegation is off by default, and `gpu_jobs = "certified"` is opt-in
 
 ### Upgrade the coordinator from 2.9
 
-Run the 2.11.0 installer over the 2.9 one, as for any update
+Run the 2.11.1 installer over the 2.9 one, as for any update
 ([Updating and removing](/oarbank/operate/update-and-remove#update-the-coordinator-by-hand)):
 
-- **macOS:** double-click `oarbank-coordinator-2.11.0-macos-arm64.pkg`. It writes the system services again and
+- **macOS:** double-click `oarbank-coordinator-2.11.1-macos-arm64.pkg`. It writes the system services again and
   restarts them on the new build.
-- **Linux:** `sudo apt install ./oarbank-coordinator-2.11.0-linux-amd64.deb` (Fedora, RHEL:
-  `sudo dnf install ./oarbank-coordinator-2.11.0-linux-amd64.rpm`).
-- **Windows:** run `oarbank-coordinator-2.11.0-windows-x64.msi` (or `-arm64`).
+- **Linux:** `sudo apt install ./oarbank-coordinator-2.11.1-linux-amd64.deb` (Fedora, RHEL:
+  `sudo dnf install ./oarbank-coordinator-2.11.1-linux-amd64.rpm`).
+- **Windows:** run `oarbank-coordinator-2.11.1-windows-x64.msi` (or `-arm64`).
 
 Check with `oarbank coordinator status` and `oarbank verify`. The console gains a **Sites** page, a **Network** card and
 a **Workloads** card on each node page, a **Workloads** tab on each module that declares workloads, and a
@@ -109,7 +109,7 @@ a **Workloads** card on each node page, a **Workloads** tab on each module that 
 
 ### Upgrade the nodes from 2.9
 
-Install the 2.11.0 node package on each node once, over the old one. This is the last time: the package brings the
+Install the 2.11.1 node package on each node once, over the old one. This is the last time: the package brings the
 node's update runner and pins the owner keys the node trusts for it, and from 2.10 the coordinator updates whole
 packages itself ([Update the fleet](/oarbank/operate/update-and-remove#update-the-fleet)).
 
@@ -118,7 +118,7 @@ To get a 2.10 or later agent onto nodes before you can reach them, upload, sign,
 and fleet updates, still wait for the package:
 
 ```sh
-oarbank agent upload oarbank-agent-2.11.0-linux-amd64
+oarbank agent upload oarbank-agent-2.11.1-linux-amd64
 oarbank agent sign <build>
 oarbank agent canary <build> --node <node>
 oarbank agent promote <build>
@@ -165,7 +165,7 @@ The how-tos: [Accept connections from the internet](/oarbank/build/inbound-liste
 ## From 2.8 to 2.9
 
 <Aside type="note">
-  This section describes the 2.9.0 files. From 2.8, use the 2.11.0 files with the same names: the 2.10 packages make
+  This section describes the 2.9.0 files. From 2.8, use the 2.11.1 files with the same names: the 2.10 packages make
   the same move.
 </Aside>
 
