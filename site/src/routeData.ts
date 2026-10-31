@@ -37,7 +37,8 @@ export const onRequest = defineRouteMiddleware(async (context) => {
   // Starlight derives these from the output file name (….html); the served URL has
   // no extension, and the root is /oarbank/.
   for (const h of head) {
-    if (isHome && h.tag === 'title') h.content = PRODUCT.docsTitle;
+    if (isHome && h.tag === 'title') h.content = PRODUCT.homeTitle;
+    if (isHome && h.tag === 'meta' && h.attrs?.property === 'og:title') h.attrs.content = PRODUCT.homeTitle;
     if (h.tag === 'link' && h.attrs?.rel === 'canonical') h.attrs.href = pageUrl;
     if (h.tag === 'meta' && h.attrs?.property === 'og:url') h.attrs.content = pageUrl;
   }

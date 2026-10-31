@@ -11,9 +11,18 @@ export const HOME_URL = `${SITE}${BASE}/`;
 export const PRODUCT = {
   name: 'Oarbank',
   docsTitle: 'Oarbank docs',
+  /** The docs home's <title> (the home page carries no site suffix). At most 65 characters. */
+  homeTitle: 'Oarbank docs: run batch jobs on your Macs, Linux and Windows PCs',
   description:
     'Documentation for Oarbank: run jobs on a fleet of macOS, Linux and Windows computers, and build modules for it with the open SDK.',
   productUrl: 'https://codonic.dev/apps/oarbank',
+  /** Site-wide social card: the codonic.dev product card, 1200×630. */
+  ogImage: {
+    url: 'https://codonic.dev/img/oarbank/og.png',
+    width: 1200,
+    height: 630,
+    alt: 'Oarbank: spread batch jobs across the computers you already own, next to the Oarbank console showing a fleet of nodes',
+  },
 };
 
 /**

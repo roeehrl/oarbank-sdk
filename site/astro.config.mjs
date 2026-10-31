@@ -34,6 +34,17 @@ export default defineConfig({
       title: PRODUCT.docsTitle,
       description: PRODUCT.description,
       titleDelimiter: '·',
+      // Every page shares the product's social card. Meta tags only: the browser
+      // never loads the image, so the CSP's img-src needs nothing new.
+      head: [
+        { tag: 'meta', attrs: { property: 'og:image', content: PRODUCT.ogImage.url } },
+        { tag: 'meta', attrs: { property: 'og:image:width', content: String(PRODUCT.ogImage.width) } },
+        { tag: 'meta', attrs: { property: 'og:image:height', content: String(PRODUCT.ogImage.height) } },
+        { tag: 'meta', attrs: { property: 'og:image:alt', content: PRODUCT.ogImage.alt } },
+        { tag: 'meta', attrs: { name: 'twitter:card', content: 'summary_large_image' } },
+        { tag: 'meta', attrs: { name: 'twitter:image', content: PRODUCT.ogImage.url } },
+        { tag: 'meta', attrs: { name: 'twitter:image:alt', content: PRODUCT.ogImage.alt } },
+      ],
       logo: { src: './src/assets/oarbank-logo.svg', alt: 'Oarbank' },
       favicon: '/favicon.svg',
       customCss: ['./src/styles/codonic.css'],

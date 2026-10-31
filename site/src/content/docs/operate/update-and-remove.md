@@ -1,6 +1,6 @@
 ---
 title: Updating and removing
-description: Update the whole fleet from the coordinator with one rollout, or a coordinator or node by hand, move the coordinator to another computer, and remove a node or the coordinator on macOS, Linux and Windows without losing your owner keys by accident.
+description: Update an Oarbank fleet with one rollout from the coordinator or by hand, move the coordinator to another computer, and remove nodes without losing keys.
 type: how-to
 platforms: [macos, linux, windows]
 core: '2.11.1'

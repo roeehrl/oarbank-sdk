@@ -1,6 +1,6 @@
 ---
 title: Versions and compatibility
-description: Find the Oarbank, agent and module SDK versions you have installed, the latest release, which SDK features need which core, and where the docs for an older version are.
+description: Find the Oarbank core, agent and module SDK versions you have, the latest release, which SDK features need which core, and docs for older versions.
 type: reference
 platforms: [macos, linux, windows]
 core: '2.11.1'

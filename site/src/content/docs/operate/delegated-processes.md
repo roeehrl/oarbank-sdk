@@ -1,6 +1,6 @@
 ---
 title: Delegated processes
-description: Let host protection pause and lower a background program of your own, started outside Oarbank, for the programs you protect, by naming it with a code signature or a trusted exact path in a delegate rule.
+description: Delegate a program you started outside Oarbank to host protection, so it is paused and lowered for your protected programs, with a delegate rule.
 type: how-to
 platforms: [macos, linux, windows]
 core: '2.11.1'

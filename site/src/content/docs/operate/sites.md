@@ -1,6 +1,6 @@
 ---
 title: Sites and shared internet lines
-description: Group the nodes that share one internet line into a site, so fleet transfers and network-heavy jobs pause on all of them while a protected program at the site uploads, and keep to an uplink budget otherwise.
+description: Group nodes that share one internet line into a site, so network-heavy fleet work pauses while a protected program there uploads, within an uplink budget.
 type: how-to
 platforms: [macos, linux, windows]
 core: '2.11.1'

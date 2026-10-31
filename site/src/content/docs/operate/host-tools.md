@@ -1,6 +1,6 @@
 ---
 title: Host tools
-description: How nodes find the programs modules need, such as a JDK or Python, what a job waiting with TOOL_NOT_FOUND or TOOL_VERSION_UNMET means, and how to install a tool, re-detect, add search paths or choose an installation per node.
+description: How Oarbank nodes find the host tools modules need, such as a JDK or Python, what TOOL_NOT_FOUND means, and how to install, re-detect or pick one.
 type: how-to
 platforms: [macos, linux, windows]
 core: '2.9.0'

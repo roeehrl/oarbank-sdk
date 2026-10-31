@@ -1,6 +1,6 @@
 ---
 title: Host protection
-description: How Oarbank keeps fleet work from harming the people using a node, and how to set its mode and protected-process rules for the fleet, a group or one node, roll rules out through a canary group, and read what it did.
+description: "Host protection keeps Oarbank fleet work from harming the people using a node: set its mode and protected-process rules, canary them and read what it did."
 type: how-to
 platforms: [macos, linux, windows]
 core: '2.11.1'
