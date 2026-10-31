@@ -1,6 +1,6 @@
 ---
 title: Settings
-description: How Oarbank settings work for owners from 2.9 on, with fleet, group and node scopes, node groups and labels, locks, bulk changes, canary then promote, campaign overrides, settings as code, reports and managed policy that only tightens.
+description: "Oarbank settings at fleet, group and node scope: node groups and labels, locks, bulk changes, canary then promote, campaign overrides and settings as code."
 type: how-to
 platforms: [macos, linux, windows]
 core: '2.11.1'

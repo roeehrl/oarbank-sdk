@@ -1,6 +1,6 @@
 ---
 title: Workloads
-description: Assign a module's long-running workload to nodes, give a per-node identity its own secrets and seat, read its state on the module's Workloads tab and the node page, and see how host protection throttles, pauses and holds it.
+description: "Run a module's long-running workload on Oarbank nodes: assign it, give each node its own secrets, read its state and see how host protection throttles it."
 type: how-to
 platforms: [macos, linux, windows]
 core: '2.11.1'

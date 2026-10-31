@@ -1,6 +1,6 @@
 ---
 title: Command-line reference
-description: Every Oarbank command an operator or module author runs, what each one does, where it is installed on macOS, Linux and Windows, and the flags that confirm or preview a change.
+description: "Oarbank command-line reference: every command an operator or module author runs, what it does and where it is installed on macOS, Linux and Windows."
 type: reference
 platforms: [macos, linux, windows]
 core: '2.11.1'

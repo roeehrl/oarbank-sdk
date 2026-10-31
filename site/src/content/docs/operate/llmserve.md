@@ -1,6 +1,6 @@
 ---
 title: Run language-model batches with llmserve
-description: Build and install llmserve, the reference module for GPU work beside a protected program, give a node a backend and a model you choose, queue prompts, and let it share the GPU only up to a certified duty.
+description: "Run language-model batches with llmserve: install it, give a node a backend and a model, queue prompts, and share the GPU only up to a certified duty."
 type: how-to
 platforms: [macos, linux, windows]
 core: '2.11.1'

@@ -1,6 +1,6 @@
 ---
 title: Troubleshooting
-description: Find out why a job waits, a node takes no work or setup stalls, where each computer keeps its logs, and the fixes for the problems people meet most on macOS, Linux and Windows.
+description: "Troubleshoot Oarbank: why a job waits, a node takes no work or setup stalls, where each computer keeps its logs, and fixes for macOS, Linux and Windows."
 type: troubleshooting
 platforms: [macos, linux, windows]
 core: '2.11.1'

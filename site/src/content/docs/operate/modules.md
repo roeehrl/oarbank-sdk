@@ -1,6 +1,6 @@
 ---
 title: Running modules
-description: Install, approve, enable and sign a module's releases, follow its readiness checklist to running work, understand which stages run before a node is certified and why a failed doctor check stops only some jobs, and know when a node deletes what a module left there.
+description: "Run Oarbank modules: install, approve, enable and sign a release, follow its readiness checklist to running jobs, and see why a doctor check stops jobs."
 type: how-to
 platforms: [macos, linux, windows]
 core: '2.11.1'

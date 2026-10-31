@@ -13,7 +13,7 @@ export const PAGES = [
     type: 'tutorial',
     title: 'Build a module in a day',
     description:
-      'Build primes, a module that counts primes on the fleet’s nodes: manifest, coordinator side, runner, goldens, the conformance kit, a bundle and per-platform declarations.',
+      'Build an Oarbank module in a day: primes counts primes on your nodes, from manifest, coordinator side and runner to goldens, conformance kit and bundle.',
     order: 1,
   },
   {
@@ -30,7 +30,7 @@ export const PAGES = [
     type: 'how-to',
     title: 'Serve jobs from a warm service',
     description:
-      'Load a model once per node in an endpoint service and let every job on the node send it work, without anything listening: the manifest, the service, the job and the conformance kit.',
+      'Serve Oarbank jobs from a warm endpoint service: load a model once per node, let each job on the node send it work, and test it with the conformance kit.',
     order: 3,
   },
   {
@@ -47,7 +47,7 @@ export const PAGES = [
     type: 'how-to',
     title: 'Place work by GPU API',
     description:
-      'Name the GPU APIs a runner or service can use, per platform, so its jobs run only on nodes that provide one; see what a node provides; give containers the GPU on Linux and macOS.',
+      'Place an Oarbank module’s work by GPU API: name the APIs a runner or service uses per platform, so its jobs run only on nodes that provide one.',
     platforms: ['macos', 'linux', 'windows'],
     order: 5,
   },
@@ -57,7 +57,7 @@ export const PAGES = [
     type: 'how-to',
     title: 'Share a GPU with a protected program',
     description:
-      'Hold the GPU duty the agent asks for with the SDK’s duty governor, prove it with the conformance kit’s duty specs, and run the llmserve reference module on MLX or llama.cpp with a model you install.',
+      'Share a node’s GPU with a protected program: hold the agent’s GPU duty with the SDK’s duty governor, prove it with the conformance kit and run llmserve.',
     platforms: ['macos', 'linux', 'windows'],
     order: 11,
   },
@@ -67,7 +67,7 @@ export const PAGES = [
     type: 'how-to',
     title: 'Accept connections from the internet',
     description:
-      'Declare an inbound listener the agent owns, serve its connections in an endpoint service, read its announced external address, narrow who may connect, read PROXY v2 headers and test it with the conformance kit.',
+      'Accept internet connections in an Oarbank module: declare an inbound listener, serve it in an endpoint service, limit who may connect, and test it.',
     order: 7,
   },
   {
@@ -75,7 +75,7 @@ export const PAGES = [
     dest: 'operate/make-a-node-reachable.md',
     type: 'how-to',
     description:
-      'Assign a module’s inbound listener to a node, let the agent map the port on the router (PCP, NAT-PMP, UPnP) or forward it by hand, read the Network card and the dial-back check, fix firewalls, and use the kill switch.',
+      'Make a node reachable from the internet: assign a module’s inbound listener, let the agent map the router port (PCP, NAT-PMP, UPnP) or forward it by hand.',
     platforms: ['macos', 'linux', 'windows'],
     order: 13,
   },
@@ -84,7 +84,7 @@ export const PAGES = [
     dest: 'build/workloads.md',
     type: 'how-to',
     description:
-      'Ship a long-running process that is the work itself: declare a workload, wrap a third-party daemon in the supervisor shim, answer status, report into your own records and pass the conformance kit.',
+      'Run a long-running workload in an Oarbank module: declare it, wrap a third-party daemon in the supervisor shim, answer status and pass the conformance kit.',
     order: 10,
   },
   {
@@ -92,7 +92,7 @@ export const PAGES = [
     dest: 'operate/compatibility.md',
     type: 'reference',
     description:
-      'The machines Oarbank’s GPU detection, GPU containers and Windows container runtime have run on, with each run’s result, versions and report, and how to add yours.',
+      'The machines Oarbank’s GPU detection, GPU containers and Windows container runtime have run on, with each run’s result and versions, and how to add yours.',
     platforms: ['macos', 'linux', 'windows'],
     order: 2,
   },
@@ -109,7 +109,7 @@ export const PAGES = [
     dest: 'build/host-tools.md',
     type: 'how-to',
     description:
-      'Ask for a JDK, a Python or another program on the node by tool id and version range, read the installation the node grants, test it, and move off tool registry ids.',
+      'Ask for a JDK, Python or another host tool by id and version range in an Oarbank module, test the installation the node grants, and move off registry ids.',
     order: 7,
   },
   {
@@ -142,7 +142,7 @@ export const PAGES = [
     dest: 'spec/platforms.md',
     type: 'spec',
     description:
-      'Rules every contract shares across macOS, Linux and Windows: platform tokens, portable paths, encodings, canonical JSON, process containers, per-platform declarations and placement.',
+      'Rules every Oarbank contract shares on macOS, Linux and Windows: platform tokens, portable paths, encodings, canonical JSON and per-platform declarations.',
     platforms: ['macos', 'linux', 'windows'],
     order: 3,
   },
@@ -183,7 +183,7 @@ export const PAGES = [
     dest: 'spec/workload-protocol.md',
     type: 'spec',
     description:
-      'How the agent runs a workload, a long-running process that is the work itself: invocation, environment, the control document, events, health, containment and the supervisor shim.',
+      'The workload protocol, how the Oarbank agent runs a long-running process that is the work itself: invocation, environment, events, health and the shim.',
     order: 8,
   },
   {
